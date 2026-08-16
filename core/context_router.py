@@ -9,14 +9,6 @@ class ContextRoute:
 
 
 class ContextRouter:
-    """
-    Определяет базовый контекст запроса до обращения к LLM.
-
-    SELF_QUERY   -> пользователь спрашивает о EddieAI
-    USER_QUERY   -> пользователь спрашивает о себе
-    GENERAL_QUERY -> обычный разговор
-    """
-
     SELF_PATTERNS = [
         r"\bрасскажи\s+о\s+себе\b",
         r"\bчто\s+ты\s+знаешь\s+о\s+себе\b",
@@ -39,8 +31,26 @@ class ContextRouter:
         r"\bчто\s+ты\s+помнишь\s+обо\s+мне\b",
     ]
 
+    MEMORY_PATTERNS = [
+        r"\bпомнишь\s+меня\b",
+        r"\bты\s+меня\s+помнишь\b",
+        r"\bты\s+помнишь\s+наш\s+разговор\b",
+        r"\bмы\s+раньше\s+общались\b",
+        r"\bмы\s+с\s+тобой\s+раньше\s+общались\b",
+        r"\bчто\s+ты\s+помнишь\s+обо\s+мне\b",
+    ]
+
     def route(self, text: str) -> ContextRoute:
         normalized = self._normalize(text)
+
+        if self._matches(
+            normalized,
+            self.MEMORY_PATTERNS,
+        ):
+            return ContextRoute(
+                route="MEMORY_QUERY",
+                confidence=1.0,
+            )
 
         if self._matches(
             normalized,

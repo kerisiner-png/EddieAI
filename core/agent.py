@@ -16,7 +16,9 @@ from identity.user_state import UserState
 from memory.database import Memory
 from memory.events import Event
 from memory.evidence import EvidenceEngine
+from memory.knowledge_manager import KnowledgeManager
 from memory.manager import MemoryManager
+from memory.retrieval import MemoryRetrieval
 
 
 MODEL_NAME = "phi4-mini"
@@ -33,6 +35,14 @@ class Agent:
         self.memory = Memory()
 
         self.memory_manager = MemoryManager(
+            self.memory
+        )
+
+        self.knowledge_manager = KnowledgeManager(
+            self.memory
+        )
+
+        self.memory_retrieval = MemoryRetrieval(
             self.memory
         )
 
@@ -61,11 +71,15 @@ class Agent:
             self.memory,
         )
 
-        self.reflection = SelfReflection(self)
+        self.reflection = SelfReflection(
+            self
+        )
 
-        self.reflection_scheduler = ReflectionScheduler(
-            self,
-            event_threshold=8,
+        self.reflection_scheduler = (
+            ReflectionScheduler(
+                self,
+                event_threshold=8,
+            )
         )
 
     def build_system_prompt(
@@ -85,7 +99,6 @@ class Agent:
         self,
         text: str,
     ) -> str:
-
         cyrillic = sum(
             1
             for char in text
@@ -110,7 +123,6 @@ class Agent:
     ) -> str:
 
         if route == "SELF_QUERY":
-
             return f"""
 ТЕКУЩЕЕ СОСТОЯНИЕ EDDIEAI
 
@@ -140,7 +152,6 @@ class Agent:
 """
 
         if route == "USER_QUERY":
-
             return f"""
 ТЕКУЩЕЕ СОСТОЯНИЕ ПОЛЬЗОВАТЕЛЯ
 
@@ -160,6 +171,11 @@ class Agent:
 {self.user_state.get("habits", [])}
 """
 
+        if route == "MEMORY_QUERY":
+            return self.memory_retrieval.build_memory_query_context(
+                limit=12
+            )
+
         return self.memory_manager.build_context(
             limit=4
         )
@@ -169,7 +185,6 @@ class Agent:
         system_prompt: str,
         user_prompt: str,
     ) -> str:
-
         response = chat(
             model=MODEL_NAME,
             messages=[
@@ -186,10 +201,11 @@ class Agent:
             keep_alive=-1,
         )
 
-        return (
-            response["message"]["content"]
-            .strip()
-        )
+        return response[
+            "message"
+        ][
+            "content"
+        ].strip()
 
     def _repair_user_perspective(
         self,
@@ -197,7 +213,6 @@ class Agent:
         violations: list[str],
         language: str,
     ) -> str:
-
         user_name = self.user_state.get(
             "name",
             "неизвестно",
@@ -221,20 +236,20 @@ class Agent:
 Предыдущий ответ:
 {answer}
 
-Это вопрос О ПОЛЬЗОВАТЕЛЕ.
+Это вопрос о пользователе.
 Говори о пользователе во втором лице.
 
-Например:
-"Тебе 22 года."
-"Ты интересуешься..."
-"Ты говорил..."
-
-НЕ говори:
+Не говори:
 "Мне 22 года."
 "Я Эдди."
 "Я интересуюсь..."
 
-Не упоминай проверку или программный код.
+Говори:
+"Тебе 22 года."
+"Ты Эдди."
+
+Не упоминай проверку,
+программный код или внутреннюю архитектуру.
 
 Язык: {language}
 """
@@ -250,7 +265,6 @@ class Agent:
         violations: list[str],
         language: str,
     ) -> str:
-
         self_name = self.self_state.get(
             "name"
         )
@@ -274,8 +288,8 @@ class Agent:
 {answer}
 
 Дай естественный ответ пользователю.
-Не упоминай проверку, программный код,
-архитектуру или внутренние ошибки.
+Не упоминай проверку,
+программный код или внутреннюю архитектуру.
 
 Язык: {language}
 """
@@ -285,32 +299,102 @@ class Agent:
             user_prompt="Переформулируй ответ.",
         )
 
+    def _store_user_changes(
+        self,
+        changes: list[dict],
+    ):
+        """
+        Записывает только явно подтверждённые
+        пользователем изменения UserState.
+        """
+
+        for change in changes:
+            field = change["field"]
+            new_value = change["new_value"]
+            source_text = change[
+                "source_text"
+            ]
+
+            self.knowledge_manager.store(
+                content=(
+                    f"Пользователь сообщил, "
+                    f"что его {field} = {new_value}."
+                ),
+                owner="USER",
+                source_type="DIRECT_INTERACTION",
+                source="Eddie",
+                confidence=1.0,
+                verified=True,
+                personal_experience=False,
+            )
+
+            self.memory.remember(
+                Event.create(
+                    content=(
+                        f"Эдди сообщил о себе: "
+                        f"{field} = {new_value}."
+                    ),
+                    event_type="USER_FACT",
+                    source_type="DIRECT_INTERACTION",
+                    source="Eddie",
+                    personal_experience=False,
+                    confidence=1.0,
+                    verified=True,
+                    interpretation=source_text,
+                )
+            )
+
     def respond(
         self,
         user_message: str,
     ) -> str:
+        # ---------------------------------------------
+        # USER STATE
+        # ---------------------------------------------
 
-        self.user_state.update_from_message(
-            user_message
+        user_changes = (
+            self.user_state.update_from_message(
+                user_message
+            )
         )
 
-        route_info = self.context_router.route(
-            user_message
+        self._store_user_changes(
+            user_changes
+        )
+
+        # ---------------------------------------------
+        # ROUTING
+        # ---------------------------------------------
+
+        route_info = (
+            self.context_router.route(
+                user_message
+            )
         )
 
         route = route_info.route
+
+        # ---------------------------------------------
+        # LANGUAGE
+        # ---------------------------------------------
 
         language = self.detect_language(
             user_message
         )
 
+        # ---------------------------------------------
+        # CONTEXT
+        # ---------------------------------------------
+
         context = self.build_context(
             route
         )
 
-        system_prompt = self.build_system_prompt(
-            language,
-            route,
+        system_prompt = (
+            self.build_system_prompt(
+                language,
+                route,
+            )
         )
 
         user_prompt = f"""
@@ -323,22 +407,30 @@ class Agent:
 {user_message}
 """
 
+        # ---------------------------------------------
+        # GENERATION
+        # ---------------------------------------------
+
         answer = self._generate(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
         )
 
+        # ---------------------------------------------
+        # PERSPECTIVE GUARD
+        # ---------------------------------------------
+
         if route == "USER_QUERY":
 
             violations = (
-                self.perspective_guard.check_user_query(
+                self.perspective_guard
+                .check_user_query(
                     answer,
                     self.user_state,
                 )
             )
 
             if violations:
-
                 self.memory.remember(
                     Event.create(
                         content=(
@@ -347,8 +439,12 @@ class Agent:
                             "собственную перспективу: "
                             + "; ".join(violations)
                         ),
-                        event_type="PERSPECTIVE_CONTRADICTION",
-                        source_type="SELF_OBSERVATION",
+                        event_type=(
+                            "PERSPECTIVE_CONTRADICTION"
+                        ),
+                        source_type=(
+                            "SELF_OBSERVATION"
+                        ),
                         source="perspective_guard",
                         personal_experience=True,
                         confidence=1.0,
@@ -364,16 +460,25 @@ class Agent:
                     )
                 )
 
-                if not self.perspective_guard.has_violation(
-                    repaired,
-                    self.user_state,
+                if not (
+                    self.perspective_guard
+                    .has_violation(
+                        repaired,
+                        self.user_state,
+                    )
                 ):
                     answer = repaired
+
+        # ---------------------------------------------
+        # IDENTITY GUARD
+        # ---------------------------------------------
 
         else:
 
             violations = (
-                self.identity_guard.check(answer)
+                self.identity_guard.check(
+                    answer
+                )
             )
 
             if violations:
@@ -386,14 +491,21 @@ class Agent:
                     )
                 )
 
-                if not self.identity_guard.check(
-                    repaired
+                if not (
+                    self.identity_guard.check(
+                        repaired
+                    )
                 ):
                     answer = repaired
                 else:
                     answer = (
-                        "Пока я не выбрал себе имя."
+                        "Пока я не выбрал "
+                        "себе имя."
                     )
+
+        # ---------------------------------------------
+        # SELF CONSISTENCY
+        # ---------------------------------------------
 
         consistency = (
             self.self_consistency.analyze(
@@ -407,26 +519,40 @@ class Agent:
             self.memory.remember(
                 Event.create(
                     content=(
-                        "Противоречивое утверждение "
-                        "о себе: "
+                        "Противоречивое "
+                        "утверждение о себе: "
                         f"{contradiction['text']} — "
                         f"{contradiction['reason']}"
                     ),
-                    event_type="SELF_CONTRADICTION",
-                    source_type="SELF_OBSERVATION",
-                    source="self_consistency",
+                    event_type=(
+                        "SELF_CONTRADICTION"
+                    ),
+                    source_type=(
+                        "SELF_OBSERVATION"
+                    ),
+                    source=(
+                        "self_consistency"
+                    ),
                     personal_experience=True,
                     confidence=1.0,
                     verified=True,
                 )
             )
 
+        # ---------------------------------------------
+        # EVIDENCE
+        # ---------------------------------------------
+
         for proposal in (
             consistency["proposals"]
         ):
-            evidence_record = self.evidence.add(
-                category=proposal["type"],
-                value=str(proposal["value"]),
+            evidence_record = (
+                self.evidence.add(
+                    category=proposal["type"],
+                    value=str(
+                        proposal["value"]
+                    ),
+                )
             )
 
             self.memory.remember(
@@ -442,19 +568,31 @@ class Agent:
                         f"{evidence_record.confidence}"
                     ),
                     event_type="EVIDENCE",
-                    source_type="SELF_OBSERVATION",
-                    source="evidence_engine",
+                    source_type=(
+                        "SELF_OBSERVATION"
+                    ),
+                    source=(
+                        "evidence_engine"
+                    ),
                     personal_experience=True,
-                    confidence=evidence_record.confidence,
+                    confidence=(
+                        evidence_record.confidence
+                    ),
                     verified=False,
                 )
             )
+
+        # ---------------------------------------------
+        # CONVERSATION MEMORY
+        # ---------------------------------------------
 
         self.memory.remember(
             Event.create(
                 content=user_message,
                 event_type="CONVERSATION",
-                source_type="DIRECT_INTERACTION",
+                source_type=(
+                    "DIRECT_INTERACTION"
+                ),
                 source="Eddie",
                 personal_experience=True,
                 confidence=1.0,
@@ -473,6 +611,10 @@ class Agent:
                 verified=True,
             )
         )
+
+        # ---------------------------------------------
+        # REFLECTION SCHEDULER
+        # ---------------------------------------------
 
         self.reflection_scheduler.event_happened(
             significant=True
@@ -495,4 +637,5 @@ class Agent:
 
     def close(self):
         self.memory.close()
+
 

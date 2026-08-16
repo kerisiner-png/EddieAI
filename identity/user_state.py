@@ -23,7 +23,10 @@ DEFAULT_STATE = {
 class UserState:
     def __init__(self, path: Path = STATE_PATH):
         self.path = path
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
 
         if not self.path.exists():
             self._save(DEFAULT_STATE)
@@ -49,21 +52,43 @@ class UserState:
                 indent=2,
             )
 
-    def get(self, key: str, default=None):
-        return self.data.get(key, default)
+    def get(
+        self,
+        key: str,
+        default=None,
+    ):
+        return self.data.get(
+            key,
+            default,
+        )
 
-    def set(self, key: str, value):
+    def set(
+        self,
+        key: str,
+        value,
+    ):
         self.data[key] = value
         self._save(self.data)
 
-    def update_from_message(self, message: str):
+    def update_from_message(
+        self,
+        message: str,
+    ) -> list[dict[str, Any]]:
+        """
+        Извлекает только явно сообщённые пользователем
+        простые факты.
+
+        Возвращает список реально изменённых полей.
+        """
+
+        changes = []
+
         text = message.strip()
 
         age_patterns = [
             r"\bмне\s+(?:уже\s+)?(\d{1,3})\b",
             r"\bмне\s+исполн(?:илось|яется)\s+(\d{1,3})\b",
             r"\bмне\s+(\d{1,3})\s+лет\b",
-            r"\bмне\s+уже\s+(\d{1,3})\s+лет\b",
             r"\bмой\s+возраст\s*[:\-—]?\s*(\d{1,3})\b",
         ]
 
@@ -79,9 +104,27 @@ class UserState:
 
             age = int(match.group(1))
 
-            if 1 <= age <= 120:
-                self.set("age", age)
-                break
+            if not 1 <= age <= 120:
+                continue
+
+            old_age = self.get("age")
+
+            if old_age != age:
+                self.set(
+                    "age",
+                    age,
+                )
+
+                changes.append({
+                    "field": "age",
+                    "old_value": old_age,
+                    "new_value": age,
+                    "source_text": message,
+                })
+
+            break
+
+        return changes
 
     def snapshot(self):
         return json.loads(
