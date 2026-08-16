@@ -1,6 +1,7 @@
-﻿import sqlite3
-from pathlib import Path
-from typing import Optional
+﻿from pathlib import Path
+import sqlite3
+
+from memory.events import Event
 
 
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "memory.db"
@@ -16,52 +17,45 @@ class Memory:
 
     def _initialize(self):
         self.connection.execute("""
-            CREATE TABLE IF NOT EXISTS memories (
+            CREATE TABLE IF NOT EXISTS events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 content TEXT NOT NULL,
+                event_type TEXT NOT NULL,
                 source_type TEXT NOT NULL,
                 source TEXT,
                 timestamp TEXT NOT NULL,
-                confidence REAL,
                 personal_experience INTEGER NOT NULL DEFAULT 0,
+                confidence REAL,
+                interpretation TEXT,
                 verified INTEGER NOT NULL DEFAULT 0
             )
         """)
         self.connection.commit()
 
-    def add(
-        self,
-        content: str,
-        source_type: str,
-        source: Optional[str] = None,
-        timestamp: Optional[str] = None,
-        confidence: Optional[float] = None,
-        personal_experience: bool = False,
-        verified: bool = False,
-    ):
-        from datetime import datetime, timezone
-
-        timestamp = timestamp or datetime.now(timezone.utc).isoformat()
-
+    def remember(self, event: Event):
         self.connection.execute("""
-            INSERT INTO memories (
+            INSERT INTO events (
                 content,
+                event_type,
                 source_type,
                 source,
                 timestamp,
-                confidence,
                 personal_experience,
+                confidence,
+                interpretation,
                 verified
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            content,
-            source_type,
-            source,
-            timestamp,
-            confidence,
-            int(personal_experience),
-            int(verified),
+            event.content,
+            event.event_type,
+            event.source_type,
+            event.source,
+            event.timestamp,
+            int(event.personal_experience),
+            event.confidence,
+            event.interpretation,
+            int(event.verified),
         ))
 
         self.connection.commit()
@@ -69,7 +63,7 @@ class Memory:
     def recent(self, limit: int = 10):
         cursor = self.connection.execute("""
             SELECT *
-            FROM memories
+            FROM events
             ORDER BY id DESC
             LIMIT ?
         """, (limit,))
