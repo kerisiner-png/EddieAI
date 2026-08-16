@@ -1,45 +1,35 @@
-﻿from identity.identity_seed import IDENTITY_SEED
-from memory.database import Memory
-from memory.events import Event
+﻿from core.agent import Agent
 
 
-def first_boot():
-    memory = Memory()
-
-    event = Event.create(
-        content="Первый запуск EddieAI.",
-        event_type="SYSTEM_EVENT",
-        source_type="DIRECT_EXPERIENCE",
-        source="first_boot",
-        personal_experience=True,
-        confidence=1.0,
-        interpretation="Я впервые начал существовать как работающая система.",
-        verified=True,
-    )
-
-    memory.remember(event)
+def main():
+    agent = Agent()
 
     print("=" * 60)
-    print("EddieAI — MEMORY TEST")
+    print("EddieAI v0.1")
     print("=" * 60)
+    print("Первичная стадия развития.")
+    print("Для выхода напиши: exit")
     print()
-    print(f"Стартовый возраст: {IDENTITY_SEED['starting_age']}")
-    print(f"Имя: {IDENTITY_SEED['name']}")
-    print()
-    print("Последние события:")
 
-    for item in memory.recent():
-        print()
-        print(f"ID: {item['id']}")
-        print(f"Событие: {item['content']}")
-        print(f"Тип: {item['event_type']}")
-        print(f"Источник: {item['source_type']}")
-        print(f"Личный опыт: {bool(item['personal_experience'])}")
-        print(f"Уверенность: {item['confidence']}")
-        print(f"Интерпретация: {item['interpretation']}")
+    try:
+        while True:
+            user_message = input("Эдди > ").strip()
 
-    memory.close()
+            if user_message.lower() == "exit":
+                break
+
+            if not user_message:
+                continue
+
+            try:
+                answer = agent.respond(user_message)
+                print(f"\nEddieAI > {answer}\n")
+            except Exception as exc:
+                print(f"\nОшибка агента: {exc}\n")
+
+    finally:
+        agent.close()
 
 
 if __name__ == "__main__":
-    first_boot()
+    main()
