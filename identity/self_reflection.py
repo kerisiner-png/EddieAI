@@ -1,0 +1,173 @@
+﻿import json
+from ollama import chat
+
+from identity.proposal import Proposal
+
+
+class SelfReflection:
+    MODEL_NAME = "phi4-mini"
+
+    def __init__(self, agent):
+        self.agent = agent
+
+    def reflect(
+        self,
+        user_message: str,
+        agent_response: str,
+        memory_context: str,
+    ) -> dict:
+
+        current_state = self.agent.self_state.snapshot()
+
+        prompt = f"""
+Ты выполняешь отдельную внутреннюю процедуру самоанализа
+автономной цифровой личности.
+
+Это НЕ обычный ответ пользователю.
+Это структурированный анализ собственного опыта.
+
+Текущая идентичность:
+{json.dumps(current_state, ensure_ascii=False, indent=2)}
+
+Недавний контекст памяти:
+{memory_context}
+
+Сообщение Эдди:
+{user_message}
+
+Твой ответ:
+{agent_response}
+
+Задача:
+1. Определи, произошло ли что-то значимое для дальнейшего развития личности.
+2. Определи, узнал ли ты что-нибудь новое о себе.
+3. Определи, появилась ли устойчивая тенденция, интерес,
+   предпочтение, привычка, убеждение или идея изменения идентичности.
+4. Не выдумывай ничего, чего нет в предоставленном опыте.
+5. Однократная случайная фраза не является устойчивой чертой личности.
+6. Не изменяй идентичность напрямую.
+7. Если оснований для изменения нет, верни пустые proposals.
+
+Верни ТОЛЬКО валидный JSON следующего вида:
+
+{{
+  "observations": [
+    "..."
+  ],
+  "new_self_knowledge": [
+    "..."
+  ],
+  "proposals": [
+    {{
+      "proposal_type": "name|interest|preference|habit|belief|goal|relationship|other",
+      "value": "...",
+      "reason": "...",
+      "confidence": 0.0,
+      "evidence": [
+        "..."
+      ]
+    }}
+  ],
+  "reflection": "..."
+}}
+
+Не добавляй markdown.
+Не добавляй пояснения вне JSON.
+"""
+
+        response = chat(
+            model=self.MODEL_NAME,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Ты выполняешь внутреннюю структурированную "
+                        "рефлексию. Отвечай только JSON."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": prompt,
+                },
+            ],
+        )
+
+        raw = response["message"]["content"].strip()
+
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            return {
+                "observations": [],
+                "new_self_knowledge": [],
+                "proposals": [],
+                "reflection": "Не удалось разобрать результат самоанализа.",
+            }
+
+        return self._validate(data)
+
+    def _validate(self, data: dict) -> dict:
+        if not isinstance(data, dict):
+            return {
+                "observations": [],
+                "new_self_knowledge": [],
+                "proposals": [],
+                "reflection": "",
+            }
+
+        observations = data.get("observations", [])
+        self_knowledge = data.get("new_self_knowledge", [])
+        proposals_data = data.get("proposals", [])
+        reflection = data.get("reflection", "")
+
+        if not isinstance(observations, list):
+            observations = []
+
+        if not isinstance(self_knowledge, list):
+            self_knowledge = []
+
+        proposals = []
+
+        if isinstance(proposals_data, list):
+            for item in proposals_data:
+                if not isinstance(item, dict):
+                    continue
+
+                proposal_type = item.get("proposal_type")
+                value = item.get("value")
+                reason = item.get("reason")
+                confidence = item.get("confidence", 0.0)
+                evidence = item.get("evidence", [])
+
+                if not isinstance(proposal_type, str):
+                    continue
+
+                if not isinstance(reason, str):
+                    continue
+
+                if not isinstance(evidence, list):
+                    evidence = []
+
+                try:
+                    confidence = float(confidence)
+                except (TypeError, ValueError):
+                    confidence = 0.0
+
+                confidence = max(0.0, min(1.0, confidence))
+
+                proposals.append(
+                    Proposal(
+                        proposal_type=proposal_type,
+                        value=value,
+                        reason=reason,
+                        confidence=confidence,
+                        evidence=evidence,
+                    )
+                )
+
+        return {
+            "observations": observations,
+            "new_self_knowledge": self_knowledge,
+            "proposals": proposals,
+            "reflection": reflection,
+        }
