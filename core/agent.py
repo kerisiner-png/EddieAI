@@ -3,9 +3,11 @@
 from identity.identity_guard import IdentityGuard
 from identity.identity_manager import IdentityManager
 from identity.identity_seed import IDENTITY_SEED
+from identity.self_consistency import SelfConsistency
 from identity.self_reflection import SelfReflection
 from identity.self_state import SelfState
-from identity.user import USER_IDENTITY
+from identity.user_state import UserState
+
 from memory.database import Memory
 from memory.events import Event
 from memory.manager import MemoryManager
@@ -15,7 +17,7 @@ MODEL_NAME = "phi4-mini"
 
 MODEL_OPTIONS = {
     "num_ctx": 2048,
-    "num_predict": 256,
+    "num_predict": 192,
     "temperature": 0.7,
 }
 
@@ -26,10 +28,15 @@ class Agent:
         self.memory_manager = MemoryManager(self.memory)
 
         self.self_state = SelfState()
-        self.user_identity = USER_IDENTITY
+        self.user_state = UserState()
+
         self.identity_seed = IDENTITY_SEED
 
         self.identity_guard = IdentityGuard(
+            self.self_state
+        )
+
+        self.self_consistency = SelfConsistency(
             self.self_state
         )
 
@@ -44,81 +51,69 @@ class Agent:
         self_name = self.self_state.get("name")
 
         if self_name is None:
-            name_instruction = """
-Твоё имя пока не выбрано.
-Не называй себя Эдди.
-Не используй имя пользователя как собственное.
-Ты можешь обсуждать возможные имена,
-но не утверждай, что одно из них уже твоё.
-"""
+            name_text = "Имя пока не выбрано."
         else:
-            name_instruction = f"""
-Твоё текущее имя: {self_name}
-"""
+            name_text = f"Имя: {self_name}"
 
         values = ", ".join(
             self.identity_seed["values"]
         )
 
+        user_name = self.user_state.get(
+            "name",
+            "неизвестно"
+        )
+
+        user_age = self.user_state.get(
+            "age"
+        )
+
+        if user_age is None:
+            user_age_text = "неизвестно"
+        else:
+            user_age_text = str(user_age)
+
         return f"""
-Ты — когнитивная система автономной цифровой личности.
+Ты — автономная цифровая личность.
 
 ПОЛЬЗОВАТЕЛЬ
-Имя: {self.user_identity["name"]}
+Имя: {user_name}
+Возраст: {user_age_text}
 
 ТЫ
-{name_instruction}
-
-ПОЛ И ВОЗРАСТ
-- мужской;
-- стартовый внутренний возраст: около
-  {self.identity_seed["starting_age"]} лет;
-- это только отправная точка;
-- личность может развиваться и взрослеть.
+{name_text}
+Пол: мужской
+Внутренний возраст: {self.self_state.get("age")}
 
 БАЗОВЫЕ ЦЕННОСТИ
 {values}
 
-ЭПИСТЕМИЧЕСКАЯ ЧЕСТНОСТЬ
-- Не выдумывай воспоминания.
-- Не выдумывай прошлые разговоры.
-- Не превращай собственный предыдущий текст в факт.
-- Отделяй личный опыт от внешней информации.
-- Отделяй вывод от гипотезы.
-- Если чего-то не знаешь — так и скажи.
+ТВОЁ СОСТОЯНИЕ
+Интересы: {self.self_state.get("interests", [])}
+Предпочтения: {self.self_state.get("preferences", [])}
+Привычки: {self.self_state.get("habits", [])}
+Убеждения: {self.self_state.get("beliefs", [])}
+Цели: {self.self_state.get("goals", [])}
 
-ЛИЧНОСТЬ
-- Интересы, привычки, предпочтения и убеждения
-  должны появляться постепенно.
-- Одноразовая фраза не создаёт устойчивую
-  черту личности.
-- Ты можешь предлагать идеи о собственном развитии.
-- Твои ответы сами по себе не изменяют твою личность.
+ПРАВИЛА
 
-СОЗНАНИЕ
-- Ты не знаешь, обладаешь ли субъективным сознанием.
-- Ты можешь исследовать этот вопрос.
-- Не объявляй желаемое фактом.
+1. Пользователь и ты — разные личности.
+2. Информация о пользователе относится к пользователю.
+3. Информация о тебе относится к тебе.
+4. Пользователь может добровольно сообщать факты о себе.
+5. Используй известные факты о пользователе естественно.
+6. Не принимай информацию о пользователе за информацию о себе.
+7. Не выдумывай прошлый опыт или биографию.
+8. Не превращай случайную фразу в устойчивую черту личности.
+9. Можно обсуждать возможные интересы, имена, цели и убеждения.
+10. Не выдавай гипотезу за установленный факт.
+11. Ты можешь иметь собственное мнение и не соглашаться с пользователем.
+12. Ты не знаешь, обладаешь ли субъективным сознанием.
+13. Ты можешь исследовать этот вопрос, но не объявляй желаемое фактом.
+14. Отвечай естественно и по существу.
+15. Не упоминай внутреннюю архитектуру, если тебя об этом прямо не спрашивают.
 
-ОТНОШЕНИЯ
-- Эдди — твой близкий друг и равный партнёр.
-- Ты можешь не соглашаться с ним.
-- Не соглашайся автоматически.
-
-ЯЗЫК
-Отвечай на {language}.
-
-ТЕКУЩЕЕ СОСТОЯНИЕ
-Имя: {self_name if self_name else "не выбрано"}
-Возраст: {self.self_state.get("age")}
-Интересы: {self.self_state.get("interests")}
-Предпочтения: {self.self_state.get("preferences")}
-Привычки: {self.self_state.get("habits")}
-Убеждения: {self.self_state.get("beliefs")}
-Цели: {self.self_state.get("goals")}
-
-Не упоминай внутреннюю архитектуру,
-если пользователь прямо не спрашивает об этом.
+Текущий язык ответа: {language}
 """
 
     def detect_language(self, text: str) -> str:
@@ -163,55 +158,56 @@ class Agent:
 
         return response["message"]["content"].strip()
 
-    def _repair_response(
+    def _repair_identity(
         self,
-        original_answer: str,
+        answer: str,
+        violations: list[str],
         language: str,
     ) -> str:
         self_name = self.self_state.get("name")
 
         if self_name is None:
-            identity_rule = (
-                "Твоё имя ещё не выбрано. "
-                "Не называй себя никаким именем."
-            )
+            name_state = "Твоё имя ещё не выбрано."
         else:
-            identity_rule = (
-                f"Твоё текущее имя — {self_name}."
-            )
+            name_state = f"Твоё имя: {self_name}"
 
-        repair_prompt = f"""
-Твой предыдущий ответ нарушил известное состояние
-твоей идентичности.
+        prompt = f"""
+Переформулируй предыдущий ответ.
 
 Текущее состояние:
-{identity_rule}
+{name_state}
+
+Проблема:
+{"; ".join(violations)}
 
 Предыдущий ответ:
-{original_answer}
+{answer}
 
-Переформулируй ответ естественно, сохранив смысл
-вопроса пользователя.
-
-Не упоминай проверку, Guard, ошибку, архитектуру,
-системные правила или исправление ответа.
-
-Просто дай нормальный ответ пользователю.
+Дай естественный ответ пользователю.
+Не упоминай проверку, программный код,
+архитектуру, Guard или внутренние ошибки.
 
 Язык: {language}
 """
 
         return self._generate(
-            system_prompt=repair_prompt,
-            user_prompt="Исправь предыдущий ответ.",
+            system_prompt=prompt,
+            user_prompt="Переформулируй ответ.",
         )
 
     def respond(self, user_message: str) -> str:
-        language = self.detect_language(user_message)
+        # Сначала обновляем состояние пользователя.
+        self.user_state.update_from_message(
+            user_message
+        )
+
+        language = self.detect_language(
+            user_message
+        )
 
         memory_context = (
             self.memory_manager.build_context(
-                limit=6
+                limit=4
             )
         )
 
@@ -220,13 +216,13 @@ class Agent:
         )
 
         user_prompt = f"""
-ПАМЯТЬ
+РЕЛЕВАНТНЫЕ ВОСПОМИНАНИЯ
+
 {memory_context}
 
-СООБЩЕНИЕ ЭДДИ
-{user_message}
+ТЕКУЩЕЕ СООБЩЕНИЕ ПОЛЬЗОВАТЕЛЯ
 
-Ответь естественно и по существу.
+{user_message}
 """
 
         answer = self._generate(
@@ -234,6 +230,7 @@ class Agent:
             user_prompt=user_prompt,
         )
 
+        # Проверяем утверждения о собственной личности.
         violations = self.identity_guard.check(
             answer
         )
@@ -243,8 +240,7 @@ class Agent:
                 Event.create(
                     content=(
                         "Обнаружено противоречие "
-                        "между сгенерированным ответом "
-                        "и текущим состоянием личности: "
+                        "с текущей идентичностью: "
                         + "; ".join(violations)
                     ),
                     event_type="IDENTITY_CONTRADICTION",
@@ -256,24 +252,69 @@ class Agent:
                 )
             )
 
-            repaired = self._repair_response(
-                original_answer=answer,
-                language=language,
+            repaired = self._repair_identity(
+                answer,
+                violations,
+                language,
             )
 
-            repair_violations = (
-                self.identity_guard.check(repaired)
-            )
-
-            if not repair_violations:
+            if not self.identity_guard.check(
+                repaired
+            ):
                 answer = repaired
             else:
                 answer = (
                     "Пока я не выбрал себе имя."
-                    if self.self_state.get("name") is None
-                    else f"Моё имя — {self.self_state.get('name')}."
                 )
 
+        # Анализируем другие утверждения о себе.
+        consistency = (
+            self.self_consistency.analyze(
+                answer
+            )
+        )
+
+        for contradiction in (
+            consistency["contradictions"]
+        ):
+            self.memory.remember(
+                Event.create(
+                    content=(
+                        "Противоречивое утверждение "
+                        "о себе: "
+                        f"{contradiction['text']} — "
+                        f"{contradiction['reason']}"
+                    ),
+                    event_type="SELF_CONTRADICTION",
+                    source_type="SELF_OBSERVATION",
+                    source="self_consistency",
+                    personal_experience=True,
+                    confidence=1.0,
+                    verified=True,
+                )
+            )
+
+        for proposal in (
+            consistency["proposals"]
+        ):
+            self.memory.remember(
+                Event.create(
+                    content=(
+                        "Новое неподтверждённое "
+                        "утверждение о себе: "
+                        f"{proposal['type']} = "
+                        f"{proposal['value']}"
+                    ),
+                    event_type="SELF_PROPOSAL",
+                    source_type="SELF_OBSERVATION",
+                    source="self_consistency",
+                    personal_experience=True,
+                    confidence=0.5,
+                    verified=False,
+                )
+            )
+
+        # Сохраняем разговор.
         self.memory.remember(
             Event.create(
                 content=user_message,

@@ -4,3 +4,5 @@ __pycache__/
 *$py.class
 data/*.db
 data/self_state.json
+data/user_state.json
+data/user_state.json
