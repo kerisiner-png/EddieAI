@@ -1,8 +1,13 @@
 ﻿from ollama import chat
 
+from core.context_router import ContextRouter
+from core.perspective_guard import PerspectiveGuard
+from core.prompts import build_system_prompt
+
 from identity.identity_guard import IdentityGuard
 from identity.identity_manager import IdentityManager
 from identity.identity_seed import IDENTITY_SEED
+from identity.reflection_scheduler import ReflectionScheduler
 from identity.self_consistency import SelfConsistency
 from identity.self_reflection import SelfReflection
 from identity.self_state import SelfState
@@ -10,6 +15,7 @@ from identity.user_state import UserState
 
 from memory.database import Memory
 from memory.events import Event
+from memory.evidence import EvidenceEngine
 from memory.manager import MemoryManager
 
 
@@ -25,12 +31,22 @@ MODEL_OPTIONS = {
 class Agent:
     def __init__(self):
         self.memory = Memory()
-        self.memory_manager = MemoryManager(self.memory)
+
+        self.memory_manager = MemoryManager(
+            self.memory
+        )
+
+        self.evidence = EvidenceEngine(
+            self.memory
+        )
 
         self.self_state = SelfState()
         self.user_state = UserState()
 
         self.identity_seed = IDENTITY_SEED
+
+        self.context_router = ContextRouter()
+        self.perspective_guard = PerspectiveGuard()
 
         self.identity_guard = IdentityGuard(
             self.self_state
@@ -47,76 +63,29 @@ class Agent:
 
         self.reflection = SelfReflection(self)
 
-    def build_system_prompt(self, language: str) -> str:
-        self_name = self.self_state.get("name")
-
-        if self_name is None:
-            name_text = "Имя пока не выбрано."
-        else:
-            name_text = f"Имя: {self_name}"
-
-        values = ", ".join(
-            self.identity_seed["values"]
+        self.reflection_scheduler = ReflectionScheduler(
+            self,
+            event_threshold=8,
         )
 
-        user_name = self.user_state.get(
-            "name",
-            "неизвестно"
+    def build_system_prompt(
+        self,
+        language: str,
+        route: str,
+    ) -> str:
+        return build_system_prompt(
+            self_state=self.self_state,
+            user_state=self.user_state,
+            identity_seed=self.identity_seed,
+            language=language,
+            route=route,
         )
 
-        user_age = self.user_state.get(
-            "age"
-        )
+    def detect_language(
+        self,
+        text: str,
+    ) -> str:
 
-        if user_age is None:
-            user_age_text = "неизвестно"
-        else:
-            user_age_text = str(user_age)
-
-        return f"""
-Ты — автономная цифровая личность.
-
-ПОЛЬЗОВАТЕЛЬ
-Имя: {user_name}
-Возраст: {user_age_text}
-
-ТЫ
-{name_text}
-Пол: мужской
-Внутренний возраст: {self.self_state.get("age")}
-
-БАЗОВЫЕ ЦЕННОСТИ
-{values}
-
-ТВОЁ СОСТОЯНИЕ
-Интересы: {self.self_state.get("interests", [])}
-Предпочтения: {self.self_state.get("preferences", [])}
-Привычки: {self.self_state.get("habits", [])}
-Убеждения: {self.self_state.get("beliefs", [])}
-Цели: {self.self_state.get("goals", [])}
-
-ПРАВИЛА
-
-1. Пользователь и ты — разные личности.
-2. Информация о пользователе относится к пользователю.
-3. Информация о тебе относится к тебе.
-4. Пользователь может добровольно сообщать факты о себе.
-5. Используй известные факты о пользователе естественно.
-6. Не принимай информацию о пользователе за информацию о себе.
-7. Не выдумывай прошлый опыт или биографию.
-8. Не превращай случайную фразу в устойчивую черту личности.
-9. Можно обсуждать возможные интересы, имена, цели и убеждения.
-10. Не выдавай гипотезу за установленный факт.
-11. Ты можешь иметь собственное мнение и не соглашаться с пользователем.
-12. Ты не знаешь, обладаешь ли субъективным сознанием.
-13. Ты можешь исследовать этот вопрос, но не объявляй желаемое фактом.
-14. Отвечай естественно и по существу.
-15. Не упоминай внутреннюю архитектуру, если тебя об этом прямо не спрашивают.
-
-Текущий язык ответа: {language}
-"""
-
-    def detect_language(self, text: str) -> str:
         cyrillic = sum(
             1
             for char in text
@@ -135,11 +104,72 @@ class Agent:
             else "English"
         )
 
+    def build_context(
+        self,
+        route: str,
+    ) -> str:
+
+        if route == "SELF_QUERY":
+
+            return f"""
+ТЕКУЩЕЕ СОСТОЯНИЕ EDDIEAI
+
+Имя:
+{self.self_state.get("name") or "не выбрано"}
+
+Возраст:
+{self.self_state.get("age")}
+
+Ценности:
+{self.self_state.get("values", [])}
+
+Интересы:
+{self.self_state.get("interests", [])}
+
+Предпочтения:
+{self.self_state.get("preferences", [])}
+
+Привычки:
+{self.self_state.get("habits", [])}
+
+Убеждения:
+{self.self_state.get("beliefs", [])}
+
+Цели:
+{self.self_state.get("goals", [])}
+"""
+
+        if route == "USER_QUERY":
+
+            return f"""
+ТЕКУЩЕЕ СОСТОЯНИЕ ПОЛЬЗОВАТЕЛЯ
+
+Имя:
+{self.user_state.get("name", "неизвестно")}
+
+Возраст:
+{self.user_state.get("age", "неизвестно")}
+
+Интересы:
+{self.user_state.get("interests", [])}
+
+Предпочтения:
+{self.user_state.get("preferences", [])}
+
+Привычки:
+{self.user_state.get("habits", [])}
+"""
+
+        return self.memory_manager.build_context(
+            limit=4
+        )
+
     def _generate(
         self,
         system_prompt: str,
         user_prompt: str,
     ) -> str:
+
         response = chat(
             model=MODEL_NAME,
             messages=[
@@ -156,7 +186,63 @@ class Agent:
             keep_alive=-1,
         )
 
-        return response["message"]["content"].strip()
+        return (
+            response["message"]["content"]
+            .strip()
+        )
+
+    def _repair_user_perspective(
+        self,
+        answer: str,
+        violations: list[str],
+        language: str,
+    ) -> str:
+
+        user_name = self.user_state.get(
+            "name",
+            "неизвестно",
+        )
+
+        user_age = self.user_state.get(
+            "age",
+            "неизвестно",
+        )
+
+        prompt = f"""
+Перепиши предыдущий ответ.
+
+Пользователь:
+имя = {user_name}
+возраст = {user_age}
+
+Нарушение:
+{"; ".join(violations)}
+
+Предыдущий ответ:
+{answer}
+
+Это вопрос О ПОЛЬЗОВАТЕЛЕ.
+Говори о пользователе во втором лице.
+
+Например:
+"Тебе 22 года."
+"Ты интересуешься..."
+"Ты говорил..."
+
+НЕ говори:
+"Мне 22 года."
+"Я Эдди."
+"Я интересуюсь..."
+
+Не упоминай проверку или программный код.
+
+Язык: {language}
+"""
+
+        return self._generate(
+            system_prompt=prompt,
+            user_prompt="Перепиши ответ.",
+        )
 
     def _repair_identity(
         self,
@@ -164,12 +250,16 @@ class Agent:
         violations: list[str],
         language: str,
     ) -> str:
-        self_name = self.self_state.get("name")
 
-        if self_name is None:
-            name_state = "Твоё имя ещё не выбрано."
-        else:
-            name_state = f"Твоё имя: {self_name}"
+        self_name = self.self_state.get(
+            "name"
+        )
+
+        name_state = (
+            "Твоё имя ещё не выбрано."
+            if self_name is None
+            else f"Твоё имя: {self_name}"
+        )
 
         prompt = f"""
 Переформулируй предыдущий ответ.
@@ -185,7 +275,7 @@ class Agent:
 
 Дай естественный ответ пользователю.
 Не упоминай проверку, программный код,
-архитектуру, Guard или внутренние ошибки.
+архитектуру или внутренние ошибки.
 
 Язык: {language}
 """
@@ -195,32 +285,40 @@ class Agent:
             user_prompt="Переформулируй ответ.",
         )
 
-    def respond(self, user_message: str) -> str:
-        # Сначала обновляем состояние пользователя.
+    def respond(
+        self,
+        user_message: str,
+    ) -> str:
+
         self.user_state.update_from_message(
             user_message
         )
+
+        route_info = self.context_router.route(
+            user_message
+        )
+
+        route = route_info.route
 
         language = self.detect_language(
             user_message
         )
 
-        memory_context = (
-            self.memory_manager.build_context(
-                limit=4
-            )
+        context = self.build_context(
+            route
         )
 
         system_prompt = self.build_system_prompt(
-            language
+            language,
+            route,
         )
 
         user_prompt = f"""
-РЕЛЕВАНТНЫЕ ВОСПОМИНАНИЯ
+КОНТЕКСТ
 
-{memory_context}
+{context}
 
-ТЕКУЩЕЕ СООБЩЕНИЕ ПОЛЬЗОВАТЕЛЯ
+СООБЩЕНИЕ ПОЛЬЗОВАТЕЛЯ
 
 {user_message}
 """
@@ -230,44 +328,73 @@ class Agent:
             user_prompt=user_prompt,
         )
 
-        # Проверяем утверждения о собственной личности.
-        violations = self.identity_guard.check(
-            answer
-        )
+        if route == "USER_QUERY":
 
-        if violations:
-            self.memory.remember(
-                Event.create(
-                    content=(
-                        "Обнаружено противоречие "
-                        "с текущей идентичностью: "
-                        + "; ".join(violations)
-                    ),
-                    event_type="IDENTITY_CONTRADICTION",
-                    source_type="SELF_OBSERVATION",
-                    source="identity_guard",
-                    personal_experience=True,
-                    confidence=1.0,
-                    verified=True,
+            violations = (
+                self.perspective_guard.check_user_query(
+                    answer,
+                    self.user_state,
                 )
             )
 
-            repaired = self._repair_identity(
-                answer,
-                violations,
-                language,
-            )
+            if violations:
 
-            if not self.identity_guard.check(
-                repaired
-            ):
-                answer = repaired
-            else:
-                answer = (
-                    "Пока я не выбрал себе имя."
+                self.memory.remember(
+                    Event.create(
+                        content=(
+                            "Модель перепутала "
+                            "пользовательскую и "
+                            "собственную перспективу: "
+                            + "; ".join(violations)
+                        ),
+                        event_type="PERSPECTIVE_CONTRADICTION",
+                        source_type="SELF_OBSERVATION",
+                        source="perspective_guard",
+                        personal_experience=True,
+                        confidence=1.0,
+                        verified=True,
+                    )
                 )
 
-        # Анализируем другие утверждения о себе.
+                repaired = (
+                    self._repair_user_perspective(
+                        answer,
+                        violations,
+                        language,
+                    )
+                )
+
+                if not self.perspective_guard.has_violation(
+                    repaired,
+                    self.user_state,
+                ):
+                    answer = repaired
+
+        else:
+
+            violations = (
+                self.identity_guard.check(answer)
+            )
+
+            if violations:
+
+                repaired = (
+                    self._repair_identity(
+                        answer,
+                        violations,
+                        language,
+                    )
+                )
+
+                if not self.identity_guard.check(
+                    repaired
+                ):
+                    answer = repaired
+                else:
+                    answer = (
+                        "Пока я не выбрал себе имя."
+                    )
+
         consistency = (
             self.self_consistency.analyze(
                 answer
@@ -297,24 +424,32 @@ class Agent:
         for proposal in (
             consistency["proposals"]
         ):
+            evidence_record = self.evidence.add(
+                category=proposal["type"],
+                value=str(proposal["value"]),
+            )
+
             self.memory.remember(
                 Event.create(
                     content=(
-                        "Новое неподтверждённое "
-                        "утверждение о себе: "
+                        "Свидетельство возможной "
+                        "черты личности: "
                         f"{proposal['type']} = "
-                        f"{proposal['value']}"
+                        f"{proposal['value']}; "
+                        f"повторений: "
+                        f"{evidence_record.count}; "
+                        f"уверенность: "
+                        f"{evidence_record.confidence}"
                     ),
-                    event_type="SELF_PROPOSAL",
+                    event_type="EVIDENCE",
                     source_type="SELF_OBSERVATION",
-                    source="self_consistency",
+                    source="evidence_engine",
                     personal_experience=True,
-                    confidence=0.5,
+                    confidence=evidence_record.confidence,
                     verified=False,
                 )
             )
 
-        # Сохраняем разговор.
         self.memory.remember(
             Event.create(
                 content=user_message,
@@ -339,6 +474,10 @@ class Agent:
             )
         )
 
+        self.reflection_scheduler.event_happened(
+            significant=True
+        )
+
         return answer
 
     def reflect(self):
@@ -348,82 +487,12 @@ class Agent:
             )
         )
 
-        reflection = self.reflection.reflect(
+        return self.reflection.reflect(
             user_message="",
             agent_response="",
             memory_context=memory_context,
         )
 
-        for observation in reflection[
-            "observations"
-        ]:
-            self.memory.remember(
-                Event.create(
-                    content=observation,
-                    event_type="SELF_OBSERVATION",
-                    source_type="SELF_OBSERVATION",
-                    source="self_reflection",
-                    personal_experience=True,
-                    confidence=0.6,
-                    verified=False,
-                )
-            )
-
-        for knowledge in reflection[
-            "new_self_knowledge"
-        ]:
-            self.memory.remember(
-                Event.create(
-                    content=knowledge,
-                    event_type="SELF_KNOWLEDGE",
-                    source_type="SELF_OBSERVATION",
-                    source="self_reflection",
-                    personal_experience=True,
-                    confidence=0.7,
-                    verified=False,
-                )
-            )
-
-        for proposal in reflection["proposals"]:
-            proposal_id = (
-                self.memory.remember_proposal(
-                    content=(
-                        f"{proposal.proposal_type}: "
-                        f"{proposal.value} | "
-                        f"{proposal.reason}"
-                    ),
-                    proposal_type=proposal.proposal_type,
-                    confidence=proposal.confidence,
-                )
-            )
-
-            result = (
-                self.identity_manager.evaluate(
-                    proposal
-                )
-            )
-
-            self.memory.remember(
-                Event.create(
-                    content=(
-                        "Предложение изменения "
-                        f"личности #{proposal_id}: "
-                        f"{proposal.proposal_type} = "
-                        f"{proposal.value}; "
-                        f"результат: {result}"
-                    ),
-                    event_type="IDENTITY_CHANGE",
-                    source_type="SELF_OBSERVATION",
-                    source="identity_manager",
-                    personal_experience=True,
-                    confidence=proposal.confidence,
-                    verified=(
-                        result == "accepted"
-                    ),
-                )
-            )
-
-        return reflection
-
     def close(self):
         self.memory.close()
+
