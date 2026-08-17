@@ -13,9 +13,17 @@ class IdentityManager:
 
     MIN_CONFIDENCE = 0.75
 
-    def __init__(self, self_state, memory):
+    def __init__(
+        self,
+        self_state,
+        memory,
+        personality_lifecycle=None,
+    ):
         self.self_state = self_state
         self.memory = memory
+        self.personality_lifecycle = (
+            personality_lifecycle
+        )
 
     def evaluate(self, proposal: Proposal) -> str:
         if proposal.confidence < self.MIN_CONFIDENCE:
@@ -109,5 +117,20 @@ class IdentityManager:
             proposal_type=proposal.proposal_type,
             confidence=proposal.confidence,
         )
+
+        if self.personality_lifecycle is not None:
+            evidence_count = (
+                proposal.evidence_count
+                if proposal.evidence_count is not None
+                else len(proposal.evidence)
+            )
+
+            self.personality_lifecycle.promote(
+                field=proposal.proposal_type,
+                value=value,
+                strength=proposal.confidence,
+                confidence=proposal.confidence,
+                evidence_count=evidence_count,
+            )
 
         return "accepted"

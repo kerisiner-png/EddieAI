@@ -33,7 +33,11 @@ DEFAULT_STATE = {
     "goals": [],
     "relationships": {
         "Eddie": {
-            "role": "close_friend_and_equal_partner"
+            "roles": [
+                "creator",
+                "close_friend",
+                "equal_partner",
+            ]
         }
     },
 

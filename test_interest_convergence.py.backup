@@ -1,0 +1,106 @@
+﻿from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from identity.evidence_consolidator import (
+    EvidenceConsolidator,
+)
+from identity.personality_lifecycle import (
+    PersonalityLifecycle,
+)
+from identity.self_state import SelfState
+from identity.user_evidence import (
+    UserEvidenceRecorder,
+)
+
+from memory.database import Memory
+from memory.evidence import EvidenceEngine
+
+
+with TemporaryDirectory() as temp:
+    memory = None
+
+    try:
+        state = SelfState(
+            Path(temp) / "state.json"
+        )
+
+        memory = Memory(
+            Path(temp) / "memory.db"
+        )
+
+        evidence = EvidenceEngine(
+            memory
+        )
+
+        lifecycle = PersonalityLifecycle(
+            state
+        )
+
+        consolidator = (
+            EvidenceConsolidator(
+                evidence,
+                lifecycle,
+            )
+        )
+
+        user_evidence = (
+            UserEvidenceRecorder(
+                evidence
+            )
+        )
+
+        evidence.add(
+            category="interest",
+            value="космос",
+            source="SELF_ACTION",
+        )
+
+        evidence.add(
+            category="interest",
+            value="космос",
+            source="SELF_OBSERVATION",
+        )
+
+        user_result = (
+            user_evidence.record_interest(
+                "космос"
+            )
+        )
+
+        evidence.add(
+            category="interest",
+            value="космос",
+            source="SHARED_EXPERIENCE",
+        )
+
+        print("=== USER STATEMENT ===")
+        print(user_result)
+
+        print()
+        print("=== COMBINED EVIDENCE ===")
+
+        record = evidence.get(
+            "interest",
+            "космос",
+        )
+
+        print(record)
+
+        print()
+        print("=== CONSOLIDATION ===")
+
+        result = (
+            consolidator.consolidate()
+        )
+
+        print(result)
+
+        print()
+        print("=== TRAITS ===")
+
+        for trait in lifecycle.all_traits():
+            print(trait)
+
+    finally:
+        if memory is not None:
+            memory.close()

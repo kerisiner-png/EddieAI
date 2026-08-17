@@ -1,4 +1,11 @@
-﻿from ollama import chat
+﻿from identity.evidence_consolidator import EvidenceConsolidator
+from identity.user_evidence import (
+    UserEvidenceRecorder,
+)
+from identity.user_statement_detector import (
+    UserStatementDetector,
+)
+from ollama import chat
 
 from core.context_router import ContextRouter
 from core.perspective_guard import PerspectiveGuard
@@ -7,6 +14,13 @@ from core.prompts import build_system_prompt
 from identity.identity_guard import IdentityGuard
 from identity.identity_manager import IdentityManager
 from identity.identity_seed import IDENTITY_SEED
+from identity.personality import PersonalityEngine
+from identity.personality_history import PersonalityHistory
+from identity.personality_lifecycle import PersonalityLifecycle
+from identity.personality_reflection import PersonalityReflection
+from identity.promotion import PromotionEngine
+from identity.proposal import Proposal
+from identity.reflection_cycle import ReflectionCycle
 from identity.reflection_scheduler import ReflectionScheduler
 from identity.self_consistency import SelfConsistency
 from identity.self_reflection import SelfReflection
@@ -18,6 +32,7 @@ from memory.events import Event
 from memory.evidence import EvidenceEngine
 from memory.knowledge_manager import KnowledgeManager
 from memory.manager import MemoryManager
+from memory.patterns import PatternDetector
 from memory.retrieval import MemoryRetrieval
 
 
@@ -46,17 +61,80 @@ class Agent:
             self.memory
         )
 
-        self.evidence = EvidenceEngine(
-            self.memory
-        )
+        # ---------------------------------------------
+        # Identity / state
+        # ---------------------------------------------
 
         self.self_state = SelfState()
         self.user_state = UserState()
 
+        self.personality_history = PersonalityHistory(
+            self.memory
+        )
+
+        self.personality_lifecycle = (
+            PersonalityLifecycle(
+                self.self_state,
+                history=self.personality_history,
+            )
+        )
+
         self.identity_seed = IDENTITY_SEED
+
+        # ---------------------------------------------
+        # Evidence / personality
+        # ---------------------------------------------
+
+        self.evidence = EvidenceEngine(
+            self.memory
+        )
+
+        self.user_statement_detector = (
+            UserStatementDetector()
+        )
+
+        self.user_evidence_recorder = (
+            UserEvidenceRecorder(
+                self.evidence
+            )
+        )
+
+        self.evidence_consolidator = (
+            EvidenceConsolidator(
+                self.evidence,
+            )
+        )
+
+        self.pattern_detector = PatternDetector(
+            self.memory
+        )
+
+        self.personality = PersonalityEngine(
+            self.pattern_detector
+        )
+
+        self.promotion = PromotionEngine(
+            self.evidence
+        )
+
+        self.personality_reflection = (
+            PersonalityReflection(self)
+        )
+
+        self.reflection_cycle = ReflectionCycle(
+            self
+        )
+
+        # ---------------------------------------------
+        # Context / perspective
+        # ---------------------------------------------
 
         self.context_router = ContextRouter()
         self.perspective_guard = PerspectiveGuard()
+
+        # ---------------------------------------------
+        # Self-consistency
+        # ---------------------------------------------
 
         self.identity_guard = IdentityGuard(
             self.self_state
@@ -66,9 +144,14 @@ class Agent:
             self.self_state
         )
 
+        # ---------------------------------------------
+        # Reflection / identity management
+        # ---------------------------------------------
+
         self.identity_manager = IdentityManager(
             self.self_state,
             self.memory,
+            self.personality_lifecycle,
         )
 
         self.reflection = SelfReflection(
@@ -82,6 +165,40 @@ class Agent:
             )
         )
 
+    # =================================================
+    # IDENTITY CONTEXT
+    # =================================================
+
+    def build_identity_context(self) -> dict:
+        return {
+            "self": {
+                "entity": "EddieAI",
+                "name": self.self_state.get("name"),
+                "gender": self.self_state.get("gender"),
+                "age": self.self_state.get("age"),
+            },
+            "user": {
+                "entity": "human_user_creator",
+                "name": self.user_state.get(
+                    "name",
+                    "unknown",
+                ),
+                "age": self.user_state.get(
+                    "age",
+                ),
+            },
+            "relationships": (
+                self.self_state.get(
+                    "relationships",
+                    {},
+                )
+            ),
+        }
+
+    # =================================================
+    # PROMPT
+    # =================================================
+
     def build_system_prompt(
         self,
         language: str,
@@ -94,6 +211,10 @@ class Agent:
             language=language,
             route=route,
         )
+
+    # =================================================
+    # LANGUAGE
+    # =================================================
 
     def detect_language(
         self,
@@ -116,6 +237,10 @@ class Agent:
             if cyrillic >= latin
             else "English"
         )
+
+    # =================================================
+    # CONTEXT
+    # =================================================
 
     def build_context(
         self,
@@ -172,13 +297,20 @@ class Agent:
 """
 
         if route == "MEMORY_QUERY":
-            return self.memory_retrieval.build_memory_query_context(
-                limit=12
+            return (
+                self.memory_retrieval
+                .build_memory_query_context(
+                    limit=12
+                )
             )
 
         return self.memory_manager.build_context(
             limit=4
         )
+
+    # =================================================
+    # LLM
+    # =================================================
 
     def _generate(
         self,
@@ -201,11 +333,14 @@ class Agent:
             keep_alive=-1,
         )
 
-        return response[
-            "message"
-        ][
-            "content"
-        ].strip()
+        return (
+            response["message"]["content"]
+            .strip()
+        )
+
+    # =================================================
+    # REPAIR: USER PERSPECTIVE
+    # =================================================
 
     def _repair_user_perspective(
         self,
@@ -259,6 +394,10 @@ class Agent:
             user_prompt="Перепиши ответ.",
         )
 
+    # =================================================
+    # REPAIR: SELF IDENTITY
+    # =================================================
+
     def _repair_identity(
         self,
         answer: str,
@@ -299,21 +438,18 @@ class Agent:
             user_prompt="Переформулируй ответ.",
         )
 
+    # =================================================
+    # USER KNOWLEDGE
+    # =================================================
+
     def _store_user_changes(
         self,
         changes: list[dict],
     ):
-        """
-        Записывает только явно подтверждённые
-        пользователем изменения UserState.
-        """
-
         for change in changes:
             field = change["field"]
             new_value = change["new_value"]
-            source_text = change[
-                "source_text"
-            ]
+            source_text = change["source_text"]
 
             self.knowledge_manager.store(
                 content=(
@@ -344,10 +480,50 @@ class Agent:
                 )
             )
 
+    # =================================================
+    # MAIN RESPONSE
+    # =================================================
+
+    def reinforce_existing_trait(
+        self,
+        category: str,
+        value: str,
+    ):
+        """
+        Если эта особенность уже существует
+        в personality lifecycle, новый опыт
+        её подкрепляет.
+        """
+
+        trait = self.personality_lifecycle.get(
+            category + "s"
+            if category in {
+                "interest",
+                "preference",
+                "habit",
+                "belief",
+                "goal",
+            }
+            else category,
+            value,
+        )
+
+        if trait is None:
+            return None
+
+        return (
+            self.personality_lifecycle
+            .reinforce(
+                field=trait.field,
+                value=trait.value,
+            )
+        )
+
     def respond(
         self,
         user_message: str,
     ) -> str:
+
         # ---------------------------------------------
         # USER STATE
         # ---------------------------------------------
@@ -361,6 +537,25 @@ class Agent:
         self._store_user_changes(
             user_changes
         )
+
+        # ---------------------------------------------
+        # USER SELF-STATEMENTS / EVIDENCE
+        # ---------------------------------------------
+
+        user_statements = (
+            self.user_statement_detector.detect(
+                user_message
+            )
+        )
+
+        for statement in user_statements:
+            if (
+                statement.get("category")
+                == "interest"
+            ):
+                self.user_evidence_recorder.record_interest(
+                    statement.get("value")
+                )
 
         # ---------------------------------------------
         # ROUTING
@@ -530,9 +725,7 @@ class Agent:
                     source_type=(
                         "SELF_OBSERVATION"
                     ),
-                    source=(
-                        "self_consistency"
-                    ),
+                    source="self_consistency",
                     personal_experience=True,
                     confidence=1.0,
                     verified=True,
@@ -552,6 +745,7 @@ class Agent:
                     value=str(
                         proposal["value"]
                     ),
+                    source="SELF_OBSERVATION",
                 )
             )
 
@@ -571,9 +765,7 @@ class Agent:
                     source_type=(
                         "SELF_OBSERVATION"
                     ),
-                    source=(
-                        "evidence_engine"
-                    ),
+                    source="evidence_engine",
                     personal_experience=True,
                     confidence=(
                         evidence_record.confidence
@@ -590,11 +782,9 @@ class Agent:
             Event.create(
                 content=user_message,
                 event_type="CONVERSATION",
-                source_type=(
-                    "DIRECT_INTERACTION"
-                ),
+                source_type="DIRECT_INTERACTION",
                 source="Eddie",
-                personal_experience=True,
+                personal_experience=False,
                 confidence=1.0,
                 verified=True,
             )
@@ -622,9 +812,208 @@ class Agent:
 
         return answer
 
+    # =================================================
+    # PERSONALITY REVIEW
+    # =================================================
+
+    def personality_review(self):
+        candidates = self.personality.candidates(
+            self_state=self.self_state
+        )
+
+        if not candidates:
+            return []
+
+        reflection = (
+            self.personality_reflection.analyze(
+                candidates
+            )
+        )
+
+        reflection_map = {}
+
+        for item in reflection:
+            key = (
+                item.get("field"),
+                item.get("value"),
+            )
+
+            reflection_map[key] = item
+
+        decisions = []
+
+        for candidate in candidates:
+            decision = self.promotion.evaluate(
+                candidate
+            )
+
+            key = (
+                candidate.field,
+                candidate.value,
+            )
+
+            decisions.append({
+                "candidate": candidate,
+                "decision": decision,
+                "reflection": reflection_map.get(
+                    key
+                ),
+            })
+
+        return decisions
+
+    # =================================================
+    # APPLY REFLECTION CYCLE
+    # =================================================
+
+    def apply_reflection_cycle(
+        self,
+        cycle_result: dict,
+    ):
+        results = []
+
+        decisions = cycle_result.get(
+            "candidate_decisions",
+            [],
+        )
+
+        candidates = {
+            (
+                candidate.field,
+                candidate.value,
+            ): candidate
+            for candidate in self.personality.candidates(
+                self_state=self.self_state
+            )
+        }
+
+        for item in decisions:
+            field = item.get("field")
+            value = item.get("value")
+            llm_decision = item.get("decision")
+            reason = item.get(
+                "reason",
+                "",
+            )
+
+            candidate = candidates.get(
+                (
+                    field,
+                    value,
+                )
+            )
+
+            if candidate is None:
+                continue
+
+            deterministic = (
+                self.promotion.evaluate(
+                    candidate
+                )
+            )
+
+            final_decision = "defer"
+
+            # LLM предлагает.
+            # PromotionEngine решает,
+            # достаточно ли доказательств.
+            if (
+                llm_decision == "promote"
+                and deterministic.action
+                == "PROMOTE"
+            ):
+                proposal = Proposal(
+                    proposal_type=candidate.category,
+                    value=candidate.value,
+                    reason=(
+                        reason
+                        or candidate.reason
+                    ),
+                    confidence=candidate.strength,
+                    evidence=[
+                        f"source:{source}"
+                        for source
+                        in candidate.source_types
+                    ],
+                    evidence_count=(
+                        candidate.evidence_count
+                    ),
+                )
+
+                identity_result = (
+                    self.identity_manager.evaluate(
+                        proposal
+                    )
+                )
+
+                if (
+                    identity_result
+                    == "accepted"
+                ):
+                    final_decision = (
+                        "accepted"
+                    )
+
+                    self.memory.remember(
+                        Event.create(
+                            content=(
+                                "Черта личности "
+                                "подтверждена: "
+                                f"{candidate.field} = "
+                                f"{candidate.value}"
+                            ),
+                            event_type=(
+                                "PERSONALITY_PROMOTION"
+                            ),
+                            source_type=(
+                                "SELF_OBSERVATION"
+                            ),
+                            source="promotion_engine",
+                            personal_experience=True,
+                            confidence=(
+                                candidate.strength
+                            ),
+                            verified=True,
+                        )
+                    )
+
+                elif (
+                    identity_result
+                    == "deferred"
+                ):
+                    final_decision = (
+                        "deferred"
+                    )
+                else:
+                    final_decision = (
+                        "rejected"
+                    )
+
+            results.append({
+                "field": field,
+                "value": value,
+                "llm_decision": (
+                    llm_decision
+                ),
+                "deterministic_decision": (
+                    deterministic.action
+                ),
+                "final_decision": (
+                    final_decision
+                ),
+                "reason": reason,
+            })
+
+        return results
+
+    # =================================================
+    # FULL REFLECTION
+    # =================================================
+
     def reflect(self):
         memory_context = (
-            self.memory_manager.build_context(
+            self.memory_manager
+            .build_reflection_context(
                 limit=20
             )
         )
@@ -635,7 +1024,14 @@ class Agent:
             memory_context=memory_context,
         )
 
+    # =================================================
+    # CLOSE
+    # =================================================
+
     def close(self):
         self.memory.close()
+
+
+
 
 

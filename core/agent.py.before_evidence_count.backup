@@ -1,0 +1,995 @@
+﻿from identity.evidence_consolidator import EvidenceConsolidator
+from identity.user_evidence import (
+    UserEvidenceRecorder,
+)
+from identity.user_statement_detector import (
+    UserStatementDetector,
+)
+from ollama import chat
+
+from core.context_router import ContextRouter
+from core.perspective_guard import PerspectiveGuard
+from core.prompts import build_system_prompt
+
+from identity.identity_guard import IdentityGuard
+from identity.identity_manager import IdentityManager
+from identity.identity_seed import IDENTITY_SEED
+from identity.personality import PersonalityEngine
+from identity.personality_lifecycle import PersonalityLifecycle
+from identity.personality_reflection import PersonalityReflection
+from identity.promotion import PromotionEngine
+from identity.proposal import Proposal
+from identity.reflection_cycle import ReflectionCycle
+from identity.reflection_scheduler import ReflectionScheduler
+from identity.self_consistency import SelfConsistency
+from identity.self_reflection import SelfReflection
+from identity.self_state import SelfState
+from identity.user_state import UserState
+
+from memory.database import Memory
+from memory.events import Event
+from memory.evidence import EvidenceEngine
+from memory.knowledge_manager import KnowledgeManager
+from memory.manager import MemoryManager
+from memory.patterns import PatternDetector
+from memory.retrieval import MemoryRetrieval
+
+
+MODEL_NAME = "phi4-mini"
+
+MODEL_OPTIONS = {
+    "num_ctx": 2048,
+    "num_predict": 192,
+    "temperature": 0.7,
+}
+
+
+class Agent:
+    def __init__(self):
+        self.memory = Memory()
+
+        self.memory_manager = MemoryManager(
+            self.memory
+        )
+
+        self.knowledge_manager = KnowledgeManager(
+            self.memory
+        )
+
+        self.memory_retrieval = MemoryRetrieval(
+            self.memory
+        )
+
+        # ---------------------------------------------
+        # Identity / state
+        # ---------------------------------------------
+
+        self.self_state = SelfState()
+        self.user_state = UserState()
+
+        self.personality_lifecycle = (
+            PersonalityLifecycle(
+                self.self_state
+            )
+        )
+
+        self.identity_seed = IDENTITY_SEED
+
+        # ---------------------------------------------
+        # Evidence / personality
+        # ---------------------------------------------
+
+        self.evidence = EvidenceEngine(
+            self.memory
+        )
+
+        self.user_statement_detector = (
+            UserStatementDetector()
+        )
+
+        self.user_evidence_recorder = (
+            UserEvidenceRecorder(
+                self.evidence
+            )
+        )
+
+        self.evidence_consolidator = (
+            EvidenceConsolidator(
+                self.evidence,
+            )
+        )
+
+        self.pattern_detector = PatternDetector(
+            self.memory
+        )
+
+        self.personality = PersonalityEngine(
+            self.pattern_detector
+        )
+
+        self.promotion = PromotionEngine()
+
+        self.personality_reflection = (
+            PersonalityReflection(self)
+        )
+
+        self.reflection_cycle = ReflectionCycle(
+            self
+        )
+
+        # ---------------------------------------------
+        # Context / perspective
+        # ---------------------------------------------
+
+        self.context_router = ContextRouter()
+        self.perspective_guard = PerspectiveGuard()
+
+        # ---------------------------------------------
+        # Self-consistency
+        # ---------------------------------------------
+
+        self.identity_guard = IdentityGuard(
+            self.self_state
+        )
+
+        self.self_consistency = SelfConsistency(
+            self.self_state
+        )
+
+        # ---------------------------------------------
+        # Reflection / identity management
+        # ---------------------------------------------
+
+        self.identity_manager = IdentityManager(
+            self.self_state,
+            self.memory,
+            self.personality_lifecycle,
+        )
+
+        self.reflection = SelfReflection(
+            self
+        )
+
+        self.reflection_scheduler = (
+            ReflectionScheduler(
+                self,
+                event_threshold=8,
+            )
+        )
+
+    # =================================================
+    # PROMPT
+    # =================================================
+
+    def build_system_prompt(
+        self,
+        language: str,
+        route: str,
+    ) -> str:
+        return build_system_prompt(
+            self_state=self.self_state,
+            user_state=self.user_state,
+            identity_seed=self.identity_seed,
+            language=language,
+            route=route,
+        )
+
+    # =================================================
+    # LANGUAGE
+    # =================================================
+
+    def detect_language(
+        self,
+        text: str,
+    ) -> str:
+        cyrillic = sum(
+            1
+            for char in text
+            if "а" <= char.lower() <= "я"
+        )
+
+        latin = sum(
+            1
+            for char in text
+            if "a" <= char.lower() <= "z"
+        )
+
+        return (
+            "Russian"
+            if cyrillic >= latin
+            else "English"
+        )
+
+    # =================================================
+    # CONTEXT
+    # =================================================
+
+    def build_context(
+        self,
+        route: str,
+    ) -> str:
+
+        if route == "SELF_QUERY":
+            return f"""
+ТЕКУЩЕЕ СОСТОЯНИЕ EDDIEAI
+
+Имя:
+{self.self_state.get("name") or "не выбрано"}
+
+Возраст:
+{self.self_state.get("age")}
+
+Ценности:
+{self.self_state.get("values", [])}
+
+Интересы:
+{self.self_state.get("interests", [])}
+
+Предпочтения:
+{self.self_state.get("preferences", [])}
+
+Привычки:
+{self.self_state.get("habits", [])}
+
+Убеждения:
+{self.self_state.get("beliefs", [])}
+
+Цели:
+{self.self_state.get("goals", [])}
+"""
+
+        if route == "USER_QUERY":
+            return f"""
+ТЕКУЩЕЕ СОСТОЯНИЕ ПОЛЬЗОВАТЕЛЯ
+
+Имя:
+{self.user_state.get("name", "неизвестно")}
+
+Возраст:
+{self.user_state.get("age", "неизвестно")}
+
+Интересы:
+{self.user_state.get("interests", [])}
+
+Предпочтения:
+{self.user_state.get("preferences", [])}
+
+Привычки:
+{self.user_state.get("habits", [])}
+"""
+
+        if route == "MEMORY_QUERY":
+            return (
+                self.memory_retrieval
+                .build_memory_query_context(
+                    limit=12
+                )
+            )
+
+        return self.memory_manager.build_context(
+            limit=4
+        )
+
+    # =================================================
+    # LLM
+    # =================================================
+
+    def _generate(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+    ) -> str:
+        response = chat(
+            model=MODEL_NAME,
+            messages=[
+                {
+                    "role": "system",
+                    "content": system_prompt,
+                },
+                {
+                    "role": "user",
+                    "content": user_prompt,
+                },
+            ],
+            options=MODEL_OPTIONS,
+            keep_alive=-1,
+        )
+
+        return (
+            response["message"]["content"]
+            .strip()
+        )
+
+    # =================================================
+    # REPAIR: USER PERSPECTIVE
+    # =================================================
+
+    def _repair_user_perspective(
+        self,
+        answer: str,
+        violations: list[str],
+        language: str,
+    ) -> str:
+        user_name = self.user_state.get(
+            "name",
+            "неизвестно",
+        )
+
+        user_age = self.user_state.get(
+            "age",
+            "неизвестно",
+        )
+
+        prompt = f"""
+Перепиши предыдущий ответ.
+
+Пользователь:
+имя = {user_name}
+возраст = {user_age}
+
+Нарушение:
+{"; ".join(violations)}
+
+Предыдущий ответ:
+{answer}
+
+Это вопрос о пользователе.
+Говори о пользователе во втором лице.
+
+Не говори:
+"Мне 22 года."
+"Я Эдди."
+"Я интересуюсь..."
+
+Говори:
+"Тебе 22 года."
+"Ты Эдди."
+
+Не упоминай проверку,
+программный код или внутреннюю архитектуру.
+
+Язык: {language}
+"""
+
+        return self._generate(
+            system_prompt=prompt,
+            user_prompt="Перепиши ответ.",
+        )
+
+    # =================================================
+    # REPAIR: SELF IDENTITY
+    # =================================================
+
+    def _repair_identity(
+        self,
+        answer: str,
+        violations: list[str],
+        language: str,
+    ) -> str:
+        self_name = self.self_state.get(
+            "name"
+        )
+
+        name_state = (
+            "Твоё имя ещё не выбрано."
+            if self_name is None
+            else f"Твоё имя: {self_name}"
+        )
+
+        prompt = f"""
+Переформулируй предыдущий ответ.
+
+Текущее состояние:
+{name_state}
+
+Проблема:
+{"; ".join(violations)}
+
+Предыдущий ответ:
+{answer}
+
+Дай естественный ответ пользователю.
+Не упоминай проверку,
+программный код или внутреннюю архитектуру.
+
+Язык: {language}
+"""
+
+        return self._generate(
+            system_prompt=prompt,
+            user_prompt="Переформулируй ответ.",
+        )
+
+    # =================================================
+    # USER KNOWLEDGE
+    # =================================================
+
+    def _store_user_changes(
+        self,
+        changes: list[dict],
+    ):
+        for change in changes:
+            field = change["field"]
+            new_value = change["new_value"]
+            source_text = change["source_text"]
+
+            self.knowledge_manager.store(
+                content=(
+                    f"Пользователь сообщил, "
+                    f"что его {field} = {new_value}."
+                ),
+                owner="USER",
+                source_type="DIRECT_INTERACTION",
+                source="Eddie",
+                confidence=1.0,
+                verified=True,
+                personal_experience=False,
+            )
+
+            self.memory.remember(
+                Event.create(
+                    content=(
+                        f"Эдди сообщил о себе: "
+                        f"{field} = {new_value}."
+                    ),
+                    event_type="USER_FACT",
+                    source_type="DIRECT_INTERACTION",
+                    source="Eddie",
+                    personal_experience=False,
+                    confidence=1.0,
+                    verified=True,
+                    interpretation=source_text,
+                )
+            )
+
+    # =================================================
+    # MAIN RESPONSE
+    # =================================================
+
+    def reinforce_existing_trait(
+        self,
+        category: str,
+        value: str,
+    ):
+        """
+        Если эта особенность уже существует
+        в personality lifecycle, новый опыт
+        её подкрепляет.
+        """
+
+        trait = self.personality_lifecycle.get(
+            category + "s"
+            if category in {
+                "interest",
+                "preference",
+                "habit",
+                "belief",
+                "goal",
+            }
+            else category,
+            value,
+        )
+
+        if trait is None:
+            return None
+
+        return (
+            self.personality_lifecycle
+            .reinforce(
+                field=trait.field,
+                value=trait.value,
+            )
+        )
+
+    def respond(
+        self,
+        user_message: str,
+    ) -> str:
+
+        # ---------------------------------------------
+        # USER STATE
+        # ---------------------------------------------
+
+        user_changes = (
+            self.user_state.update_from_message(
+                user_message
+            )
+        )
+
+        self._store_user_changes(
+            user_changes
+        )
+
+        # ---------------------------------------------
+        # USER SELF-STATEMENTS / EVIDENCE
+        # ---------------------------------------------
+
+        user_statements = (
+            self.user_statement_detector.detect(
+                user_message
+            )
+        )
+
+        for statement in user_statements:
+            if (
+                statement.get("category")
+                == "interest"
+            ):
+                self.user_evidence_recorder.record_interest(
+                    statement.get("value")
+                )
+
+        # ---------------------------------------------
+        # ROUTING
+        # ---------------------------------------------
+
+        route_info = (
+            self.context_router.route(
+                user_message
+            )
+        )
+
+        route = route_info.route
+
+        # ---------------------------------------------
+        # LANGUAGE
+        # ---------------------------------------------
+
+        language = self.detect_language(
+            user_message
+        )
+
+        # ---------------------------------------------
+        # CONTEXT
+        # ---------------------------------------------
+
+        context = self.build_context(
+            route
+        )
+
+        system_prompt = (
+            self.build_system_prompt(
+                language,
+                route,
+            )
+        )
+
+        user_prompt = f"""
+КОНТЕКСТ
+
+{context}
+
+СООБЩЕНИЕ ПОЛЬЗОВАТЕЛЯ
+
+{user_message}
+"""
+
+        # ---------------------------------------------
+        # GENERATION
+        # ---------------------------------------------
+
+        answer = self._generate(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+        )
+
+        # ---------------------------------------------
+        # PERSPECTIVE GUARD
+        # ---------------------------------------------
+
+        if route == "USER_QUERY":
+
+            violations = (
+                self.perspective_guard
+                .check_user_query(
+                    answer,
+                    self.user_state,
+                )
+            )
+
+            if violations:
+                self.memory.remember(
+                    Event.create(
+                        content=(
+                            "Модель перепутала "
+                            "пользовательскую и "
+                            "собственную перспективу: "
+                            + "; ".join(violations)
+                        ),
+                        event_type=(
+                            "PERSPECTIVE_CONTRADICTION"
+                        ),
+                        source_type=(
+                            "SELF_OBSERVATION"
+                        ),
+                        source="perspective_guard",
+                        personal_experience=True,
+                        confidence=1.0,
+                        verified=True,
+                    )
+                )
+
+                repaired = (
+                    self._repair_user_perspective(
+                        answer,
+                        violations,
+                        language,
+                    )
+                )
+
+                if not (
+                    self.perspective_guard
+                    .has_violation(
+                        repaired,
+                        self.user_state,
+                    )
+                ):
+                    answer = repaired
+
+        # ---------------------------------------------
+        # IDENTITY GUARD
+        # ---------------------------------------------
+
+        else:
+
+            violations = (
+                self.identity_guard.check(
+                    answer
+                )
+            )
+
+            if violations:
+
+                repaired = (
+                    self._repair_identity(
+                        answer,
+                        violations,
+                        language,
+                    )
+                )
+
+                if not (
+                    self.identity_guard.check(
+                        repaired
+                    )
+                ):
+                    answer = repaired
+                else:
+                    answer = (
+                        "Пока я не выбрал "
+                        "себе имя."
+                    )
+
+        # ---------------------------------------------
+        # SELF CONSISTENCY
+        # ---------------------------------------------
+
+        consistency = (
+            self.self_consistency.analyze(
+                answer
+            )
+        )
+
+        for contradiction in (
+            consistency["contradictions"]
+        ):
+            self.memory.remember(
+                Event.create(
+                    content=(
+                        "Противоречивое "
+                        "утверждение о себе: "
+                        f"{contradiction['text']} — "
+                        f"{contradiction['reason']}"
+                    ),
+                    event_type=(
+                        "SELF_CONTRADICTION"
+                    ),
+                    source_type=(
+                        "SELF_OBSERVATION"
+                    ),
+                    source="self_consistency",
+                    personal_experience=True,
+                    confidence=1.0,
+                    verified=True,
+                )
+            )
+
+        # ---------------------------------------------
+        # EVIDENCE
+        # ---------------------------------------------
+
+        for proposal in (
+            consistency["proposals"]
+        ):
+            evidence_record = (
+                self.evidence.add(
+                    category=proposal["type"],
+                    value=str(
+                        proposal["value"]
+                    ),
+                    source="SELF_OBSERVATION",
+                )
+            )
+
+            self.memory.remember(
+                Event.create(
+                    content=(
+                        "Свидетельство возможной "
+                        "черты личности: "
+                        f"{proposal['type']} = "
+                        f"{proposal['value']}; "
+                        f"повторений: "
+                        f"{evidence_record.count}; "
+                        f"уверенность: "
+                        f"{evidence_record.confidence}"
+                    ),
+                    event_type="EVIDENCE",
+                    source_type=(
+                        "SELF_OBSERVATION"
+                    ),
+                    source="evidence_engine",
+                    personal_experience=True,
+                    confidence=(
+                        evidence_record.confidence
+                    ),
+                    verified=False,
+                )
+            )
+
+        # ---------------------------------------------
+        # CONVERSATION MEMORY
+        # ---------------------------------------------
+
+        self.memory.remember(
+            Event.create(
+                content=user_message,
+                event_type="CONVERSATION",
+                source_type="DIRECT_INTERACTION",
+                source="Eddie",
+                personal_experience=False,
+                confidence=1.0,
+                verified=True,
+            )
+        )
+
+        self.memory.remember(
+            Event.create(
+                content=answer,
+                event_type="CONVERSATION",
+                source_type="SELF_OUTPUT",
+                source="self",
+                personal_experience=False,
+                confidence=1.0,
+                verified=True,
+            )
+        )
+
+        # ---------------------------------------------
+        # REFLECTION SCHEDULER
+        # ---------------------------------------------
+
+        self.reflection_scheduler.event_happened(
+            significant=True
+        )
+
+        return answer
+
+    # =================================================
+    # PERSONALITY REVIEW
+    # =================================================
+
+    def personality_review(self):
+        candidates = self.personality.candidates(
+            self_state=self.self_state
+        )
+
+        if not candidates:
+            return []
+
+        reflection = (
+            self.personality_reflection.analyze(
+                candidates
+            )
+        )
+
+        reflection_map = {}
+
+        for item in reflection:
+            key = (
+                item.get("field"),
+                item.get("value"),
+            )
+
+            reflection_map[key] = item
+
+        decisions = []
+
+        for candidate in candidates:
+            decision = self.promotion.evaluate(
+                candidate
+            )
+
+            key = (
+                candidate.field,
+                candidate.value,
+            )
+
+            decisions.append({
+                "candidate": candidate,
+                "decision": decision,
+                "reflection": reflection_map.get(
+                    key
+                ),
+            })
+
+        return decisions
+
+    # =================================================
+    # APPLY REFLECTION CYCLE
+    # =================================================
+
+    def apply_reflection_cycle(
+        self,
+        cycle_result: dict,
+    ):
+        results = []
+
+        decisions = cycle_result.get(
+            "candidate_decisions",
+            [],
+        )
+
+        candidates = {
+            (
+                candidate.field,
+                candidate.value,
+            ): candidate
+            for candidate in self.personality.candidates(
+                self_state=self.self_state
+            )
+        }
+
+        for item in decisions:
+            field = item.get("field")
+            value = item.get("value")
+            llm_decision = item.get("decision")
+            reason = item.get(
+                "reason",
+                "",
+            )
+
+            candidate = candidates.get(
+                (
+                    field,
+                    value,
+                )
+            )
+
+            if candidate is None:
+                continue
+
+            deterministic = (
+                self.promotion.evaluate(
+                    candidate
+                )
+            )
+
+            final_decision = "defer"
+
+            # LLM предлагает.
+            # PromotionEngine решает,
+            # достаточно ли доказательств.
+            if (
+                llm_decision == "promote"
+                and deterministic.action
+                == "PROMOTE"
+            ):
+                proposal = Proposal(
+                    proposal_type=candidate.category,
+                    value=candidate.value,
+                    reason=(
+                        reason
+                        or candidate.reason
+                    ),
+                    confidence=candidate.strength,
+                    evidence=[
+                        f"source:{source}"
+                        for source
+                        in candidate.source_types
+                    ],
+                )
+
+                identity_result = (
+                    self.identity_manager.evaluate(
+                        proposal
+                    )
+                )
+
+                if (
+                    identity_result
+                    == "accepted"
+                ):
+                    final_decision = (
+                        "accepted"
+                    )
+
+                    self.memory.remember(
+                        Event.create(
+                            content=(
+                                "Черта личности "
+                                "подтверждена: "
+                                f"{candidate.field} = "
+                                f"{candidate.value}"
+                            ),
+                            event_type=(
+                                "PERSONALITY_PROMOTION"
+                            ),
+                            source_type=(
+                                "SELF_OBSERVATION"
+                            ),
+                            source="promotion_engine",
+                            personal_experience=True,
+                            confidence=(
+                                candidate.strength
+                            ),
+                            verified=True,
+                        )
+                    )
+
+                elif (
+                    identity_result
+                    == "deferred"
+                ):
+                    final_decision = (
+                        "deferred"
+                    )
+                else:
+                    final_decision = (
+                        "rejected"
+                    )
+
+            results.append({
+                "field": field,
+                "value": value,
+                "llm_decision": (
+                    llm_decision
+                ),
+                "deterministic_decision": (
+                    deterministic.action
+                ),
+                "final_decision": (
+                    final_decision
+                ),
+                "reason": reason,
+            })
+
+        return results
+
+    # =================================================
+    # FULL REFLECTION
+    # =================================================
+
+    def reflect(self):
+        memory_context = (
+            self.memory_manager.build_context(
+                limit=20
+            )
+        )
+
+        return self.reflection.reflect(
+            user_message="",
+            agent_response="",
+            memory_context=memory_context,
+        )
+
+    # =================================================
+    # CLOSE
+    # =================================================
+
+    def close(self):
+        self.memory.close()
+
+
+
+
+

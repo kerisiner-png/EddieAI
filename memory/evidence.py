@@ -2,24 +2,33 @@
 from datetime import datetime, timezone
 import math
 
+from memory.provenance import (
+    source_weight,
+    validate_source,
+)
+
 
 @dataclass
 class EvidenceRecord:
     category: str
     value: str
     count: int
+    weighted_score: float
+    confidence: float
+    source_types: list[str]
     first_seen: str
     last_seen: str
-    confidence: float
 
 
 class EvidenceEngine:
     """
-    Собирает повторяющиеся свидетельства возможных
-    черт личности.
+    Хранит отдельные свидетельства.
 
-    Одно утверждение ничего не меняет.
-    Повторяемость увеличивает уверенность.
+    Ключевой принцип:
+    повторение одной и той же фразы не равно независимому
+    доказательству.
+
+    Каждое evidence имеет источник и вес.
     """
 
     def __init__(self, memory):
@@ -28,136 +37,192 @@ class EvidenceEngine:
 
     def _ensure_table(self):
         self.memory.connection.execute("""
-            CREATE TABLE IF NOT EXISTS evidence (
+            CREATE TABLE IF NOT EXISTS evidence_events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 category TEXT NOT NULL,
                 value TEXT NOT NULL,
-                count INTEGER NOT NULL DEFAULT 0,
-                first_seen TEXT NOT NULL,
-                last_seen TEXT NOT NULL,
-                confidence REAL NOT NULL DEFAULT 0.0,
-                UNIQUE(category, value)
+                source TEXT NOT NULL,
+                weight REAL NOT NULL,
+                event_id INTEGER,
+                independence_key TEXT,
+                created_at TEXT NOT NULL
             )
         """)
+
+        columns = {
+            row["name"]
+            for row in self.memory.connection.execute(
+                "PRAGMA table_info(evidence_events)"
+            ).fetchall()
+        }
+
+        if "independence_key" not in columns:
+            self.memory.connection.execute(
+                """
+                ALTER TABLE evidence_events
+                ADD COLUMN independence_key TEXT
+                """
+            )
+
         self.memory.connection.commit()
 
     def add(
         self,
         category: str,
         value: str,
+        source: str = "SELF_OBSERVATION",
+        event_id: int | None = None,
+        independence_key: str | None = None,
     ) -> EvidenceRecord:
-        now = datetime.now(timezone.utc).isoformat()
 
-        row = self.memory.connection.execute("""
-            SELECT *
-            FROM evidence
-            WHERE category = ? AND value = ?
-        """, (category, value)).fetchone()
+        validate_source(source)
 
-        if row is None:
-            count = 1
+        now = datetime.now(
+            timezone.utc
+        ).isoformat()
 
-            self.memory.connection.execute("""
-                INSERT INTO evidence (
-                    category,
-                    value,
-                    count,
-                    first_seen,
-                    last_seen,
-                    confidence
-                )
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (
+        weight = source_weight(source)
+
+        self.memory.connection.execute("""
+            INSERT INTO evidence_events (
                 category,
                 value,
-                count,
-                now,
-                now,
-                self._confidence(count),
-            ))
-        else:
-            count = row["count"] + 1
-
-            self.memory.connection.execute("""
-                UPDATE evidence
-                SET count = ?,
-                    last_seen = ?,
-                    confidence = ?
-                WHERE id = ?
-            """, (
-                count,
-                now,
-                self._confidence(count),
-                row["id"],
-            ))
+                source,
+                weight,
+                event_id,
+                independence_key,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            category,
+            value,
+            source,
+            weight,
+            event_id,
+            independence_key,
+            now,
+        ))
 
         self.memory.connection.commit()
 
-        updated = self.memory.connection.execute("""
-            SELECT *
-            FROM evidence
-            WHERE category = ? AND value = ?
-        """, (category, value)).fetchone()
-
-        return EvidenceRecord(
-            category=updated["category"],
-            value=updated["value"],
-            count=updated["count"],
-            first_seen=updated["first_seen"],
-            last_seen=updated["last_seen"],
-            confidence=updated["confidence"],
-        )
-
-    def _confidence(self, count: int) -> float:
-        # 1 повторение — слабое свидетельство.
-        # Рост постепенно замедляется.
-        return round(
-            1.0 - math.exp(-count / 3.0),
-            3,
+        return self.get(
+            category,
+            value,
         )
 
     def get(
         self,
         category: str,
         value: str,
-    ):
-        row = self.memory.connection.execute("""
-            SELECT *
-            FROM evidence
-            WHERE category = ? AND value = ?
-        """, (category, value)).fetchone()
+    ) -> EvidenceRecord:
 
-        if row is None:
-            return None
-
-        return EvidenceRecord(
-            category=row["category"],
-            value=row["value"],
-            count=row["count"],
-            first_seen=row["first_seen"],
-            last_seen=row["last_seen"],
-            confidence=row["confidence"],
-        )
-
-    def strong_candidates(
-        self,
-        minimum_confidence: float = 0.75,
-    ):
         rows = self.memory.connection.execute("""
             SELECT *
-            FROM evidence
-            WHERE confidence >= ?
-            ORDER BY confidence DESC, count DESC
-        """, (minimum_confidence,)).fetchall()
+            FROM evidence_events
+            WHERE category = ?
+              AND value = ?
+            ORDER BY id ASC
+        """, (
+            category,
+            value,
+        )).fetchall()
+
+        if not rows:
+            raise ValueError(
+                "Evidence record does not exist."
+            )
+
+        count = len(rows)
+
+        weighted_score = sum(
+            row["weight"]
+            for row in rows
+        )
+
+        source_types = sorted(
+            {
+                row["source"]
+                for row in rows
+                if row["weight"] > 0
+            }
+        )
+
+        independence_keys = {
+            (
+                row["independence_key"]
+                if row["independence_key"]
+                else row["source"]
+            )
+            for row in rows
+            if row["weight"] > 0
+        }
+
+        # ????????????? ????????? ??????
+        # ???????? ????? ????????.
+        diversity_bonus = min(
+            1.0,
+            len(independence_keys) / 3.0,
+        )
+
+        repetition_signal = (
+            1.0 - math.exp(
+                -weighted_score / 3.0
+            )
+        )
+
+        confidence = round(
+            (
+                repetition_signal * 0.7
+                + diversity_bonus * 0.3
+            ),
+            3,
+        )
+
+        return EvidenceRecord(
+            category=category,
+            value=value,
+            count=count,
+            weighted_score=round(
+                weighted_score,
+                3,
+            ),
+            confidence=confidence,
+            source_types=source_types,
+            first_seen=rows[0]["created_at"],
+            last_seen=rows[-1]["created_at"],
+        )
+
+    def all_records(self):
+        rows = self.memory.connection.execute("""
+            SELECT DISTINCT
+                category,
+                value
+            FROM evidence_events
+            WHERE weight > 0
+        """).fetchall()
 
         return [
-            EvidenceRecord(
-                category=row["category"],
-                value=row["value"],
-                count=row["count"],
-                first_seen=row["first_seen"],
-                last_seen=row["last_seen"],
-                confidence=row["confidence"],
+            self.get(
+                row["category"],
+                row["value"],
             )
             for row in rows
         ]
+
+    def strong_candidates(
+        self,
+        minimum_confidence: float = 0.70,
+        minimum_weighted_score: float = 2.5,
+    ):
+        return [
+            record
+            for record in self.all_records()
+            if (
+                record.confidence
+                >= minimum_confidence
+                and record.weighted_score
+                >= minimum_weighted_score
+            )
+        ]
+

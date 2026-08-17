@@ -1,0 +1,356 @@
+﻿from core.agent_loop import AgentLoop
+from core.autonomy_orchestrator import AutonomyOrchestrator
+from core.autonomous_runtime import AutonomousRuntime
+from core.autonomy_scheduler import AutonomyScheduler
+
+from identity.action_planner import ActionPlanner
+from identity.adaptive_plan_controller import (
+    AdaptivePlanController,
+)
+from identity.adaptive_planner import (
+    AdaptivePlanner,
+)
+from identity.behavior_pattern_detector import (
+    BehaviorPatternDetector,
+)
+from identity.evidence_consolidator import (
+    EvidenceConsolidator,
+)
+from identity.filesystem_executor import (
+    FilesystemExecutor,
+)
+from identity.goal_generator import GoalGenerator
+from identity.goal_manager import GoalManager
+from identity.goal_plan_generator import (
+    GoalPlanGenerator,
+)
+from identity.goal_planner import GoalPlanner
+from identity.goal_review import GoalReview
+from identity.llm_executor import LLMExecutor
+from identity.motivation import MotivationEngine
+from identity.reflection_engine import (
+    ReflectionEngine,
+)
+from identity.self_experience import (
+    SelfExperienceConsolidator,
+)
+from identity.task_controller import (
+    TaskController,
+)
+from identity.tool_registry import ToolRegistry
+from identity.tool_runner import ToolRunner
+from identity.web_executor import (
+    WebExecutor,
+)
+
+from memory.external_knowledge import (
+    ExternalKnowledgeRecorder,
+)
+from memory.research_context import (
+    ResearchContext,
+)
+from memory.self_interpretation import (
+    SelfInterpretation,
+)
+from memory.source_evaluator import (
+    SourceEvaluator,
+)
+from memory.tool_experience import (
+    ToolExperienceRecorder,
+)
+
+
+class AutonomyRuntimeFactory:
+    def __init__(
+        self,
+        agent,
+        filesystem_root=r"C:\EddieAI",
+    ):
+        self.agent = agent
+        self.filesystem_root = filesystem_root
+
+    def build(self):
+        # -----------------------------------------
+        # GOALS / PLANNING
+        # -----------------------------------------
+
+        goal_planner = GoalPlanner(
+            self.agent.self_state
+        )
+
+        goal_manager = GoalManager(
+            self.agent.self_state,
+            goal_planner,
+        )
+
+        goal_review = GoalReview(
+            goal_manager
+        )
+
+        motivation = MotivationEngine(
+            self.agent.self_state,
+            self.agent.personality_lifecycle,
+        )
+
+        goal_plan_generator = GoalPlanGenerator(
+            goal_planner
+        )
+
+        goal_generator = GoalGenerator(
+            motivation_engine=motivation,
+            goal_manager=goal_manager,
+            goal_review=goal_review,
+            goal_plan_generator=(
+                goal_plan_generator
+            ),
+        )
+
+        adaptive_planner = AdaptivePlanner()
+
+        adaptive_plan_controller = (
+            AdaptivePlanController(
+                goal_planner
+            )
+        )
+
+        # -----------------------------------------
+        # RESEARCH / MEMORY
+        # -----------------------------------------
+
+        external_recorder = (
+            ExternalKnowledgeRecorder(
+                self.agent.memory
+            )
+        )
+
+        self_interpreter = (
+            SelfInterpretation(
+                self.agent.memory
+            )
+        )
+
+        research_context = ResearchContext(
+            self.agent.memory
+        )
+
+        source_evaluator = SourceEvaluator(
+            acceptance_threshold=0.45
+        )
+
+        # -----------------------------------------
+        # TOOLS
+        # -----------------------------------------
+
+        registry = ToolRegistry()
+
+        registry.register(
+            name="llm",
+            executor=LLMExecutor(),
+            description=(
+                "Внутренний локальный LLM executor."
+            ),
+            enabled=True,
+        )
+
+        registry.register(
+            name="filesystem",
+            executor=FilesystemExecutor(
+                self.filesystem_root
+            ),
+            description=(
+                "Filesystem sandbox "
+                "для проекта EddieAI."
+            ),
+            enabled=True,
+        )
+
+        registry.register(
+            name="web",
+            executor=WebExecutor(),
+            description=(
+                "Внешний web search executor."
+            ),
+            enabled=True,
+        )
+
+        # RESEARCH маршрутизируется отдельно.
+        # Фактический composite execution
+        # выполняется внутри ToolRunner.
+        registry.register(
+            name="research",
+            executor=object(),
+            description=(
+                "Составной research executor."
+            ),
+            enabled=True,
+        )
+
+        tool_runner = ToolRunner(
+            registry,
+            filesystem_root=(
+                self.filesystem_root
+            ),
+            external_recorder=(
+                external_recorder
+            ),
+            self_interpreter=(
+                self_interpreter
+            ),
+            source_evaluator=(
+                source_evaluator
+            ),
+        )
+
+        # -----------------------------------------
+        # EXPERIENCE
+        # -----------------------------------------
+
+        experience_recorder = (
+            ToolExperienceRecorder(
+                self.agent.memory
+            )
+        )
+
+        experience_consolidator = (
+            SelfExperienceConsolidator(
+                self.agent.memory,
+                self.agent.evidence,
+            )
+        )
+
+        # -----------------------------------------
+        # TASK EXECUTION
+        # -----------------------------------------
+
+        task_controller = TaskController(
+            goal_manager,
+            goal_planner,
+        )
+
+        reflection_engine = ReflectionEngine(
+            self.agent.memory,
+            self.agent.evidence,
+            self.agent.personality_lifecycle,
+        )
+
+        evidence_consolidator = (
+            EvidenceConsolidator(
+                self.agent.evidence,
+                self.agent.personality_lifecycle,
+            )
+        )
+
+        behavior_pattern_detector = (
+            BehaviorPatternDetector(
+                self.agent.memory,
+                self.agent.evidence,
+            )
+        )
+
+        agent_loop = AgentLoop(
+            goal_manager=goal_manager,
+            goal_planner=goal_planner,
+            action_planner=ActionPlanner(),
+            tool_runner=tool_runner,
+            task_controller=task_controller,
+            experience_recorder=(
+                experience_recorder
+            ),
+            max_actions=1,
+            experience_consolidator=(
+                experience_consolidator
+            ),
+            research_context=(
+                research_context
+            ),
+            adaptive_planner=(
+                adaptive_planner
+            ),
+            adaptive_plan_controller=(
+                adaptive_plan_controller
+            ),
+            reflection_engine=reflection_engine,
+        )
+
+        # -----------------------------------------
+        # ORCHESTRATION
+        # -----------------------------------------
+
+        orchestrator = AutonomyOrchestrator(
+            goal_manager=goal_manager,
+            goal_generator=goal_generator,
+            goal_plan_generator=(
+                goal_plan_generator
+            ),
+            agent_loop=agent_loop,
+        )
+
+        # -----------------------------------------
+        # SCHEDULING
+        # -----------------------------------------
+
+        scheduler = AutonomyScheduler(
+            autonomous_cycle=orchestrator,
+            interval_seconds=300,
+            max_ticks_per_window=3,
+            window_seconds=3600,
+        )
+
+        # -----------------------------------------
+        # RUNTIME
+        # -----------------------------------------
+
+        runtime = AutonomousRuntime(
+            scheduler=scheduler,
+            memory=self.agent.memory,
+        )
+
+        runtime.behavior_pattern_detector = (
+            behavior_pattern_detector
+        )
+
+        runtime.evidence_consolidator = (
+            evidence_consolidator
+        )
+
+        runtime.goal_manager = goal_manager
+        runtime.goal_planner = goal_planner
+        runtime.motivation = motivation
+        runtime.goal_generator = goal_generator
+        runtime.goal_plan_generator = (
+            goal_plan_generator
+        )
+        runtime.adaptive_planner = (
+            adaptive_planner
+        )
+        runtime.adaptive_plan_controller = (
+            adaptive_plan_controller
+        )
+        runtime.tool_registry = registry
+        runtime.tool_runner = tool_runner
+        runtime.external_recorder = (
+            external_recorder
+        )
+        runtime.self_interpreter = (
+            self_interpreter
+        )
+        runtime.research_context = (
+            research_context
+        )
+        runtime.source_evaluator = (
+            source_evaluator
+        )
+        runtime.experience_recorder = (
+            experience_recorder
+        )
+        runtime.experience_consolidator = (
+            experience_consolidator
+        )
+
+        runtime.reflection_engine = reflection_engine
+
+        return runtime
+
+
+
+

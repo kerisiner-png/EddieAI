@@ -81,6 +81,25 @@ class Memory:
             )
         """)
 
+        self.connection.execute("""
+            CREATE TABLE IF NOT EXISTS personality_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                field TEXT NOT NULL,
+                value TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                status_before TEXT,
+                status_after TEXT,
+                strength_before REAL,
+                strength_after REAL,
+                confidence_before REAL,
+                confidence_after REAL,
+                evidence_count INTEGER,
+                contradictions INTEGER,
+                reason TEXT,
+                created_at TEXT NOT NULL
+            )
+        """)
+
         self.connection.commit()
 
     def remember(self, event: Event):

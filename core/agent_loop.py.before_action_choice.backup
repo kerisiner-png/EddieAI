@@ -1,0 +1,335 @@
+﻿from dataclasses import dataclass
+
+
+@dataclass
+class LoopResult:
+    status: str
+    goal: str | None
+    actions_executed: int
+    steps: list
+
+
+class AgentLoop:
+    def __init__(
+        self,
+        goal_manager,
+        goal_planner,
+        action_planner,
+        tool_runner,
+        task_controller,
+        experience_recorder,
+        max_actions: int = 3,
+        experience_consolidator=None,
+        research_context=None,
+        adaptive_planner=None,
+        adaptive_plan_controller=None,
+        reflection_engine=None,
+    ):
+        self.goal_manager = goal_manager
+        self.goal_planner = goal_planner
+        self.action_planner = action_planner
+        self.tool_runner = tool_runner
+        self.task_controller = task_controller
+
+        self.experience_recorder = (
+            experience_recorder
+        )
+
+        self.experience_consolidator = (
+            experience_consolidator
+        )
+
+        self.research_context = (
+            research_context
+        )
+
+        self.adaptive_planner = (
+            adaptive_planner
+        )
+
+        self.adaptive_plan_controller = (
+            adaptive_plan_controller
+        )
+
+        self.reflection_engine = (
+            reflection_engine
+        )
+
+        self.max_actions = max(
+            1,
+            int(max_actions),
+        )
+
+    def run_once(self):
+        goal = self.goal_manager.best_candidate()
+
+        if goal is None:
+            active = self.goal_manager.active()
+
+            if not active:
+                return LoopResult(
+                    status="NO_GOAL",
+                    goal=None,
+                    actions_executed=0,
+                    steps=[],
+                )
+
+            goal = sorted(
+                active,
+                key=lambda item: (
+                    item.priority,
+                    item.motivation,
+                ),
+                reverse=True,
+            )[0]
+
+        if goal.status != "ACTIVE":
+            activation = self.goal_manager.activate(
+                goal.value
+            )
+
+            if activation.get(
+                "status"
+            ) != "ACTIVATED":
+                return LoopResult(
+                    status="GOAL_NOT_ACTIVATED",
+                    goal=goal.value,
+                    actions_executed=0,
+                    steps=[],
+                )
+
+        steps = []
+        actions_executed = 0
+
+        for _ in range(self.max_actions):
+            task = (
+                self.goal_manager.activate_next_task(
+                    goal.value
+                )
+            )
+
+            if task is None:
+                self.goal_manager.sync_progress(
+                    goal.value
+                )
+
+                current_goal = (
+                    self.goal_manager.get(
+                        goal.value
+                    )
+                )
+
+                if (
+                    current_goal.status
+                    == "COMPLETED"
+                ):
+                    return LoopResult(
+                        status="GOAL_COMPLETED",
+                        goal=goal.value,
+                        actions_executed=(
+                            actions_executed
+                        ),
+                        steps=steps,
+                    )
+
+                return LoopResult(
+                    status="NO_TASK",
+                    goal=goal.value,
+                    actions_executed=(
+                        actions_executed
+                    ),
+                    steps=steps,
+                )
+
+            context = ""
+
+            if self.research_context is not None:
+                context = (
+                    self.research_context.build(
+                        query=goal.value
+                    )
+                )
+
+            action_plan = (
+                self.action_planner.plan(
+                    task,
+                    context=context,
+                )
+            )
+
+            action = (
+                self.tool_runner.executor.create(
+                    action_type=(
+                        action_plan.action_type
+                    ),
+                    target=action_plan.target,
+                    parameters=(
+                        action_plan.parameters
+                    ),
+                    reason=action_plan.reason,
+                    dry_run=False,
+                )
+            )
+
+            result = self.tool_runner.run(
+                action
+            )
+
+            actions_executed += 1
+
+            recorded = (
+                self.experience_recorder.record(
+                    action,
+                    result,
+                    owner="SELF",
+                    personal_experience=True,
+                )
+            )
+
+            consolidated = None
+
+            if (
+                self.experience_consolidator
+                is not None
+            ):
+                consolidated = (
+                    self.experience_consolidator
+                    .record(
+                        action,
+                        result,
+                    )
+                )
+
+            task_result = (
+                self.task_controller.execute_result(
+                    goal.value,
+                    task.title,
+                    result,
+                    activate_next=False,
+                )
+            )
+
+            adaptive_result = None
+
+            if (
+                result.get("status") == "OK"
+                and self.adaptive_planner
+                is not None
+                and self.adaptive_plan_controller
+                is not None
+            ):
+                remaining_tasks = [
+                    pending.title
+                    for pending
+                    in self.goal_planner.tasks(
+                        goal.value
+                    )
+                    if pending.status
+                    in {
+                        "PENDING",
+                        "ACTIVE",
+                    }
+                ]
+
+                adaptive_decision = (
+                    self.adaptive_planner.review(
+                        goal=goal.value,
+                        completed_task=task.title,
+                        result=result,
+                        remaining_tasks=(
+                            remaining_tasks
+                        ),
+                    )
+                )
+
+                adaptive_result = (
+                    self.adaptive_plan_controller.apply(
+                        goal=goal.value,
+                        decision=adaptive_decision,
+                    )
+                )
+
+            reflection = None
+
+            if (
+                result.get("status") == "OK"
+                and self.reflection_engine
+                is not None
+            ):
+                reflection = (
+                    self.reflection_engine.reflect(
+                        goal=goal.value,
+                        task=task.title,
+                        action=action.to_dict(),
+                        result=result,
+                    )
+                )
+
+            next_task = (
+                self.goal_manager
+                .activate_next_task(
+                    goal.value
+                )
+            )
+
+            if isinstance(
+                task_result,
+                dict,
+            ):
+                task_result[
+                    "next_task"
+                ] = next_task
+
+            steps.append({
+                "task": task.title,
+                "action": action.to_dict(),
+                "result": result,
+                "context_used": context,
+                "experience": (
+                    recorded["event"].content
+                ),
+                "consolidated_experience": (
+                    consolidated
+                ),
+                "task_result": task_result,
+                "adaptive_result": (
+                    adaptive_result
+                ),
+                "reflection": reflection,
+            })
+
+            if result.get("status") != "OK":
+                return LoopResult(
+                    status="ACTION_FAILED",
+                    goal=goal.value,
+                    actions_executed=(
+                        actions_executed
+                    ),
+                    steps=steps,
+                )
+
+            updated_goal = (
+                self.goal_manager.sync_progress(
+                    goal.value
+                )
+            )
+
+            if (
+                updated_goal.status
+                == "COMPLETED"
+            ):
+                return LoopResult(
+                    status="GOAL_COMPLETED",
+                    goal=goal.value,
+                    actions_executed=(
+                        actions_executed
+                    ),
+                    steps=steps,
+                )
+
+        return LoopResult(
+            status="ACTION_LIMIT_REACHED",
+            goal=goal.value,
+            actions_executed=actions_executed,
+            steps=steps,
+        )

@@ -1,0 +1,428 @@
+﻿from dataclasses import dataclass, asdict
+from datetime import datetime, timezone
+from typing import Any
+
+
+VALID_STATUSES = {
+    "CANDIDATE",
+    "EMERGING",
+    "ACTIVE",
+    "WEAKENING",
+    "DORMANT",
+    "REJECTED",
+}
+
+
+@dataclass
+class TraitState:
+    field: str
+    value: str
+    status: str
+    strength: float
+    confidence: float
+    evidence_count: int
+    first_confirmed: str
+    last_confirmed: str
+    last_used: str | None = None
+    contradictions: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+class PersonalityLifecycle:
+    """
+    Управляет жизненным циклом уже сформированных
+    свойств личности.
+
+    Lifecycle не создаёт черты из воздуха.
+    Он только:
+    - усиливает существующие;
+    - ослабляет неиспользуемые;
+    - переводит их между состояниями;
+    - реактивирует dormant-черты.
+    """
+
+    ACTIVE_THRESHOLD = 0.80
+    EMERGING_THRESHOLD = 0.55
+    WEAKENING_THRESHOLD = 0.35
+
+    def __init__(self, self_state):
+        self.self_state = self_state
+
+        traits = self.self_state.get(
+            "personality_traits"
+        )
+
+        if traits is None:
+            self.self_state.set(
+                "personality_traits",
+                {}
+            )
+
+    def _traits(self) -> dict:
+        return self.self_state.get(
+            "personality_traits",
+            {}
+        )
+
+    def _save_traits(
+        self,
+        traits: dict,
+    ):
+        self.self_state.set(
+            "personality_traits",
+            traits,
+        )
+
+    def _key(
+        self,
+        field: str,
+        value: str,
+    ) -> str:
+        return (
+            f"{field}:"
+            f"{value.strip().lower()}"
+        )
+
+    def _status_from_strength(
+        self,
+        strength: float,
+    ) -> str:
+        if strength >= self.ACTIVE_THRESHOLD:
+            return "ACTIVE"
+
+        if strength >= self.EMERGING_THRESHOLD:
+            return "EMERGING"
+
+        if strength >= self.WEAKENING_THRESHOLD:
+            return "WEAKENING"
+
+        if strength > 0:
+            return "DORMANT"
+
+        return "REJECTED"
+
+    def get(
+        self,
+        field: str,
+        value: str,
+    ) -> TraitState | None:
+        data = self._traits().get(
+            self._key(field, value)
+        )
+
+        if data is None:
+            return None
+
+        return TraitState(
+            field=data["field"],
+            value=data["value"],
+            status=data["status"],
+            strength=float(
+                data["strength"]
+            ),
+            confidence=float(
+                data["confidence"]
+            ),
+            evidence_count=int(
+                data["evidence_count"]
+            ),
+            first_confirmed=data[
+                "first_confirmed"
+            ],
+            last_confirmed=data[
+                "last_confirmed"
+            ],
+            last_used=data.get(
+                "last_used"
+            ),
+            contradictions=int(
+                data.get(
+                    "contradictions",
+                    0,
+                )
+            ),
+        )
+
+    def promote(
+        self,
+        field: str,
+        value: str,
+        strength: float,
+        confidence: float,
+        evidence_count: int,
+    ) -> TraitState:
+
+        now = datetime.now(
+            timezone.utc
+        ).isoformat()
+
+        existing = self.get(
+            field,
+            value,
+        )
+
+        if existing is None:
+            trait = TraitState(
+                field=field,
+                value=value,
+                status=self._status_from_strength(
+                    strength
+                ),
+                strength=max(
+                    0.0,
+                    min(1.0, strength),
+                ),
+                confidence=max(
+                    0.0,
+                    min(1.0, confidence),
+                ),
+                evidence_count=evidence_count,
+                first_confirmed=now,
+                last_confirmed=now,
+                last_used=now,
+            )
+        else:
+            trait = existing
+
+            trait.strength = max(
+                trait.strength,
+                strength,
+            )
+
+            trait.confidence = max(
+                trait.confidence,
+                confidence,
+            )
+
+            trait.evidence_count = max(
+                trait.evidence_count,
+                evidence_count,
+            )
+
+            trait.last_confirmed = now
+            trait.last_used = now
+
+            if trait.status != "REJECTED":
+                trait.status = (
+                    self._status_from_strength(
+                        trait.strength
+                    )
+                )
+
+        self._write_trait(trait)
+
+        return trait
+
+    def reinforce(
+        self,
+        field: str,
+        value: str,
+        amount: float = 0.05,
+    ):
+        """
+        Подкрепляет уже существующую черту.
+
+        Особенно важно для dormant-черты:
+        новый подтверждающий опыт возвращает её
+        из DORMANT в WEAKENING/EMERGING/ACTIVE.
+        """
+
+        trait = self.get(
+            field,
+            value,
+        )
+
+        if trait is None:
+            return None
+
+        if trait.status == "REJECTED":
+            return trait
+
+        now = datetime.now(
+            timezone.utc
+        ).isoformat()
+
+        trait.strength = min(
+            1.0,
+            trait.strength + amount,
+        )
+
+        trait.confidence = min(
+            1.0,
+            trait.confidence + amount * 0.5,
+        )
+
+        trait.evidence_count += 1
+        trait.last_confirmed = now
+        trait.last_used = now
+
+        trait.status = (
+            self._status_from_strength(
+                trait.strength
+            )
+        )
+
+        self._write_trait(trait)
+
+        return trait
+
+    def contradict(
+        self,
+        field: str,
+        value: str,
+        amount: float = 0.10,
+    ):
+        trait = self.get(
+            field,
+            value,
+        )
+
+        if trait is None:
+            return None
+
+        if trait.status == "REJECTED":
+            return trait
+
+        trait.contradictions += 1
+
+        trait.strength = max(
+            0.0,
+            trait.strength - amount,
+        )
+
+        trait.confidence = max(
+            0.0,
+            trait.confidence - amount * 0.5,
+        )
+
+        if trait.strength <= 0.10:
+            trait.status = "REJECTED"
+        else:
+            trait.status = (
+                self._status_from_strength(
+                    trait.strength
+                )
+            )
+
+        self._write_trait(trait)
+
+        return trait
+
+    def decay(
+        self,
+        amount: float = 0.02,
+    ):
+        """
+        Один цикл естественного затухания.
+
+        Это не означает, что интерес исчезает
+        после одного дня. Каждый вызов лишь немного
+        снижает силу.
+        """
+
+        traits = self._traits()
+
+        for key, raw in traits.items():
+            status = raw["status"]
+
+            if status == "REJECTED":
+                continue
+
+            if status == "ACTIVE":
+                delta = amount * 0.5
+            elif status == "EMERGING":
+                delta = amount
+            elif status == "WEAKENING":
+                delta = amount * 1.5
+            elif status == "DORMANT":
+                delta = amount * 2.0
+            else:
+                delta = amount
+
+            raw["strength"] = max(
+                0.0,
+                float(raw["strength"]) - delta,
+            )
+
+            raw["confidence"] = max(
+                0.0,
+                float(raw["confidence"])
+                - delta * 0.5,
+            )
+
+            raw["status"] = (
+                self._status_from_strength(
+                    raw["strength"]
+                )
+            )
+
+        self._save_traits(traits)
+
+    def all_traits(self):
+        result = []
+
+        for raw in self._traits().values():
+            result.append(
+                TraitState(
+                    field=raw["field"],
+                    value=raw["value"],
+                    status=raw["status"],
+                    strength=float(
+                        raw["strength"]
+                    ),
+                    confidence=float(
+                        raw["confidence"]
+                    ),
+                    evidence_count=int(
+                        raw["evidence_count"]
+                    ),
+                    first_confirmed=raw[
+                        "first_confirmed"
+                    ],
+                    last_confirmed=raw[
+                        "last_confirmed"
+                    ],
+                    last_used=raw.get(
+                        "last_used"
+                    ),
+                    contradictions=int(
+                        raw.get(
+                            "contradictions",
+                            0,
+                        )
+                    ),
+                )
+            )
+
+        return result
+
+    def active_traits(self):
+        return [
+            trait
+            for trait in self.all_traits()
+            if trait.status == "ACTIVE"
+        ]
+
+    def dormant_traits(self):
+        return [
+            trait
+            for trait in self.all_traits()
+            if trait.status == "DORMANT"
+        ]
+
+    def _write_trait(
+        self,
+        trait: TraitState,
+    ):
+        traits = self._traits()
+
+        traits[
+            self._key(
+                trait.field,
+                trait.value,
+            )
+        ] = trait.to_dict()
+
+        self._save_traits(traits)

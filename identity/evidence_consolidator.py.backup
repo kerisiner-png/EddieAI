@@ -1,0 +1,123 @@
+﻿class EvidenceConsolidator:
+    """
+    Сводит агрегированные evidence и решает,
+    достаточно ли независимых подтверждений
+    для изменения personality lifecycle.
+    """
+
+    MIN_CONFIDENCE = 0.70
+    MIN_WEIGHTED_SCORE = 2.5
+    MIN_SOURCE_TYPES = 3
+
+    def __init__(
+        self,
+        evidence,
+        personality_lifecycle,
+    ):
+        self.evidence = evidence
+        self.personality = (
+            personality_lifecycle
+        )
+
+    def consolidate(self):
+        candidates = (
+            self.evidence.strong_candidates(
+                minimum_confidence=(
+                    self.MIN_CONFIDENCE
+                ),
+                minimum_weighted_score=(
+                    self.MIN_WEIGHTED_SCORE
+                ),
+            )
+        )
+
+        results = []
+
+        for record in candidates:
+            source_types = [
+                source
+                for source in record.source_types
+                if source
+            ]
+
+            if (
+                len(source_types)
+                < self.MIN_SOURCE_TYPES
+            ):
+                results.append({
+                    "status": "WAITING",
+                    "field": record.category,
+                    "value": record.value,
+                    "evidence_count": record.count,
+                    "source_types": source_types,
+                    "weighted_score": (
+                        record.weighted_score
+                    ),
+                    "confidence": record.confidence,
+                    "reason": (
+                        "Недостаточно разнообразных "
+                        "provenance-источников."
+                    ),
+                })
+                continue
+
+            existing = self.personality.get(
+                record.category,
+                record.value,
+            )
+
+            if existing is None:
+                trait = (
+                    self.personality.promote(
+                        field=record.category,
+                        value=record.value,
+                        strength=min(
+                            1.0,
+                            0.5
+                            + record.weighted_score
+                            * 0.1,
+                        ),
+                        confidence=(
+                            record.confidence
+                        ),
+                        evidence_count=(
+                            record.count
+                        ),
+                    )
+                )
+
+                status = "PROMOTED"
+
+            else:
+                trait = (
+                    self.personality.reinforce(
+                        field=record.category,
+                        value=record.value,
+                        amount=min(
+                            0.15,
+                            0.03
+                            * len(
+                                source_types
+                            ),
+                        ),
+                    )
+                )
+
+                status = "REINFORCED"
+
+            results.append({
+                "status": status,
+                "field": record.category,
+                "value": record.value,
+                "evidence_count": record.count,
+                "source_types": source_types,
+                "weighted_score": (
+                    record.weighted_score
+                ),
+                "confidence": (
+                    record.confidence
+                ),
+                "trait": trait,
+            })
+
+        return results
