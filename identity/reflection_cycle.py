@@ -7,8 +7,8 @@ MODEL_NAME = "phi4-mini"
 
 MODEL_OPTIONS = {
     "num_ctx": 2048,
-    "num_predict": 384,
-    "temperature": 0.5,
+    "num_predict": 512,
+    "temperature": 0.2,
 }
 
 
@@ -16,13 +16,11 @@ class ReflectionCycle:
     """
     Единый когнитивный цикл рефлексии.
 
-    Один inference анализирует:
-    - накопленный опыт;
-    - наблюдения о себе;
-    - кандидатов личности.
+    LLM только оценивает уже существующие
+    personality candidates.
 
-    LLM только предлагает оценку.
-    Изменение self_state выполняется отдельно.
+    LLM не имеет права создавать новые
+    identity fields или изменять self_state.
     """
 
     def __init__(self, agent):
@@ -59,14 +57,14 @@ class ReflectionCycle:
         )
 
         prompt = f"""
-Ты выполняешь периодическую внутреннюю рефлексию
-автономной цифровой личности.
+Ты выполняешь внутреннюю рефлексию личности EddieAI.
 
-НАКОПЛЕННЫЙ ОПЫТ
+Твоя задача — ТОЛЬКО оценить уже существующие
+кандидаты личности.
 
-{memory_context}
+ТЫ НЕ МОЖЕШЬ СОЗДАВАТЬ НОВЫЕ КАНДИДАТЫ.
 
-ТЕКУЩЕЕ СОСТОЯНИЕ
+ТЕКУЩЕЕ СОСТОЯНИЕ SELF:
 
 {json.dumps(
     self_state,
@@ -74,7 +72,7 @@ class ReflectionCycle:
     indent=2,
 )}
 
-КАНДИДАТЫ НА ФОРМИРОВАНИЕ ЛИЧНОСТИ
+КАНДИДАТЫ, КОТОРЫЕ РАЗРЕШЕНО ОЦЕНИВАТЬ:
 
 {json.dumps(
     candidate_data,
@@ -82,40 +80,42 @@ class ReflectionCycle:
     indent=2,
 )}
 
-Проанализируй:
+Для КАЖДОГО переданного кандидата выбери:
 
-1. Какие события действительно значимы?
-2. Есть ли повторяющиеся особенности?
-3. Какие кандидаты выглядят устойчивыми?
-4. Какие кандидаты пока лучше отложить?
-5. Есть ли противоречия между новым опытом
-   и текущим состоянием личности?
+"promote" — кандидат достаточно подтверждён;
+"defer" — нужно больше наблюдений;
+"reject" — кандидат недостаточно обоснован.
 
-Не создавай новых фактов.
-Не меняй состояние напрямую.
+КРИТИЧЕСКИЕ ПРАВИЛА:
 
-Для каждого кандидата используй:
-"promote" — достаточно оснований;
-"defer" — наблюдать дальше;
-"reject" — считать недостаточно обоснованным.
+- Используй только кандидатов из списка выше.
+- Не добавляй age.
+- Не добавляй gender.
+- Не добавляй name.
+- Не добавляй values.
+- Не добавляй interests, если их нет среди кандидатов.
+- Не создавай новые personality fields.
+- Не изменяй self_state.
+- Не придумывай отсутствующие факты.
 
-Верни ТОЛЬКО JSON:
+Верни JSON следующего вида:
 
 {{
-  "observations": [],
-  "self_knowledge": [],
   "candidate_decisions": [
     {{
-      "field": "...",
-      "value": "...",
-      "decision": "promote|defer|reject",
-      "reason": "..."
+      "field": "точное поле кандидата",
+      "value": "точное значение кандидата",
+      "decision": "promote",
+      "reason": "краткая причина"
     }}
-  ],
-  "summary": "..."
+  ]
 }}
 
-Без markdown.
+Если кандидатов нет:
+
+{{
+  "candidate_decisions": []
+}}
 """
 
         response = chat(
@@ -126,7 +126,9 @@ class ReflectionCycle:
                     "content": (
                         "Ты выполняешь внутренний "
                         "reflection cycle. "
-                        "Отвечай только JSON."
+                        "Оценивай только предоставленные "
+                        "кандидаты. "
+                        "Возвращай только JSON."
                     ),
                 },
                 {
@@ -135,48 +137,145 @@ class ReflectionCycle:
                 },
             ],
             options=MODEL_OPTIONS,
+            format="json",
             keep_alive=-1,
         )
 
-        raw = response[
-            "message"
-        ][
-            "content"
-        ].strip()
+        raw = (
+            response["message"]["content"]
+            .strip()
+        )
 
-        try:
-            result = json.loads(raw)
-        except json.JSONDecodeError:
+        result = self._parse_json(raw)
+
+        if result is None:
             result = {
-                "observations": [],
-                "self_knowledge": [],
                 "candidate_decisions": [],
-                "summary": "",
             }
 
         if not isinstance(result, dict):
             result = {
-                "observations": [],
-                "self_knowledge": [],
                 "candidate_decisions": [],
-                "summary": "",
             }
 
-        result.setdefault(
-            "observations",
-            [],
-        )
-        result.setdefault(
-            "self_knowledge",
-            [],
-        )
-        result.setdefault(
-            "candidate_decisions",
-            [],
-        )
-        result.setdefault(
-            "summary",
-            "",
+        candidate_decisions = (
+            result.get(
+                "candidate_decisions",
+                [],
+            )
         )
 
-        return result
+        if not isinstance(
+            candidate_decisions,
+            list,
+        ):
+            candidate_decisions = []
+
+        valid_candidates = {
+            (
+                candidate.field,
+                str(candidate.value),
+            )
+            for candidate in candidates
+        }
+
+        filtered_decisions = []
+
+        for item in candidate_decisions:
+            if not isinstance(item, dict):
+                continue
+
+            field = item.get("field")
+            value = item.get("value")
+            decision = item.get("decision")
+            reason = item.get("reason", "")
+
+            if not isinstance(field, str):
+                continue
+
+            if value is None:
+                continue
+
+            value_text = str(value)
+
+            if (
+                field,
+                value_text,
+            ) not in valid_candidates:
+                continue
+
+            if decision not in {
+                "promote",
+                "defer",
+                "reject",
+            }:
+                continue
+
+            if not isinstance(reason, str):
+                reason = ""
+
+            filtered_decisions.append(
+                {
+                    "field": field,
+                    "value": value_text,
+                    "decision": decision,
+                    "reason": reason,
+                }
+            )
+
+        return {
+            "candidate_decisions": (
+                filtered_decisions
+            ),
+        }
+
+    def _parse_json(self, raw: str):
+        if not isinstance(raw, str):
+            return None
+
+        raw = raw.strip()
+
+        if not raw:
+            return None
+
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            pass
+
+        if raw.startswith("```"):
+            lines = raw.splitlines()
+
+            if lines:
+                lines = lines[1:]
+
+            if (
+                lines
+                and lines[-1].strip() == "```"
+            ):
+                lines = lines[:-1]
+
+            cleaned = "\n".join(
+                lines
+            ).strip()
+
+            if cleaned.startswith("json"):
+                cleaned = cleaned[4:].lstrip()
+
+            try:
+                return json.loads(cleaned)
+            except json.JSONDecodeError:
+                pass
+
+        start = raw.find("{")
+        end = raw.rfind("}")
+
+        if start >= 0 and end > start:
+            try:
+                return json.loads(
+                    raw[start:end + 1]
+                )
+            except json.JSONDecodeError:
+                pass
+
+        return None
