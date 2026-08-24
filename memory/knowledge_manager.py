@@ -1,4 +1,4 @@
-﻿from memory.knowledge import Knowledge
+from memory.knowledge import Knowledge
 from memory.knowledge_boundary import KnowledgeBoundary
 
 

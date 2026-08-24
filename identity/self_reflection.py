@@ -1,4 +1,4 @@
-﻿from json import JSONDecodeError
+from json import JSONDecodeError
 import json
 
 from ollama import chat
@@ -371,16 +371,24 @@ class SelfReflection:
         protected_user_knowledge = []
         filtered_self_knowledge = []
 
+        # Реконструировано 23.08 по смыслу: оригинал побит
+        # кодировкой ещё до первого коммита (git-версий нет).
+        # Ложные срабатывания безопасны: факт остаётся пользователю.
         user_markers = [
-            "????",
-            "??? ",
-            "??? ",
-            "??? ",
-            "??? ",
-            "? ?????",
-            "??? ????????",
-            "??? ????? ????????",
-            "??? ?????????",
+            "у меня",
+            "меня ",
+            "мне ",
+            "мой ",
+            "моя ",
+            "моё ",
+            "мои ",
+            "я имею",
+            "я предпочитаю",
+            "меня зовут",
+            "моя семья",
+            "мои родители",
+            "я живу",
+            "мне нравится",
         ]
 
         for item in user_knowledge:

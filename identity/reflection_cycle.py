@@ -1,4 +1,4 @@
-﻿import json
+import json
 
 from ollama import chat
 
@@ -25,6 +25,161 @@ class ReflectionCycle:
 
     def __init__(self, agent):
         self.agent = agent
+
+    def run_snapshot(
+        self,
+        snapshot: dict,
+    ):
+        """
+        Reflection безопасная для worker-thread.
+
+        Использует только сериализованный snapshot.
+        Не обращается к SQLite, self_state или другим
+        thread-bound объектам Agent.
+        """
+
+        self_state = snapshot.get(
+            "self_state",
+            {},
+        )
+
+        candidates = snapshot.get(
+            "candidates",
+            [],
+        )
+
+        if not isinstance(candidates, list):
+            candidates = []
+
+        if not candidates:
+            return {
+                "candidate_decisions": [],
+            }
+
+        prompt = f"""
+Ты выполняешь внутреннюю рефлексию личности EddieAI.
+
+Твоя задача — ТОЛЬКО оценить уже существующие
+кандидаты личности.
+
+Ты НЕ МОЖЕШЬ создавать новые кандидаты.
+
+ТЕКУЩЕЕ СОСТОЯНИЕ SELF:
+
+{json.dumps(self_state, ensure_ascii=False, indent=2)}
+
+КАНДИДАТЫ:
+
+{json.dumps(candidates, ensure_ascii=False, indent=2)}
+
+Для каждого кандидата выбери:
+"promote", "defer" или "reject".
+
+Не создавай новых полей.
+Не придумывай факты.
+Не изменяй self_state.
+
+Верни ТОЛЬКО JSON:
+{
+  "candidate_decisions": [
+    {
+      "field": "точное поле",
+      "value": "точное значение",
+      "decision": "promote",
+      "reason": "краткая причина"
+    }
+  ]
+}
+"""
+
+        response = chat(
+            model=MODEL_NAME,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Ты выполняешь внутренний reflection cycle. "
+                        "Оценивай только предоставленные кандидаты. "
+                        "Возвращай только JSON."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": prompt,
+                },
+            ],
+            options=MODEL_OPTIONS,
+            format="json",
+            keep_alive=-1,
+        )
+
+        raw = (
+            response["message"]["content"]
+            .strip()
+        )
+
+        result = self._parse_json(raw)
+
+        if not isinstance(result, dict):
+            return {
+                "candidate_decisions": [],
+            }
+
+        candidate_decisions = result.get(
+            "candidate_decisions",
+            [],
+        )
+
+        if not isinstance(candidate_decisions, list):
+            candidate_decisions = []
+
+        valid_candidates = {
+            (
+                str(item.get("field")),
+                str(item.get("value")),
+            )
+            for item in candidates
+        }
+
+        filtered = []
+
+        for item in candidate_decisions:
+            if not isinstance(item, dict):
+                continue
+
+            field = item.get("field")
+            value = item.get("value")
+            decision = item.get("decision")
+            reason = item.get("reason", "")
+
+            if field is None or value is None:
+                continue
+
+            key = (
+                str(field),
+                str(value),
+            )
+
+            if key not in valid_candidates:
+                continue
+
+            if decision not in {
+                "promote",
+                "defer",
+                "reject",
+            }:
+                continue
+
+            filtered.append({
+                "field": str(field),
+                "value": str(value),
+                "decision": decision,
+                "reason": str(reason),
+            })
+
+        return {
+            "candidate_decisions": filtered,
+        }
 
     def run(self):
         memory_context = (

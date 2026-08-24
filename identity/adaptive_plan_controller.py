@@ -1,4 +1,4 @@
-﻿from identity.goal_planner import VALID_TASK_STATUSES
+from identity.goal_planner import VALID_TASK_STATUSES
 
 
 class AdaptivePlanController:

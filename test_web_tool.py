@@ -1,4 +1,4 @@
-﻿from identity.action_executor import ActionExecutor
+from identity.action_executor import ActionExecutor
 from identity.tool_registry import ToolRegistry
 from identity.tool_runner import ToolRunner
 from identity.web_executor import WebExecutor

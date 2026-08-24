@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from identity.goal_generator import GoalGenerator

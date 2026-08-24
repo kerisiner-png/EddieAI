@@ -1,4 +1,4 @@
-﻿class TaskController:
+class TaskController:
     """
     Связывает GoalPlanner с результатами ToolRunner.
     """

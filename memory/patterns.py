@@ -1,4 +1,4 @@
-﻿from dataclasses import dataclass
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from memory.evidence import EvidenceEngine

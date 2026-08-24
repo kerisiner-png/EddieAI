@@ -1,4 +1,4 @@
-﻿class UserEvidenceRecorder:
+class UserEvidenceRecorder:
     """
     Записывает явные утверждения пользователя
     как provenance USER_STATEMENT.

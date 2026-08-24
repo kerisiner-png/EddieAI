@@ -1,4 +1,4 @@
-﻿import json
+import json
 
 from ollama import chat
 

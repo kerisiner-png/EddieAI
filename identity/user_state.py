@@ -1,14 +1,19 @@
-﻿import json
+import json
+import os
 import re
 from pathlib import Path
 from typing import Any
 
 
-STATE_PATH = (
-    Path(__file__).resolve().parent.parent
-    / "data"
-    / "user_state.json"
+_DATA_DIR = Path(
+    os.environ.get("EDDIE_DATA_DIR")
+    or (
+        Path(__file__).resolve().parent.parent
+        / "data"
+    )
 )
+
+STATE_PATH = _DATA_DIR / "user_state.json"
 
 
 DEFAULT_STATE = {

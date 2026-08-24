@@ -69,10 +69,40 @@ class AgentLoop:
         evidence=None,
 
         identity_manager=None,
+        goal_review=None,
+        appraisal_engine=None,
+        affective_state=None,
+        belief_challenge_detector=None,
+        affective_behavior_policy=None,
 
     ):
 
         self.goal_manager = goal_manager
+        self.goal_review = goal_review
+
+        self.appraisal_engine = (
+            appraisal_engine
+        )
+
+        self.affective_state = (
+            affective_state
+        )
+
+        self.belief_challenge_detector = (
+            belief_challenge_detector
+        )
+
+        self.affective_behavior_policy = (
+            affective_behavior_policy
+        )
+
+        self.goal_affective_memory = (
+            getattr(
+                affective_behavior_policy,
+                "goal_affective_memory",
+                None,
+            )
+        )
 
         self.goal_planner = goal_planner
 
@@ -263,8 +293,8 @@ class AgentLoop:
                     proposal_type=category,
                     value=value,
                     reason=(
-                        "????????????? ????????? "
-                        f"?????????? ??????? "
+                        "Наблюдение подтверждено "
+                        f"повторными свидетельствами "
                         f"{category}: {value}"
                     ),
                     confidence=confidence,
@@ -290,6 +320,160 @@ class AgentLoop:
                 })
 
         return results
+
+    def _process_follow_up_goals(
+        self,
+        reflection,
+        completed_goal: str,
+    ):
+        """
+        Обрабатывает follow-up candidates,
+        появившиеся из reflection завершённой цели.
+
+        Reflection только предлагает.
+        GoalReview принимает решение.
+        GoalManager изменяет состояние.
+        """
+
+        if not isinstance(
+            reflection,
+            dict,
+        ):
+            return []
+
+        follow_up_goals = reflection.get(
+            "follow_up_goals",
+            [],
+        )
+
+        if not isinstance(
+            follow_up_goals,
+            list,
+        ):
+            return []
+
+        if self.goal_review is None:
+            return []
+
+        results = []
+
+        for candidate_data in follow_up_goals:
+            if not isinstance(
+                candidate_data,
+                dict,
+            ):
+                continue
+
+            goal_value = str(
+                candidate_data.get(
+                    "goal",
+                    "",
+                )
+            ).strip()
+
+            if not goal_value:
+                continue
+
+            if (
+                goal_value.casefold()
+                == completed_goal.casefold()
+            ):
+                results.append({
+                    "goal": goal_value,
+                    "status": "REJECTED",
+                    "reason": (
+                        "Follow-up совпадает "
+                        "с завершённой целью."
+                    ),
+                })
+                continue
+
+            if self.goal_manager.get(
+                goal_value
+            ) is not None:
+                results.append({
+                    "goal": goal_value,
+                    "status": "EXISTS",
+                    "reason": (
+                        "Такая цель уже существует."
+                    ),
+                })
+                continue
+
+            motivation = float(
+                candidate_data.get(
+                    "motivation",
+                    0.0,
+                )
+            )
+
+            priority = float(
+                candidate_data.get(
+                    "priority",
+                    0.0,
+                )
+            )
+
+            confidence = float(
+                candidate_data.get(
+                    "confidence",
+                    0.0,
+                )
+            )
+
+            candidate = (
+                self.goal_manager.add_candidate(
+                    value=goal_value,
+                    motivation=motivation,
+                    priority=priority,
+                    confidence=confidence,
+                    source="reflection",
+                )
+            )
+
+            decision = (
+                self.goal_review.evaluate(
+                    candidate
+                )
+            )
+
+            if decision.action != "ACTIVATE":
+                results.append({
+                    "goal": goal_value,
+                    "status": "DEFERRED",
+                    "review": decision.reason,
+                })
+                continue
+
+            activation = (
+                self.goal_manager.activate(
+                    goal_value
+                )
+            )
+
+            if activation.get(
+                "status"
+            ) != "ACTIVATED":
+                results.append({
+                    "goal": goal_value,
+                    "status": "DEFERRED",
+                    "review": (
+                        activation.get(
+                            "reason",
+                            "Активация не удалась.",
+                        )
+                    ),
+                })
+                continue
+
+            results.append({
+                "goal": goal_value,
+                "status": "ACTIVATED",
+                "review": decision.reason,
+            })
+
+        return results
+
 
     def run_once(self):
 
@@ -479,9 +663,26 @@ class AgentLoop:
                 )
             )
 
+            behavioral_biases = {}
+
+            if (
+                self.affective_behavior_policy
+                is not None
+            ):
+                behavioral_biases = (
+                    self.affective_behavior_policy
+                    .biases(
+                        options=action_options,
+                        task=task,
+                    )
+                )
+
             selection = (
                 self.action_selector.select(
-                    action_options
+                    action_options,
+                    behavioral_biases=(
+                        behavioral_biases
+                    ),
                 )
             )
 
@@ -586,7 +787,130 @@ class AgentLoop:
 
             )
 
+            # Старые affective reactions постепенно затухают
+            # перед оценкой нового события.
+            if self.affective_state is not None:
+                self.affective_state.decay()
 
+            appraisal_result = None
+
+            if self.appraisal_engine is not None:
+                appraisal_result = (
+                    self.appraisal_engine.appraise(
+                        goal=goal.value,
+                        task=task.title,
+                        action=action.to_dict(),
+                        result=result,
+                    )
+                )
+
+                if (
+                    self.experience_recorder
+                    is not None
+                    and hasattr(
+                        self.experience_recorder,
+                        "memory",
+                    )
+                    and appraisal_result[
+                        "changes"
+                    ]
+                ):
+                    self.experience_recorder.memory.remember(
+                        Event.create(
+                            content=(
+                                "Автоматическая "
+                                "affective reaction: "
+                                + str(
+                                    appraisal_result[
+                                        "changes"
+                                    ]
+                                )
+                            ),
+                            event_type=(
+                                "AFFECTIVE_REACTION"
+                            ),
+                            source_type=(
+                                "APPRAISAL_ENGINE"
+                            ),
+                            source="SELF",
+                            personal_experience=True,
+                            confidence=1.0,
+                            verified=True,
+                        )
+                    )
+
+                # Affective reaction happens automatically
+                # from the event. It is not selected by
+                # the personality or by the LLM.
+                self.experience_recorder.memory
+
+                if appraisal_result[
+                    "changes"
+                ]:
+                    self.appraisal_engine
+
+                    # Apply through Agent-owned
+                    # affective state if available.
+                    affective_state = getattr(
+                        self,
+                        "affective_state",
+                        None,
+                    )
+
+                    if affective_state is not None:
+                        affective_state.apply_reaction(
+                            changes=(
+                                appraisal_result[
+                                    "changes"
+                                ]
+                            ),
+                            trigger=(
+                                appraisal_result[
+                                    "trigger"
+                                ]
+                            ),
+                            reason=(
+                                "Реакция автоматически "
+                                "возникла вследствие оценки "
+                                "завершённого события."
+                            ),
+                            source="APPRAISAL_ENGINE",
+                            metadata={
+                                "goal": goal.value,
+                                "task": task.title,
+                                "action_type": action.to_dict().get(
+                                    "action_type"
+                                ),
+                                "appraisal": (
+                                    appraisal_result[
+                                        "appraisal"
+                                    ]
+                                ),
+                            },
+                        )
+
+                        if (
+                            hasattr(
+                                self,
+                                "goal_affective_memory",
+                            )
+                            and
+                            self.goal_affective_memory
+                            is not None
+                        ):
+                            self.goal_affective_memory.record(
+                                goal=goal.value,
+                                changes=(
+                                    appraisal_result[
+                                        "changes"
+                                    ]
+                                ),
+                                trigger=(
+                                    appraisal_result[
+                                        "trigger"
+                                    ]
+                                ),
+                            )
 
             actions_executed += 1
 
@@ -780,15 +1104,46 @@ class AgentLoop:
 
             )
 
+            # -------------------------------------------------
+            # FOLLOW-UP GOALS
+            # -------------------------------------------------
+            #
+            # Reflection may suggest what EddieAI could pursue
+            # next, but only a completed current goal can trigger
+            # this transition. Reflection itself has no authority
+            # to modify the goal state.
+            #
 
+            follow_up_results = []
+
+            current_goal = (
+                self.goal_manager.get(
+                    goal.value
+                )
+            )
+
+            if (
+                reflection
+                and current_goal is not None
+                and current_goal.status == "COMPLETED"
+            ):
+                follow_up_results = (
+                    self._process_follow_up_goals(
+                        reflection=reflection,
+                        completed_goal=goal.value,
+                    )
+                )
 
             if isinstance(
-
                 task_result,
-
                 dict,
-
             ):
+                task_result[
+                    "next_task"
+                ] = next_task
+                task_result[
+                    "follow_up_goals"
+                ] = follow_up_results
 
                 task_result[
 

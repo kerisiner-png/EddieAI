@@ -1,9 +1,21 @@
-﻿class ReflectionScheduler:
-    """
-    Управляет периодическими циклами рефлексии личности.
+import json
+import time
 
-    Обычные сообщения не изменяют силу черт напрямую.
-    Изменения происходят во время reflection/sleep cycle.
+
+class ReflectionScheduler:
+    """
+    Планировщик фоновой рефлексии личности.
+
+    Главный поток:
+        - собирает snapshot;
+        - ставит snapshot в CognitiveQueue.
+
+    Worker:
+        - получает только JSON snapshot;
+        - выполняет ReflectionCycle без SQLite.
+
+    Main thread:
+        - применяет готовый результат.
     """
 
     def __init__(
@@ -26,22 +38,80 @@
 
         if (
             self.events_since_reflection
-            >= self.event_threshold
+            < self.event_threshold
         ):
-            return self.run_reflection()
+            return False
 
-        return False
+        return self.enqueue_reflection()
+
+    def enqueue_reflection(self):
+        candidates = (
+            self.agent.personality.candidates(
+                self_state=self.agent.self_state
+            )
+        )
+
+        snapshot = {
+            "created_at": time.time(),
+            "self_state": (
+                self.agent.self_state.snapshot()
+            ),
+            "candidates": [
+                {
+                    "field": candidate.field,
+                    "value": candidate.value,
+                    "category": candidate.category,
+                    "strength": candidate.strength,
+                    "weighted_score": (
+                        candidate.weighted_score
+                    ),
+                    "evidence_count": (
+                        candidate.evidence_count
+                    ),
+                    "source_types": (
+                        candidate.source_types
+                    ),
+                    "reason": candidate.reason,
+                }
+                for candidate in candidates
+            ],
+        }
+
+        item = (
+            self.agent.cognitive_queue.enqueue(
+                content=json.dumps(
+                    snapshot,
+                    ensure_ascii=False,
+                ),
+                route="REFLECTION",
+                reason=(
+                    "Достигнут порог значимых событий. "
+                    "Сформирован snapshot для фоновой "
+                    "рефлексии личности."
+                ),
+            )
+        )
+
+        self.events_since_reflection = 0
+
+        self.agent.cognition_worker.start()
+        self.agent.cognition_worker.wake()
+
+        return {
+            "queued": True,
+            "item_id": item.id,
+            "status": item.status,
+            "candidate_count": len(
+                candidates
+            ),
+        }
 
     def _reinforce_confirmed_traits(self):
-        """
-        Подкрепляет уже активные свойства, если
-        evidence снова подтверждает их.
-        """
-
         results = []
 
         traits = (
-            self.agent.personality_lifecycle
+            self.agent
+            .personality_lifecycle
             .all_traits()
         )
 
@@ -49,14 +119,14 @@
             if trait.status == "REJECTED":
                 continue
 
-            category = trait.field
-
-            evidence = self.agent.evidence.get(
-                category,
-                trait.value,
-            )
-
-            if evidence is None:
+            try:
+                evidence = (
+                    self.agent.evidence.get(
+                        trait.field,
+                        trait.value,
+                    )
+                )
+            except ValueError:
                 continue
 
             if evidence.confidence <= 0:
@@ -77,21 +147,10 @@
 
         return results
 
-    def run_reflection(self):
-        """
-        Полный reflection cycle:
-
-        1. Анализ опыта.
-        2. Анализ кандидатов.
-        3. Применение подтверждённых изменений.
-        4. Подкрепление существующих черт.
-        5. Медленное затухание.
-        """
-
-        cycle_result = (
-            self.agent.reflection_cycle.run()
-        )
-
+    def apply_completed_reflection(
+        self,
+        cycle_result: dict,
+    ):
         application_result = (
             self.agent.apply_reflection_cycle(
                 cycle_result
@@ -102,39 +161,20 @@
             self._reinforce_confirmed_traits()
         )
 
-        # Одно небольшое затухание за цикл.
         self.agent.personality_lifecycle.decay(
             amount=0.02
         )
 
-        self.events_since_reflection = 0
-
         return {
-            "cycle": cycle_result,
             "applied": application_result,
             "reinforced": reinforced,
         }
 
     def session_end(self):
-        """
-        Reflection при завершении сессии.
-        """
-
         if self.events_since_reflection <= 0:
             return None
 
-        return self.run_reflection()
+        return self.enqueue_reflection()
 
     def sleep_cycle(self):
-        """
-        Будущий полноценный цикл сна.
-
-        Пока делает обычный reflection cycle,
-        но может отдельно расширяться до:
-        - консолидации памяти;
-        - забывания;
-        - анализа долгосрочных целей;
-        - эмоциональной переработки.
-        """
-
-        return self.run_reflection()
+        return self.enqueue_reflection()

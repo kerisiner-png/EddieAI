@@ -1,4 +1,4 @@
-﻿from core.agent import Agent
+from core.agent import Agent
 from core.autonomy_runtime_factory import (
     AutonomyRuntimeFactory,
 )

@@ -1,4 +1,4 @@
-﻿from identity.action_executor import ActionExecutor
+from identity.action_executor import ActionExecutor
 from identity.action_router import ActionRouter
 from identity.tool_policy import ToolExecutionPolicy
 

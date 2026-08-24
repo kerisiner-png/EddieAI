@@ -1,4 +1,4 @@
-﻿import json
+import json
 from dataclasses import dataclass
 
 
@@ -36,6 +36,7 @@ class ActionSelector:
     def select(
         self,
         options,
+        behavioral_biases=None,
     ) -> ActionSelection:
 
         options = list(options)
@@ -67,18 +68,67 @@ class ActionSelector:
             for option in options
         )
 
+        biases = (
+            behavioral_biases
+            if isinstance(
+                behavioral_biases,
+                dict,
+            )
+            else {}
+        )
+
+        def bias_for(option):
+            return float(
+                biases.get(
+                    option.action_type,
+                    0.0,
+                )
+            )
+
+        # -----------------------------------------
+        # Нет истории
+        # -----------------------------------------
+
         if total == 0:
-            selected = options[0]
+
+            selected = max(
+                options,
+                key=lambda option: (
+                    bias_for(option),
+                    -options.index(option),
+                ),
+            )
+
+            bias = bias_for(
+                selected
+            )
+
+            if abs(bias) > 0.0:
+                reason = (
+                    "История выбора отсутствует; "
+                    "выбор скорректирован текущим "
+                    "affective state."
+                )
+            else:
+                selected = options[0]
+                reason = (
+                    "История выбора отсутствует; "
+                    "использован первый допустимый "
+                    "вариант."
+                )
 
             return ActionSelection(
                 selected=selected,
                 options=options,
-                reason=(
-                    "История выбора отсутствует; "
-                    "использован первый допустимый "
-                    "вариант."
-                ),
+                reason=reason,
             )
+
+        # -----------------------------------------
+        # Exploration
+        #
+        # Во время исследования сохраняем старую
+        # механику, но bias становится tie-breaker.
+        # -----------------------------------------
 
         exploration = (
             total
@@ -94,6 +144,7 @@ class ActionSelector:
                         option.action_type,
                         0,
                     ),
+                    -bias_for(option),
                     option.action_type,
                 ),
             )
@@ -101,25 +152,37 @@ class ActionSelector:
             reason = (
                 "Режим исследования: выбран "
                 "наименее использованный "
-                "допустимый вариант."
+                "допустимый вариант с учётом "
+                "текущего affective state."
             )
 
         else:
+            # -------------------------------------
+            # Нормальный выбор
+            #
+            # Историческая частота остаётся основной
+            # величиной; affective bias — небольшой
+            # корректирующий фактор.
+            # -------------------------------------
+
             selected = max(
                 options,
                 key=lambda option: (
                     counts.get(
                         option.action_type,
                         0,
-                    ),
+                    )
+                    + bias_for(option),
+                    bias_for(option),
                     option.action_type,
                 ),
             )
 
             reason = (
                 "Режим эксплуатации: выбран "
-                "наиболее часто использовавшийся "
-                "вариант."
+                "наиболее подходящий по истории "
+                "вариант с учётом текущего "
+                "affective state."
             )
 
         return ActionSelection(

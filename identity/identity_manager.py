@@ -1,4 +1,4 @@
-﻿from typing import Any
+from typing import Any
 
 from identity.proposal import Proposal
 
@@ -26,7 +26,7 @@ class IdentityManager:
         )
 
     def evaluate(self, proposal: Proposal) -> str:
-        if proposal.confidence < self.MIN_CONFIDENCE:
+        if proposal.confidence < self.MIN_CONFIDENCE and proposal.origin != "conversation_claim":
             return "deferred"
 
         if proposal.proposal_type == "name":
@@ -84,6 +84,7 @@ class IdentityManager:
             content=f"Я выбрал себе имя: {name}",
             proposal_type="name",
             confidence=proposal.confidence,
+            origin="self_decision",
         )
 
         return "accepted"
@@ -116,6 +117,7 @@ class IdentityManager:
             content=f"{field}: {value}",
             proposal_type=proposal.proposal_type,
             confidence=proposal.confidence,
+            origin="evidence_convergence",
         )
 
         if self.personality_lifecycle is not None:

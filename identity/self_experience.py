@@ -1,4 +1,4 @@
-﻿from dataclasses import dataclass
+from dataclasses import dataclass
 
 from memory.events import Event
 from memory.knowledge import Knowledge

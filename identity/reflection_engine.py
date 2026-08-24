@@ -1,4 +1,4 @@
-﻿import json
+import json
 
 from ollama import chat
 
@@ -74,13 +74,21 @@ class ReflectionEngine:
 4. Есть ли наблюдение, которое может быть
    устойчивым сигналом интереса, предпочтения,
    привычки или убеждения.
+5. Может ли завершённое действие естественно
+   породить следующий конкретный шаг.
 
 Очень важно:
 - единичное действие НЕ доказывает черту личности;
 - не придумывай психологические свойства;
 - если сигнала недостаточно, верни пустой список;
 - evidence confidence должен быть осторожным;
-- не превращай внешний источник в собственный факт.
+- не превращай внешний источник в собственный факт;
+- follow_up_goals должны быть конкретными следующими
+  действиями, вытекающими из результата этой цели;
+- не создавай цели ради активности;
+- не предлагай помощь пользователю как цель;
+- не дублируй уже завершённую цель;
+- если естественного следующего шага нет, верни [].
 
 Верни только JSON:
 
@@ -92,6 +100,15 @@ class ReflectionEngine:
       "category": "interest|preference|habit|belief",
       "value": "...",
       "confidence": 0.0
+    }}
+  ],
+  "follow_up_goals": [
+    {{
+      "goal": "...",
+      "motivation": 0.0,
+      "priority": 0.0,
+      "confidence": 0.0,
+      "reason": "..."
     }}
   ],
   "confidence": 0.0
@@ -182,12 +199,24 @@ class ReflectionEngine:
         # Reflection produces interpretation signals only.
         # These signals are not independent evidence.
 
+        follow_up_goals = (
+            self._clean_follow_up_goals(
+                data.get(
+                    "follow_up_goals",
+                    [],
+                ),
+                completed_goal=goal,
+                result_text=result_text,
+            )
+        )
+
         return {
             "status": "OK",
             "lesson": lesson,
             "error": error,
             "confidence": confidence,
             "signals": signals,
+            "follow_up_goals": follow_up_goals,
             "evidence": [],
         }
 
@@ -265,6 +294,178 @@ class ReflectionEngine:
             ensure_ascii=False,
             indent=2,
         )
+
+    def _clean_follow_up_goals(
+        self,
+        goals,
+        *,
+        completed_goal: str,
+        result_text: str,
+    ):
+        if not isinstance(
+            goals,
+            list,
+        ):
+            return []
+
+        cleaned = []
+
+        for item in goals:
+            if not isinstance(
+                item,
+                dict,
+            ):
+                continue
+
+            goal = str(
+                item.get(
+                    "goal",
+                    "",
+                )
+            ).strip()
+
+            if not goal:
+                continue
+
+            if len(goal) > 280:
+                continue
+
+            if not self._follow_up_is_relevant(
+                goal=goal,
+                completed_goal=completed_goal,
+                result_text=result_text,
+            ):
+                continue
+
+            motivation = self._confidence(
+                item.get(
+                    "motivation",
+                    0.0,
+                )
+            )
+
+            priority = self._confidence(
+                item.get(
+                    "priority",
+                    0.0,
+                )
+            )
+
+            confidence = self._confidence(
+                item.get(
+                    "confidence",
+                    0.0,
+                )
+            )
+
+            reason = str(
+                item.get(
+                    "reason",
+                    "",
+                )
+            ).strip()
+
+            cleaned.append({
+                "goal": goal,
+                "motivation": motivation,
+                "priority": priority,
+                "confidence": confidence,
+                "reason": reason,
+            })
+
+            if len(cleaned) >= 3:
+                break
+
+        return cleaned
+
+
+    @staticmethod
+    def _follow_up_is_relevant(
+        *,
+        goal: str,
+        completed_goal: str,
+        result_text: str,
+    ) -> bool:
+        import re
+
+        stopwords = {
+            "изучить",
+            "изучение",
+            "исследовать",
+            "исследование",
+            "продолжить",
+            "продолжение",
+            "тема",
+            "темы",
+            "далее",
+            "глубже",
+            "подробнее",
+            "лучше",
+            "понимание",
+            "помочь",
+            "помощь",
+            "пользователь",
+            "пользователю",
+            "сейчас",
+            "новые",
+            "нового",
+            "новое",
+            "аспекты",
+            "аспектов",
+            "область",
+            "области",
+        }
+
+        def tokens(
+            value: str,
+        ) -> set[str]:
+
+            raw = re.findall(
+                r"[A-Za-zА-Яа-яЁё0-9]{5,}",
+                str(value).casefold(),
+            )
+
+            return {
+                token.replace(
+                    "ё",
+                    "е",
+                )
+                for token in raw
+                if token not in stopwords
+            }
+
+        goal_tokens = tokens(goal)
+
+        source_tokens = (
+            tokens(completed_goal)
+            | tokens(result_text)
+        )
+
+        if (
+            not goal_tokens
+            or not source_tokens
+        ):
+            return False
+
+        for left in goal_tokens:
+            for right in source_tokens:
+
+                if left == right:
+                    return True
+
+                if (
+                    len(left) >= 6
+                    and len(right) >= 6
+                    and (
+                        left[:6] == right[:6]
+                        or left in right
+                        or right in left
+                    )
+                ):
+                    return True
+
+        return False
+
 
     def _clean_signals(
         self,

@@ -1,4 +1,4 @@
-﻿from memory.database import Memory
+from memory.database import Memory
 
 
 class MemoryManager:

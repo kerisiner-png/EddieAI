@@ -1,4 +1,4 @@
-﻿from dataclasses import dataclass
+from dataclasses import dataclass
 
 
 @dataclass
@@ -26,11 +26,17 @@ class AutonomyOrchestrator:
         goal_generator,
         goal_plan_generator,
         agent_loop,
+        agent=None,
+        affective_behavior_policy=None,
     ):
         self.goal_manager = goal_manager
         self.goal_generator = goal_generator
         self.goal_plan_generator = goal_plan_generator
         self.agent_loop = agent_loop
+        self.agent = agent
+        self.affective_behavior_policy = (
+            affective_behavior_policy
+        )
 
     def tick(self):
         active = self.goal_manager.active()
@@ -60,15 +66,56 @@ class AutonomyOrchestrator:
             goal = active[0]
 
         else:
-            goal = sorted(
-                active,
+            scored_goals = []
+
+            for item in active:
+                base_score = (
+                    float(item.priority) * 0.50
+                    + float(item.motivation) * 0.30
+                    + float(item.confidence) * 0.20
+                )
+
+                affective_bias = 0.0
+
+                if (
+                    self.affective_behavior_policy
+                    is not None
+                ):
+                    affective_bias = (
+                        self.affective_behavior_policy
+                        .goal_bias(item)
+                    )
+
+                scored_goals.append({
+                    "goal": item,
+                    "base_score": round(
+                        base_score,
+                        4,
+                    ),
+                    "affective_bias": (
+                        affective_bias
+                    ),
+                    "total_score": round(
+                        base_score
+                        + affective_bias,
+                        4,
+                    ),
+                })
+
+            scored_goals.sort(
                 key=lambda item: (
-                    item.priority,
-                    item.motivation,
-                    item.confidence,
+                    item["total_score"],
+                    float(
+                        item["goal"].priority
+                    ),
+                    float(
+                        item["goal"].motivation
+                    ),
                 ),
                 reverse=True,
-            )[0]
+            )
+
+            goal = scored_goals[0]["goal"]
 
         # -----------------------------------------
         # Нет плана
@@ -106,9 +153,24 @@ class AutonomyOrchestrator:
         # Есть цель и план
         # -----------------------------------------
 
-        execution = (
-            self.agent_loop.run_once()
-        )
+        if self.agent is not None:
+            self.agent.autonomy_execution_state = {
+                "busy": True,
+                "goal": goal.value,
+                "task": None,
+            }
+
+        try:
+            execution = (
+                self.agent_loop.run_once()
+            )
+        finally:
+            if self.agent is not None:
+                self.agent.autonomy_execution_state = {
+                    "busy": False,
+                    "goal": None,
+                    "task": None,
+                }
 
         return OrchestrationResult(
             status="EXECUTED",

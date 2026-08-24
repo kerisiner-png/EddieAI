@@ -1,3 +1,3 @@
-﻿USER_IDENTITY = {
+USER_IDENTITY = {
     "name": "Эдди",
 }

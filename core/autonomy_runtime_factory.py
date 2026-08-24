@@ -1,4 +1,6 @@
-﻿from core.agent_loop import AgentLoop
+from core.agent_loop import AgentLoop
+from core.autonomy_arbitrator import AutonomyArbitrator
+from core.model_orchestrator import ModelOrchestrator
 from core.autonomy_orchestrator import AutonomyOrchestrator
 from core.autonomous_runtime import AutonomousRuntime
 from core.autonomy_scheduler import AutonomyScheduler
@@ -144,11 +146,21 @@ class AutonomyRuntimeFactory:
         # TOOLS
         # -----------------------------------------
 
+        # -----------------------------------------
+        # MODEL ORCHESTRATION
+        # -----------------------------------------
+
+        model_orchestrator = (
+            self.agent.model_orchestrator
+        )
+
         registry = ToolRegistry()
 
         registry.register(
             name="llm",
-            executor=LLMExecutor(),
+            executor=LLMExecutor(
+                model_orchestrator
+            ),
             description=(
                 "Внутренний локальный LLM executor."
             ),
@@ -186,6 +198,13 @@ class AutonomyRuntimeFactory:
                 "Составной research executor."
             ),
             enabled=True,
+        )
+
+        # ?????????????? self-model ? ???????
+        # ??????????????????? capabilities.
+        self.agent.capabilities = registry.describe()
+        self.agent.self_consistency.capabilities = (
+            self.agent.capabilities
         )
 
         tool_runner = ToolRunner(
@@ -308,7 +327,22 @@ class AutonomyRuntimeFactory:
                 adaptive_plan_controller
             ),
             reflection_engine=reflection_engine,
+            goal_review=goal_review,
+            appraisal_engine=(
+                self.agent.appraisal_engine
+            ),
+            affective_state=(
+                self.agent.affective_state
+            ),
+            belief_challenge_detector=(
+                self.agent.belief_challenge_detector
+            ),
+            affective_behavior_policy=(
+                self.agent.affective_behavior_policy
+            ),
         )
+
+        runtime_agent_loop = agent_loop
 
         # -----------------------------------------
         # ORCHESTRATION
@@ -321,6 +355,10 @@ class AutonomyRuntimeFactory:
                 goal_plan_generator
             ),
             agent_loop=agent_loop,
+            agent=self.agent,
+            affective_behavior_policy=(
+                self.agent.affective_behavior_policy
+            ),
         )
 
         # -----------------------------------------
@@ -344,6 +382,8 @@ class AutonomyRuntimeFactory:
             orchestrator=orchestrator,
         )
 
+        self.agent.autonomous_runtime = runtime
+
         runtime.behavior_pattern_detector = (
             behavior_pattern_detector
         )
@@ -353,6 +393,21 @@ class AutonomyRuntimeFactory:
         )
 
         runtime.goal_manager = goal_manager
+        self.agent.goal_manager = goal_manager
+
+        self.agent.autonomy_arbitrator = (
+            AutonomyArbitrator(
+                goal_manager,
+                agent=self.agent,
+            )
+        )
+
+        runtime.autonomy_arbitrator = (
+            self.agent.autonomy_arbitrator
+        )
+
+        runtime.agent_loop = agent_loop
+
         runtime.goal_planner = goal_planner
         runtime.motivation = motivation
         runtime.goal_generator = goal_generator
@@ -388,7 +443,10 @@ class AutonomyRuntimeFactory:
 
         runtime.reflection_engine = reflection_engine
 
+        self.agent.cognition_worker.start()
         return runtime
+
+
 
 
 

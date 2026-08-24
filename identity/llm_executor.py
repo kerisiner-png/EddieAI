@@ -1,18 +1,20 @@
-﻿from ollama import chat
+from core.model_orchestrator import ModelOrchestrator
 
 
 class LLMExecutor:
     """
     Внутренний исполнитель THINK / RESEARCH / WRITE.
 
-    Внешние действия он не выполняет и не имитирует.
+    Выбор модели делегируется ModelOrchestrator.
     """
 
     def __init__(
         self,
-        model: str = "phi4-mini",
+        model_orchestrator: ModelOrchestrator,
     ):
-        self.model = model
+        self.model_orchestrator = (
+            model_orchestrator
+        )
 
     def think(
         self,
@@ -35,45 +37,31 @@ class LLMExecutor:
 если его не было.
 """
 
-        response = chat(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Ты внутренний исполнитель THINK. "
-                        "Не выдумывай внешние действия."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": prompt,
-                },
-            ],
-            options={
-                "num_ctx": 2048,
-                "num_predict": 256,
-                "temperature": 0.4,
-            },
-            keep_alive=-1,
-        )
-
-        return {
-            "status": "OK",
-            "content": (
-                response["message"]["content"]
-                .strip()
+        return self.model_orchestrator.execute(
+            task=target,
+            context=context,
+            system=(
+                "Ты внутренний исполнитель THINK. "
+                "Не выдумывай внешние действия."
             ),
-        }
+            user=prompt,
+        )
 
     def research(
         self,
         target: str,
         context: str = "",
     ):
-        return self.think(
-            target,
-            context,
+        return self.model_orchestrator.execute(
+            task=target,
+            context=context,
+            system=(
+                "Ты внутренний исполнитель RESEARCH. "
+                "Не утверждай, что получил данные "
+                "из внешнего источника, если инструмент "
+                "не был реально использован."
+            ),
+            user=target,
         )
 
     def write(
@@ -81,7 +69,12 @@ class LLMExecutor:
         target: str,
         context: str = "",
     ):
-        return self.think(
-            target,
-            context,
+        return self.model_orchestrator.execute(
+            task=target,
+            context=context,
+            system=(
+                "Ты внутренний исполнитель WRITE."
+            ),
+            user=target,
         )
+

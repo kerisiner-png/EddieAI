@@ -1,4 +1,4 @@
-﻿class MemoryRetrieval:
+class MemoryRetrieval:
     """
     Выбирает реальные записи памяти для специальных запросов.
     """

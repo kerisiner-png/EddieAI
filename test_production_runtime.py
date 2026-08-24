@@ -1,3 +1,4 @@
+from core.model_orchestrator import ModelOrchestrator
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -185,7 +186,7 @@ with TemporaryDirectory() as temp:
 
     registry.register(
         name="llm",
-        executor=LLMExecutor(),
+        executor=LLMExecutor(ModelOrchestrator()),
         description="Local LLM.",
         enabled=True,
     )

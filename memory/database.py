@@ -1,15 +1,36 @@
-﻿from pathlib import Path
+from pathlib import Path
+import os
 import sqlite3
+import threading
 
 from memory.events import Event
 from memory.knowledge import Knowledge
 
 
-DB_PATH = (
-    Path(__file__).resolve().parent.parent
-    / "data"
-    / "memory.db"
+_DATA_DIR = Path(
+    os.environ.get("EDDIE_DATA_DIR")
+    or (
+        Path(__file__).resolve().parent.parent
+        / "data"
+    )
 )
+
+DB_PATH = _DATA_DIR / "memory.db"
+
+
+def _synchronized(method):
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return method(
+                self,
+                *args,
+                **kwargs,
+            )
+
+    wrapper.__name__ = method.__name__
+    wrapper.__doc__ = method.__doc__
+
+    return wrapper
 
 
 class Memory:
@@ -20,13 +41,24 @@ class Memory:
             exist_ok=True,
         )
 
+        self._lock = threading.RLock()
+
         self.connection = sqlite3.connect(
-            self.db_path
+            self.db_path,
+            check_same_thread=False,
         )
         self.connection.row_factory = sqlite3.Row
 
+        self.connection.execute(
+            "PRAGMA journal_mode=WAL"
+        )
+        self.connection.execute(
+            "PRAGMA busy_timeout=5000"
+        )
+
         self._initialize()
 
+    @_synchronized
     def _initialize(self):
         self.connection.execute("""
             CREATE TABLE IF NOT EXISTS events (
@@ -50,9 +82,25 @@ class Memory:
                 proposal_type TEXT NOT NULL,
                 confidence REAL NOT NULL,
                 status TEXT NOT NULL DEFAULT 'pending',
+                origin TEXT,
                 created_at TEXT NOT NULL
             )
         """)
+
+        proposal_columns = {
+            row["name"]
+            for row in self.connection.execute(
+                "PRAGMA table_info(self_proposals)"
+            ).fetchall()
+        }
+
+        if "origin" not in proposal_columns:
+            self.connection.execute(
+                """
+                ALTER TABLE self_proposals
+                ADD COLUMN origin TEXT
+                """
+            )
 
         self.connection.execute("""
             CREATE TABLE IF NOT EXISTS evidence (
@@ -102,6 +150,7 @@ class Memory:
 
         self.connection.commit()
 
+    @_synchronized
     def remember(self, event: Event):
         self.connection.execute("""
             INSERT INTO events (
@@ -130,6 +179,7 @@ class Memory:
 
         self.connection.commit()
 
+    @_synchronized
     def remember_knowledge(
         self,
         knowledge: Knowledge,
@@ -158,6 +208,7 @@ class Memory:
 
         self.connection.commit()
 
+    @_synchronized
     def get_knowledge(
         self,
         owner: str | None = None,
@@ -181,11 +232,13 @@ class Memory:
 
         return cursor.fetchall()
 
+    @_synchronized
     def remember_proposal(
         self,
         content: str,
         proposal_type: str,
         confidence: float = 0.5,
+        origin: str | None = None,
     ):
         from datetime import datetime, timezone
 
@@ -199,13 +252,15 @@ class Memory:
                 proposal_type,
                 confidence,
                 status,
+                origin,
                 created_at
             )
-            VALUES (?, ?, ?, 'pending', ?)
+            VALUES (?, ?, ?, 'pending', ?, ?)
         """, (
             content,
             proposal_type,
             confidence,
+            origin,
             timestamp,
         ))
 
@@ -213,6 +268,7 @@ class Memory:
 
         return cursor.lastrowid
 
+    @_synchronized
     def pending_proposals(self, limit: int = 20):
         cursor = self.connection.execute("""
             SELECT *
@@ -224,6 +280,7 @@ class Memory:
 
         return cursor.fetchall()
 
+    @_synchronized
     def set_proposal_status(
         self,
         proposal_id: int,
@@ -252,6 +309,7 @@ class Memory:
 
         self.connection.commit()
 
+    @_synchronized
     def recent(self, limit: int = 10):
         cursor = self.connection.execute("""
             SELECT *
@@ -262,5 +320,6 @@ class Memory:
 
         return cursor.fetchall()
 
+    @_synchronized
     def close(self):
         self.connection.close()

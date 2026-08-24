@@ -1,5 +1,7 @@
-﻿from dataclasses import dataclass
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from concurrent.futures import Future, ThreadPoolExecutor
+import threading
 
 
 @dataclass
@@ -34,8 +36,21 @@ class AutonomousRuntime:
         self.last_result = None
         self.cycles_completed = 0
 
-        # Optional post-cycle consolidation.
         self.evidence_consolidator = None
+
+        # Один автономный тик за раз.
+        self._executor = ThreadPoolExecutor(
+            max_workers=1,
+            thread_name_prefix="EddieAI-Autonomy",
+        )
+
+        self._background_future: Future | None = None
+
+        # Отдельный daemon-loop следит за scheduler.
+        self._loop_thread = None
+        self._loop_stop = threading.Event()
+
+        self._closed = False
 
     def snapshot(self):
         return RuntimeSnapshot(
@@ -47,6 +62,15 @@ class AutonomousRuntime:
         )
 
     def tick(self):
+        if self._closed:
+            return {
+                "status": "CLOSED",
+                "state": "CLOSED",
+                "reason": (
+                    "Autonomous runtime уже закрыт."
+                ),
+            }
+
         if self.state in {
             "THINKING",
             "ACTING",
@@ -73,20 +97,12 @@ class AutonomousRuntime:
         self.last_error = None
 
         try:
-            # -------------------------------------
-            # AUTONOMOUS ACTION
-            # -------------------------------------
-
             self.state = "ACTING"
 
             result = self.scheduler.tick()
 
             self.last_result = result
             self.cycles_completed += 1
-
-            # -------------------------------------
-            # POST-CYCLE CONSOLIDATION
-            # -------------------------------------
 
             consolidation = None
 
@@ -125,6 +141,138 @@ class AutonomousRuntime:
                 "state": self.state,
                 "error": str(exc),
             }
+
+    def tick_background(self):
+        if self._closed:
+            return {
+                "status": "CLOSED",
+                "state": "CLOSED",
+            }
+
+        if self.state == "PAUSED":
+            return {
+                "status": "PAUSED",
+                "state": self.state,
+            }
+
+        if (
+            self._background_future is not None
+            and not self._background_future.done()
+        ):
+            return {
+                "status": "ALREADY_RUNNING",
+                "state": self.state,
+                "future": self._background_future,
+            }
+
+        self._background_future = (
+            self._executor.submit(
+                self.tick
+            )
+        )
+
+        return {
+            "status": "STARTED",
+            "state": self.state,
+            "future": self._background_future,
+        }
+
+    def background_status(self):
+        future = self._background_future
+
+        if future is None:
+            return {
+                "running": False,
+                "done": False,
+                "result": None,
+            }
+
+        if not future.done():
+            return {
+                "running": True,
+                "done": False,
+                "result": None,
+            }
+
+        try:
+            result = future.result()
+        except Exception as exc:
+            result = {
+                "status": "ERROR",
+                "error": str(exc),
+            }
+
+        return {
+            "running": False,
+            "done": True,
+            "result": result,
+        }
+
+    def start_background_loop(self):
+        if self._closed:
+            return {
+                "status": "CLOSED",
+                "reason": (
+                    "Autonomous runtime уже закрыт."
+                ),
+            }
+
+        if (
+            self._loop_thread is not None
+            and self._loop_thread.is_alive()
+        ):
+            return {
+                "status": "ALREADY_RUNNING",
+            }
+
+        self._loop_stop.clear()
+
+        self._loop_thread = threading.Thread(
+            target=self._background_loop,
+            name="EddieAI-AutonomyLoop",
+            daemon=True,
+        )
+
+        self._loop_thread.start()
+
+        return {
+            "status": "STARTED",
+        }
+
+    def stop_background_loop(self):
+        self._loop_stop.set()
+
+        thread = self._loop_thread
+
+        if (
+            thread is not None
+            and thread.is_alive()
+            and thread is not threading.current_thread()
+        ):
+            thread.join(
+                timeout=2.0
+            )
+
+        self._loop_thread = None
+
+        return {
+            "status": "STOPPED",
+        }
+
+    def _background_loop(self):
+        while not self._loop_stop.is_set():
+            if self._closed:
+                break
+
+            if self.state != "PAUSED":
+                self.tick_background()
+
+            # Короткое ожидание нужно только для
+            # отзывчивого shutdown. Сам scheduler
+            # всё равно контролирует реальный интервал.
+            self._loop_stop.wait(
+                timeout=1.0
+            )
 
     def pause(self):
         if self.state in {
@@ -173,4 +321,24 @@ class AutonomousRuntime:
 
         return {
             "status": "RESET",
+        }
+
+    def close(self):
+        if self._closed:
+            return {
+                "status": "ALREADY_CLOSED",
+            }
+
+        self.stop_background_loop()
+
+        self._closed = True
+
+        self._executor.shutdown(
+            wait=True
+        )
+
+        self.state = "CLOSED"
+
+        return {
+            "status": "CLOSED",
         }

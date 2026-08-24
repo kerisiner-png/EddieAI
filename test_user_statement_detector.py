@@ -1,4 +1,4 @@
-﻿from identity.user_statement_detector import (
+from identity.user_statement_detector import (
     UserStatementDetector,
 )
 

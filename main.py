@@ -1,8 +1,17 @@
-﻿from core.agent import Agent
+from core.agent import Agent
+from core.autonomy_runtime_factory import (
+    AutonomyRuntimeFactory,
+)
 
 
 def main():
     agent = Agent()
+
+    runtime = (
+        AutonomyRuntimeFactory(
+            agent
+        ).build()
+    )
 
     print("=" * 60)
     print("EddieAI v0.1")
@@ -13,7 +22,9 @@ def main():
 
     try:
         while True:
-            user_message = input("Эдди > ").strip()
+            user_message = input(
+                "Эдди > "
+            ).strip()
 
             if user_message.lower() == "exit":
                 break
@@ -22,10 +33,16 @@ def main():
                 continue
 
             try:
-                answer = agent.respond(user_message)
-                print(f"\nEddieAI > {answer}\n")
+                answer = agent.respond(
+                    user_message
+                )
+                print(
+                    f"\nEddieAI > {answer}\n"
+                )
             except Exception as exc:
-                print(f"\nОшибка агента: {exc}\n")
+                print(
+                    f"\nОшибка агента: {exc}\n"
+                )
 
     finally:
         agent.close()
