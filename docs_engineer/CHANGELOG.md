@@ -4,6 +4,265 @@
 [АРХИВ], когда её описание перестаёт соответствовать живому коду.
 Формат — см. docs_engineer\README.md. Времена артефактные.
 
+## 25.08.2026 ночь — чистка прода data\memory.db (отмашка Эдди «давай, делай»)
+
+### [АКТУАЛЬНО] Удалён тестовый мусор, история личности сохранена
+Автотест прошлой смены писал напрямую в прод. Выполнено:
+- Бэкап ВСЕГО data\ → `data_backup_2026-08-25\` (7 файлов,
+  memory.db — через sqlite backup API).
+- Удалено 107 событий (id 190–296: автотест «Я решаю изучить Python»
+  ×20 + служебные violations, окно 24.08 06:27–06:45 UTC) и все
+  3 pending-предложения self_proposals того же окна (вкл. origin=test).
+- СОХРАНЕНЫ настоящие разговоры 23.08: события 1–189 («Рождение
+  Эпохи 2», честные диалоги про ложь/гипотезы) не тронуты.
+- PRAGMA integrity_check = ok; wal_checkpoint(TRUNCATE) выполнен;
+  evidence/knowledge/personality_history пусты — следов теста нет.
+Отчёт о живом прогоне:
+`C:\EddieAI_Simulations\отчеты\MINI_RUN_25_08_MEMORY_AND_THOUGHTS_LIVE.md`.
+Изменённые файлы: data\memory.db (очищен), docs_engineer\CHANGELOG.md.
+
+## 25.08.2026 вечер — размышления на облачной модели + приёмочный мини-прогон PASS
+
+### [АКТУАЛЬНО] Вариант B Эдди: мир+рефлексия → Mistral, локал = фолбэк
+Решение Эдди («B вариант хорош, делаем прямо сейчас»; хранение
+личности остаётся на ПК, в облако уходят только тексты промптов).
+Правки:
+- core\model_orchestrator.py `_cloud_chat`: поддержка
+  options["response_format"] → payload["response_format"] (JSON-режим
+  Mistral {"type":"json_object"}, сверено с Context7).
+- identity\reflection_cycle.py run_snapshot: cloud-first через
+  orchestrator._cloud_chat (response_format json_object,
+  temperature 0.2); фолбэк на прежний ollama chat(phi4-mini);
+  keep_alive -1 → "3m" (гвоздь RAM: модель держалась вечно).
+- core\agent.py _respond_world_observation: fast=False → fast=True
+  в обоих вызовах (_generate и retry) → мировая вербализация идёт
+  «облачным ртом», qwen — автоматический фолбэк.
+
+Смоуки (облако мокнуто): 8 мировых тиков → 8 облачных вызовов,
+ollama 0 вызовов; REFLECTION встаёт после 8 событий, применяется как
+REFLECTION_APPLIED; пустые кандидаты дают ранний выход без LLM
+(штатно). py_compile OK; байты 3 файлов чистые.
+
+### Приёмочный мини-прогон «школьное утро» (%TEMP%\opencode\mini_school_run.py)
+12 тиков мировых наблюдений через EddieBridge с ЖИВЫМ Mistral,
+пауза 40 c, ~14 мин стены, изоляция в tmp (прод/профиль симуляций не
+тронуты). РЕЗУЛЬТАТ: песочница 36 событий (SELF_EXPERIENCE 12 +
+CONVERSATION 12 + ACTION_CHOICE 12), REFLECTION/DONE (облачный цикл,
+candidate_decisions=[] — у чистой личности кандидатов нет), worker
+RUNNING/processed=1, self_state не изменён, кириллица в базе цела
+(0 «?» по байтам; «?» в консоли были артефактом PowerShell-вывода).
+Локальный стек НЕ грузился вовсе (ollama остался ~10 МБ) — P0-c/P0-d
+приняты на живом контуре. Регресс p0b_chain PASS. Процессы после
+прогона: python завершён, тяжёлых нет.
+Изменённые файлы: core\model_orchestrator.py, core\agent.py,
+identity\reflection_cycle.py, docs_engineer\{TODO,CHANGELOG}.md,
+PROJECT_STATE.md.
+
+## 25.08.2026 (ночь, смена инженера) — Б2: когниция в симуляциях заработала
+
+### [АКТУАЛЬНО] Фикс apply_analyzed + worker в мосту + apply в мировом пути (по отмашке «давай»)
+Контекст: P0-c — мысли cognition_worker испарялись. Расследование:
+(1) route="COGNITION" никем не создаётся, а сломанная ветка под ним
+ссылалась на несуществующий self.self_state (гарантированный
+AttributeError) и содержала мёртвый код после return; (2) применение
+REFLECTION (apply_completed_reflection) лежало ПОД условием COGNITION —
+рефлексии проваливались в общий decision-путь; каноничный статус
+REFLECTION_APPLIED ждут core_regression_test.py:660 и
+super_system_stress_test.py:1517; (3) в симуляциях cognition_worker
+не стартовал (start() зовёт только AutonomyRuntimeFactory), а
+apply_all_analyzed вызывался только в respond().
+
+Правки:
+- core\cognitive_processor.py apply_analyzed: три дефектных блока
+  (COGNITION+self.self_state 364–406, мёртвый кусок 407–441,
+  недостижимый дубль 443–483) заменены ОДНОЙ веткой route=="REFLECTION"
+  and status=="ANALYZED" → json.loads → reflection_scheduler.
+  apply_completed_reflection → complete → REFLECTION_APPLIED
+  {decision=applied}. Общий путь (decision_engine.decide) не тронут.
+- core\agent.py respond_with_action: в начале метода добавлен
+  self.cognitive_processor.apply_all_analyzed() (как в respond(),
+  без обёртки — единый стиль).
+- simulation_framework\eddie\bridge.py create(): после attach стартует
+  agent.cognition_worker (getattr-защита); остановка уже существует —
+  bridge.close() → agent.close() → worker.stop().
+
+Проверки:
+- b2_test.py: REFLECTION через process_next → REFLECTION_APPLIED,
+  элемент DONE; EddieBridge.create → worker RUNNING; close → STOPPED;
+  песочница на месте.
+- Регресс: p0b_chain PASS, p0b_full PASS, fix_verify PASS (7 событий
+  в песочнице, профиль чист, apply_all_analyzed при пустой очереди
+  безвреден).
+- py_compile трёх файлов OK; байт-чек: UTF-8 no BOM, 0 мохибека,
+  0 nulls.
+Изменённые файлы: core\cognitive_processor.py, core\agent.py,
+simulation_framework\eddie\bridge.py, docs_engineer\{TODO,MEMORY,
+CHANGELOG}.md. Примечание: Context7-сверка sqlite3 backup API
+выполнена на шаге A1 (тот же блок работ).
+
+## 25.08.2026 (ночь, смена инженера) — P0-d починен: память мировых циклов пишется в песочницу
+
+### [АКТУАЛЬНО] Фиксы A1+A2+Б1 по отмашке Эдди («делай»)
+Контекст: расследование подтвердило — песочницы прогонов пусты, потому
+что (1) MemorySandbox копировал базу shutil.copy2 без учёта WAL
+(схема жила в -wal → копия-пустышка), а _reset молча пропускал
+отсутствующие таблицы; (2) мировой путь respond_with_action вообще
+не писал память (единственный remember — ACTION_CHOICE — сидел в
+try/except pass). Воспроизведено leak-тестами: «remember calls: 0».
+
+Правки:
+- simulation_framework\persistence\memory_sandbox.py:
+  __init__ копирует исходник через sqlite3 backup API (консистентный
+  снимок при WAL/конкурентном доступе; shutil убран); attach() после
+  подмены соединения вызывает agent.memory._initialize() +
+  _ensure_table() у agent.evidence / agent.goal_affective_memory —
+  схема песочницы гарантирована независимо от состояния копии.
+- core\agent.py `_respond_world_observation`: после генерации ответа
+  пишутся два события — наблюдение мира (SELF_EXPERIENCE /
+  SELF_EXPERIENCE, source="world", personal_experience=True,
+  confidence=0.8) и реплика агента (CONVERSATION / SELF_OUTPUT,
+  source="world_response", confidence=1.0). try/except сохранён
+  (ночной прогон не должен падать на записи), НО с журналированием
+  "[memory] world observation record failed".
+- core\agent.py ACTION_CHOICE: except pass → except с печатью
+  "[memory] action choice record failed" (правило MEMORY.md: глотание
+  только с журналом).
+
+Проверки:
+- fix_verify_test.py (песочница, LLM замокан): 3 цикла → в
+  run/memory.db ровно 7 событий (2×SELF_EXPERIENCE+CONVERSATION,
+  затем ACTION_CHOICE+пара при меню движения); профиль не вырос
+  (events=0).
+- Регресс P0-b: p0b_chain_test PASS; p0b_full_test PASS (цель
+  принята, self_state обновлён).
+- py_compile обоих файлов OK; байт-чек: UTF-8 no BOM, 0 мохибека,
+  0 nulls.
+Не сделано (следующий шаг по плану): Б2 (apply_all_analyzed в
+respond_with_action + запуск cognition_worker в симуляциях) и фикс
+трёх дефектов cognitive_processor.apply_analyzed — отдельным диффом.
+Изменённые файлы: C:\EddieAI\core\agent.py,
+C:\EddieAI_Simulations\simulation_framework\persistence\
+memory_sandbox.py, docs_engineer\TODO.md, docs_engineer\MEMORY.md,
+docs_engineer\CHANGELOG.md.
+
+## 24.08.2026 ~18:42 (системное; ночь 25.08 в хронологии смен) — в план добавлен «Единый интерфейс» (голос+текст)
+
+### [АКТУАЛЬНО] Вопрос Эдди про раздельность каналов — разобран, решение записано
+Факты [Подтверждено]: мозг уже один (main.py:8 и voice_repl.py:378
+создают один Agent и зовут один respond()); память диалога общая
+через БД (memory/manager.py:82 build_conversation_context).
+Раздельность чисто интерфейсная. Реальные проблемы: асимметрия
+ритуалов закрытия (текстовый main.py не пишет дневник/снимки,
+в отличие от voice_repl.py:333-363) и невозможность двух
+одновременных процессов.
+В TODO.md добавлен блок «Единый интерфейс»: Т1 eddie.py
+(--text/--voice/--mixed, уши/рот → модуль), Т2 общий
+close_session(agent). Пометка: фундамент рубежа C, делать одной
+сменой до него.
+Изменённые файлы: docs_engineer\TODO.md, docs_engineer\CHANGELOG.md.
+
+## 24.08.2026 ~18:32 (системное; ночь 25.08 в хронологии смен) — спроектирован механизм снов; карта этапов и рубежей
+
+### [АКТУАЛЬНО] Сны = путь к рубежу A (решение Эдди)
+Стратегическое планирование с Эдди: разбор всех 16 этажей роудмапа,
+оценка главной цели (~40–45% до «живёт на ПК как растущая личность»),
+промежуточная цель — непрерывный режим. Идея Эдди: использовать
+симуляционную систему как механизм СНОВИДЕНИЙ — принято как главный
+способ закрыть P0-a/P0-c (ночной аудит 25.08: diff души после
+кризиса = пуст).
+
+Разведка кода [Подтверждено координатами]: AppraisalEngine
+(identity/appraisal_engine.py:11,320), AffectiveState API
+(affective_state.py:148-371), COGNITIVE_DECISION
+(cognitive_decision_engine.py:435), PersonalDiary.write
+(personal_diary.py:55), soul_snapshot take_snapshot/diff
+(soul_snapshot.py:23,79), программный мир без LLM
+(scroll_truancy_no_llm.py:31-52). Механизм встраивается в готовое.
+
+План записан в TODO.md: С1 провенанс (DREAM 0.25) → С2 ядро лёгких
+снов core/dream_processor.py → С3 мировые сны dream_night.py →
+С4 интеграция R3 + критерий рубежа A (diff души ≠ пуст). Правила
+безопасности: source=DREAM везде, вес 0.25 против 1.0 у яви,
+запрет прямых изменений черт, лимит повторов сюжета.
+Очередь рубежей: A (сны) → B «Живёт сутки» → C «Голос в сутках».
+Правки файлов НЕ делались (только TODO/CHANGELOG): параллельная
+сессия ведёт контур честности.
+Изменённые файлы: docs_engineer\TODO.md, docs_engineer\CHANGELOG.md.
+
+## 24.08.2026 ~17:10 (системное; ночь 25.08 в хронологии смен) — документ «Уроки втуберов» + задача «аффект в голосе»
+
+### [АКТУАЛЬНО] Зафиксированы lessons learned от AI-втуберов
+Обсуждение с Эдди «чему научиться у втуберов». Создан
+docs_engineer\LESSONS_VTUBERS.md: 9 уроков из практики Neuro-sama
+(источник фактов: Wikipedia, обновлена 14.08.2026) с привязкой к
+рубежам проекта (голосовой стек, P2, R3, этаж 5), раздел «что НЕ
+берём» (решение совета от 23.08 подтверждено), главная выжимка.
+В TODO.md добавлена задача «аффект в голосе» (self_state.affect ->
+параметры PSOLA/DSP рта z3-конвейера), очередь после P2/P6 — решено
+Эдди. В PROJECT_STATE.md добавлена пометка об очереди.
+Проверка: байт-чек четырёх файлов — UTF-8 no BOM, кириллица цела,
+0 литеральных «?».
+Изменённые файлы: docs_engineer\LESSONS_VTUBERS.md (новый),
+docs_engineer\TODO.md, docs_engineer\CHANGELOG.md, PROJECT_STATE.md.
+
+## 24.08.2026 ~13:00 — коммит ca6013c + закрытие P0-b (цепь целей из диалога)
+
+### [АКТУАЛЬНО] P0-b починен и проверен
+Контекст: аудит 25.08 ночи нашёл «мёртвый конвейер роста» — разговорные
+цели («Я решаю изучить Python») создавали pending proposal, но он никогда
+не принимался. Прерванная смена отлаживала именно это; её DEBUG-правка
+13:47 сломала agent.py.
+
+Корень (в восстановленном 77a08896): в `_capture_goal_claim` весь блок
+принятия proposals был мёртвым кодом — лежал внутри первого except ПОСЛЕ
+`return`; плюс три скрытые мины: proposal_type "goals" (evaluate знает
+только "goal"), вызов `set_proposal_status(id, status, origin)` с тремя
+аргументами (сигнатура — два), конструирование Proposal без обязательных
+reason/evidence и с несуществующим полем origin.
+
+Правки:
+- core/agent.py `_capture_goal_claim` переписан: два чистых try/except,
+  тип "goal", Proposal(proposal_type, value, reason, confidence,
+  evidence=[], origin=p["origin"]), set_proposal_status(p["id"],
+  "accepted"); DEBUG-принты прерванной смены убраны.
+- identity/proposal.py: в dataclass добавлено поле
+  `origin: str | None = None` (в конец — все существующие keyword-вызовы
+  совместимы). Без него bypass MIN_CONFIDENCE в IdentityManager.evaluate
+  физически не работал (AttributeError/None != "conversation_claim").
+- По пути найдена и исправлена СВОЯ ошибка первого варианта правки:
+  Proposal создавался без origin → evaluate давал deferred; поймано
+  построчной трассировкой sys.settrace (L4206 result='deferred').
+
+Проверки:
+- Цепочка без LLM (Memory+IdentityManager+SelfState, песочница):
+  remember→pending→evaluate accepted→goals обновлён→proposal закрыт PASS.
+- Полный тест test_p0b_conversation_goal.py (песочница EDDIE_DATA_DIR,
+  БЕЗ LLM-сервера: warm-up отключён конфигом агента) PASS: цель принята,
+  self_state goals=['Я решаю изучить Python'], исходный proposal closed;
+  остающаяся pending-запись origin=evidence_convergence — штатное эхо
+  _evaluate_list_field.
+- agent.py (6040 строк), proposal.py: py_compile OK; UTF-8 no BOM,
+  0 nulls, 0 мохибека.
+
+Попутно найдено (НЕ исправлялось, решение за Эдди): прод data/memory.db
+загрязнён тестами прошлой смены (06:34–06:45 UTC 24.08): ~10 CONVERSATION
+«Я решаю изучить Python», 2 IDENTITY_CONSISTENCY_VIOLATION
+(OWNERSHIP_MISMATCH), 3 pending self_proposals (включая мусорный 'test').
+Прод self_state.json чист: goals=[], interests канонические.
+Детали — TODO.md блок P0-b.
+
+Коммит страховки: ca6013c «EddieAI: affective dialogue, claims,
+cognition, voice stack; recover agent.py from shadow-git» (233 файла,
++37750/−1334; прод-данные сняты из индекса). Добавлен .gitignore
+(__pycache__/, *.pyc, *.db-shm, *.db-wal); удалён мусорный файл
+«-Pattern» (0 байт, артефакт PowerShell).
+
+Изменённые файлы: core/agent.py, identity/proposal.py, .gitignore,
+docs_engineer/{CHANGELOG,TODO}.md, PROJECT_STATE.md.
+Оставшиеся риски: прод memory.db загрязнён (см. выше); полный тест с
+живым LLM-стеком не гонялся (RAM), но цепь целей от LLM не зависит —
+_capture_goal_claim анализирует текст сообщения пользователя.
+
 ## 24.08.2026 ~16:00 — полное восстановление core/agent.py из shadow-git
 
 ### [АКТУАЛЬНО] agent.py восстановлен на 100% (снапшот 77a08896, 6040 строк)

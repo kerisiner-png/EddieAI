@@ -77,6 +77,13 @@ class ModelOrchestrator:
                     options.get("num_predict", 300), 512
                 ),
             }
+            response_format = options.get(
+                "response_format"
+            )
+            if response_format is not None:
+                payload["response_format"] = (
+                    response_format
+                )
             req = urllib.request.Request(
                 "https://api.mistral.ai/v1/chat/completions",
                 data=json.dumps(payload).encode("utf-8"),

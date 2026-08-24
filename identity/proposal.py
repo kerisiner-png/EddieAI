@@ -10,6 +10,7 @@ class Proposal:
     confidence: float
     evidence: list[str]
     evidence_count: int | None = None
+    origin: str | None = None
 
     def to_dict(self):
         return asdict(self)

@@ -3829,7 +3829,7 @@ Respond briefly and naturally.
                         user_prompt
                     ),
                     task="conversation",
-                    fast=False,
+                    fast=True,
                 )
             )
         )
@@ -3852,7 +3852,7 @@ Respond briefly and naturally.
                             task=(
                                 "conversation"
                             ),
-                            fast=False,
+                            fast=True,
                         )
                     )
                 )
@@ -3864,6 +3864,44 @@ Respond briefly and naturally.
                     final_answer = (
                         retry
                     )
+
+        try:
+
+            from memory.events import Event
+
+            self.memory.remember(
+                Event.create(
+                    content=observation_text,
+                    event_type="SELF_EXPERIENCE",
+                    source_type="SELF_EXPERIENCE",
+                    source="world",
+                    personal_experience=True,
+                    confidence=0.8,
+                )
+            )
+
+            self.memory.remember(
+                Event.create(
+                    content=final_answer,
+                    event_type="CONVERSATION",
+                    source_type="SELF_OUTPUT",
+                    source="world_response",
+                    personal_experience=False,
+                    confidence=1.0,
+                )
+            )
+
+            self.reflection_scheduler.event_happened(
+                significant=True
+            )
+
+        except Exception as exc:
+
+            print(
+                "[memory] world observation "
+                f"record failed: {exc}",
+                flush=True,
+            )
 
         return final_answer
 
@@ -3920,6 +3958,8 @@ Respond briefly and naturally.
         self,
         observation_text: str,
     ) -> dict:
+
+        self.cognitive_processor.apply_all_analyzed()
 
         menu = self._parse_move_menu(
             observation_text,
@@ -3994,9 +4034,13 @@ Respond briefly and naturally.
                 ),
             )
 
-        except Exception:
+        except Exception as exc:
 
-            pass
+            print(
+                "[memory] action choice "
+                f"record failed: {exc}",
+                flush=True,
+            )
 
         phrase = (
             self.MOVE_DECISION_PHRASES.get(
@@ -4132,7 +4176,6 @@ Respond briefly and naturally.
         self,
         answer: str,
     ):
-        print("DEBUG: _capture_goal_claim called with:", answer)
         lowered = (
             answer or ""
         ).casefold()
@@ -4163,52 +4206,55 @@ Respond briefly and naturally.
             marker in lowered
             for marker in markers
         )
-        print("DEBUG: hit =", hit)
 
         if not hit:
-            print("DEBUG: not hit, returning")
             return
 
+        proposal_id = None
 
-
-        print("DEBUG: about to remember_proposal")
         try:
             proposal_id = self.memory.remember_proposal(
                 content=(answer or "")[:200],
-                proposal_type="goals",
+                proposal_type="goal",
                 confidence=0.4,
                 origin="conversation_claim",
             )
         except Exception as e:
-            print("DEBUG: remember_proposal failed:", e)
+            print("goal claim: remember failed:", e)
             return
-            print("DEBUG: proposal_id =", proposal_id)
-            # Обрабатываем все pending proposals с origin="conversation_claim"
-            pending = self.memory.pending_proposals(limit=10)
-            print("DEBUG: pending proposals:", pending)
-            if not pending:
-                print("DEBUG: pending is empty")
+
+        if proposal_id is None:
+            return
+
+        try:
+            pending = self.memory.pending_proposals(
+                limit=10,
+            )
             for p in pending:
-                print("DEBUG: checking proposal:", dict(p))
                 if (
                     p["origin"] == "conversation_claim"
                     and p["id"] == proposal_id
                 ):
-                    from identity.proposal import Proposal
                     proposal_obj = Proposal(
                         proposal_type=p["proposal_type"],
                         value=p["content"],
+                        reason="conversation claim",
                         confidence=p["confidence"],
+                        evidence=[],
                         origin=p["origin"],
                     )
-                    result = self.identity_manager.evaluate(proposal_obj)
-                    print("DEBUG: evaluate result:", result)
+                    result = (
+                        self.identity_manager.evaluate(
+                            proposal_obj
+                        )
+                    )
                     if result == "accepted":
                         self.memory.set_proposal_status(
-                            p["id"], "accepted", "conversation_claim"
+                            p["id"],
+                            "accepted",
                         )
         except Exception as e:
-            print("DEBUG: exception in _capture_goal_claim:", e)
+            print("goal claim: processing failed:", e)
 
     def _respond_core(
         self,

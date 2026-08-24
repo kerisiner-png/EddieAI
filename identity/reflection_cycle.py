@@ -92,31 +92,59 @@ class ReflectionCycle:
 }
 """
 
-        response = chat(
-            model=MODEL_NAME,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Ты выполняешь внутренний reflection cycle. "
-                        "Оценивай только предоставленные кандидаты. "
-                        "Возвращай только JSON."
-                    ),
+        cloud_content = (
+            self.agent.model_orchestrator
+            ._cloud_chat(
+                system=(
+                    "Ты выполняешь внутренний "
+                    "reflection cycle. "
+                    "Оценивай только предоставленные "
+                    "кандидаты. Возвращай только JSON."
+                ),
+                user=prompt,
+                options={
+                    "temperature": 0.2,
+                    "num_predict": 512,
+                    "response_format": {
+                        "type": "json_object"
+                    },
                 },
-                {
-                    "role": "user",
-                    "content": prompt,
-                },
-            ],
-            options=MODEL_OPTIONS,
-            format="json",
-            keep_alive=-1,
+            )
         )
 
-        raw = (
-            response["message"]["content"]
-            .strip()
-        )
+        if cloud_content is not None:
+
+            raw = cloud_content
+
+        else:
+
+            response = chat(
+                model=MODEL_NAME,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "Ты выполняешь внутренний "
+                            "reflection cycle. "
+                            "Оценивай только предоставленные "
+                            "кандидаты. "
+                            "Возвращай только JSON."
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    },
+                ],
+                options=MODEL_OPTIONS,
+                format="json",
+                keep_alive="3m",
+            )
+
+            raw = (
+                response["message"]["content"]
+                .strip()
+            )
 
         result = self._parse_json(raw)
 
