@@ -5294,14 +5294,16 @@ Respond briefly and naturally.
 
         try:
             chat_context = self.memory.chat_context(
-                limit=8
+                limit=200
             )
         except Exception:
             chat_context = ""
 
         try:
             unread_context = (
-                self.memory.chat_unread_context()
+                self.memory.chat_unread_context(
+                    limit=20
+                )
             )
         except Exception:
             unread_context = ""
@@ -5399,7 +5401,13 @@ The user request may be handled normally.
 
 {dialogue_context}
 
-ИСТОРИЯ ПЕРЕПИСКИ (для контекста):
+МЕССЕНДЖЕР — чат с Эдди:
+
+Непрочитанные сообщения Эдди
+(реши: прочитать и ответить, или подождать):
+{unread_context}
+
+Вся переписка (с временами):
 {chat_context}
 
 ВРЕМЯ
