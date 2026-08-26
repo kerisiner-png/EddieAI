@@ -522,6 +522,16 @@ IDLE — сейчас ничего не делать.
                 payload={"goal": value},
             )
 
+        inbox = state.get("inbox_unread", 0)
+
+        try:
+            inbox = int(inbox)
+        except (TypeError, ValueError):
+            inbox = 0
+
+        if inbox > 0 and frustration < 0.70:
+            return Action("READ_INBOX")
+
         candidate = self.goal_manager.best_candidate()
 
         if candidate is not None:

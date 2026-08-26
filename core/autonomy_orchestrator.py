@@ -383,17 +383,22 @@ class AutonomyOrchestrator:
         if kind == "REFLECT":
             return self._reflection_action()
 
-        if kind == "CHECK_INBOX":
-            inbox_action = self._handle_inbox()
+        if kind == "READ_INBOX":
+            server = getattr(
+                self, "server", None
+            )
 
-            if inbox_action is not None:
-                return inbox_action
+            if server is not None:
+                try:
+                    server.respond_and_deliver()
+                except Exception:
+                    pass
 
             return OrchestrationResult(
-                status="NO_MOTIVATION",
+                status="INBOX_READ",
                 reason=(
-                    "Почта пуста, локальное ядро "
-                    "не нашло действия."
+                    "EddieAI решил прочитать "
+                    "и ответить."
                 ),
             )
 
