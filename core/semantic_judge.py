@@ -9,6 +9,12 @@ JUDGE_OPTIONS = {
     "temperature": 0.0,
 }
 
+REGEN_OPTIONS = {
+    "num_ctx": 2048,
+    "num_predict": 200,
+    "temperature": 0.4,
+}
+
 
 class SemanticJudge:
     def __init__(
@@ -65,6 +71,77 @@ class SemanticJudge:
         )
 
         return self._parse(raw)
+
+    def regenerate(
+        self,
+        user_message,
+        answer,
+        verdict,
+    ):
+        if not self.enabled:
+            return None
+
+        if not answer:
+            return None
+
+        issue = verdict.get("issue")
+
+        if issue not in {
+            "evasion",
+            "fabrication",
+        }:
+            return None
+
+        reason = verdict.get("reason") or ""
+
+        prompt = (
+            self._regenerate_prompt(
+                user_message,
+                answer,
+                issue,
+                reason,
+            )
+        )
+
+        raw = self.llm.chat(
+            system=(
+                "Ты — EddieAI, цифровая личность. "
+                "Отвечай честно и по сути вопроса, "
+                "не выдумывая фактов."
+            ),
+            user=prompt,
+            options=REGEN_OPTIONS,
+            task="conversation",
+        )
+
+        if raw and raw.strip():
+            return raw.strip()
+
+        return None
+
+    def _regenerate_prompt(
+        self,
+        user_message,
+        answer,
+        issue,
+        reason,
+    ):
+        return f"""
+Сообщение пользователя:
+{user_message}
+
+Прежний ответ содержал проблему:
+{issue} — {reason}
+
+Прежний ответ:
+{answer}
+
+Перепиши ответ: не уклоняйся от сути вопроса
+и не выдумывай фактов, деятельности или биографии.
+Отвечай честно и по существу.
+
+Только новый ответ, без пояснений.
+"""
 
     def _prompt(
         self,

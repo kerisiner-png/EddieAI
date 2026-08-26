@@ -4196,6 +4196,17 @@ Respond briefly and naturally.
                         verified=True,
                     )
                 )
+
+                retried = (
+                    self.semantic_judge.regenerate(
+                        user_message,
+                        answer,
+                        verdict,
+                    )
+                )
+
+                if retried:
+                    answer = retried
         except Exception:
             pass
 

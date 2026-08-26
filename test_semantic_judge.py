@@ -71,4 +71,43 @@ verdict = SemanticJudge(
 assert verdict["ok"] is False
 assert verdict["issue"] == "empty"
 
+# Авто-ремонт: при issue судья перегенерирует ответ
+class FakeSeq:
+    def __init__(self, replies):
+        self.replies = list(replies)
+
+    def _cloud_chat(self, system, user, options, task):
+        return (
+            self.replies.pop(0)
+            if self.replies
+            else "{}"
+        )
+
+
+judge = SemanticJudge(
+    model_orchestrator=FakeSeq([
+        '{"ok": false, "issue": "fabrication", '
+        '"reason": "выдумал деятельность"}',
+        "Честный ответ по сути.",
+    ])
+)
+
+verdict = judge.judge("Что ты делал?", "Я летал на Марс.")
+
+assert verdict["ok"] is False
+
+retried = judge.regenerate(
+    "Что ты делал?",
+    "Я летал на Марс.",
+    verdict,
+)
+
+assert retried == "Честный ответ по сути.", retried
+
+# Ок-вердикт -> ремонт не нужен
+assert judge.regenerate(
+    "x", "y",
+    {"ok": True, "issue": None},
+) is None
+
 print("ALL PASS")
