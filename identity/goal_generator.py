@@ -53,9 +53,15 @@ class GoalGenerator:
             )
 
             if existing is not None:
+                planner = getattr(
+                    self.goal_manager,
+                    "planner",
+                    None,
+                )
+
                 plan_created = (
-                    self.goal_manager.planner
-                    .get_plan(
+                    planner is not None
+                    and planner.get_plan(
                         candidate.goal
                     )
                     is not None
@@ -106,7 +112,7 @@ class GoalGenerator:
                     )
                 )
 
-                if activated["status"] == "ACTIVATED":
+                if activated.get("status") == "ACTIVATED":
                     status = "ACTIVATED"
                 else:
                     status = "DEFERRED"
@@ -126,7 +132,7 @@ class GoalGenerator:
                         "Цель возникла из "
                         "мотивационной системы. "
                         f"Источник: "
-                        f"{candidate.source_traits}"
+                        f"{getattr(candidate, 'source_traits', '')}"
                     ),
                 )
 

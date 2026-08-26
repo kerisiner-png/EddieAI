@@ -117,8 +117,12 @@ last_updated:
             basis or []
         )
         state["provenance"] = []
-        state["unresolved_reasons"] = list(
-            reasons
+        state["unresolved_reasons"] = (
+            list(reasons)
+            if isinstance(reasons, list)
+            else [reasons]
+            if reasons
+            else []
         )
         state["last_updated"] = (
             datetime.now(
@@ -229,11 +233,19 @@ last_updated:
             )
         )
         state["confidence"] = confidence
-        state["basis"] = list(
-            basis
+        state["basis"] = (
+            list(basis)
+            if isinstance(basis, list)
+            else [basis]
+            if basis
+            else []
         )
-        state["provenance"] = list(
-            provenance or []
+        state["provenance"] = (
+            list(provenance)
+            if isinstance(provenance, list)
+            else [provenance]
+            if provenance
+            else []
         )
         state["unresolved_reasons"] = []
         state["last_updated"] = now

@@ -1,8 +1,10 @@
 from dataclasses import dataclass
 from typing import Any
 
+import ctypes
 import json
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -48,20 +50,222 @@ class ModelOrchestrator:
         phi4-mini
     """
 
-    MISTRAL_KEY_PATH = (
-        Path.home() / ".eddieai_secrets" / "mistral.key"
-    )
+    SECRETS_DIR = Path.home() / ".eddieai_secrets"
     MISTRAL_MODEL = "mistral-small-latest"
 
-    def _cloud_chat(self, *, system, user, options):
-        if not self.MISTRAL_KEY_PATH.exists():
-            return None
+    CLOUD_PROVIDERS = [
+        {
+            "name": "zen-deepseek-flash",
+            "key_path": (
+                SECRETS_DIR / "zen.key"
+            ),
+            "url": (
+                "https://opencode.ai/zen/v1"
+                "/chat/completions"
+            ),
+            "model": "deepseek-v4-flash",
+            "max_tokens": 1024,
+            "roles": [
+                "conversation",
+                "fallback",
+                "plan",
+            ],
+        },
+        {
+            "name": "zen-deepseek-pro",
+            "key_path": (
+                SECRETS_DIR / "zen.key"
+            ),
+            "url": (
+                "https://opencode.ai/zen/v1"
+                "/chat/completions"
+            ),
+            "model": "deepseek-v4-pro",
+            "max_tokens": 1024,
+            "roles": [
+                "reflection",
+                "deep",
+            ],
+        },
+        {
+            "name": "zen-qwen-affective",
+            "key_path": (
+                SECRETS_DIR / "zen.key"
+            ),
+            "url": (
+                "https://opencode.ai/zen/v1"
+                "/chat/completions"
+            ),
+            "model": "qwen3.6-plus",
+            "max_tokens": 1024,
+            "roles": ["affective"],
+        },
+        {
+            "name": "zen-kimi-vision",
+            "key_path": (
+                SECRETS_DIR / "zen.key"
+            ),
+            "url": (
+                "https://opencode.ai/zen/v1"
+                "/chat/completions"
+            ),
+            "model": "kimi-k3",
+            "max_tokens": 1024,
+            "roles": ["vision"],
+        },
+        {
+            "name": "glm",
+            "key_path": (
+                SECRETS_DIR / "glm.key"
+            ),
+            "url": (
+                "https://api.z.ai/api/paas/v4"
+                "/chat/completions"
+            ),
+            "model": "glm-4.5-flash",
+        },
+        {
+            "name": "deepseek",
+            "key_path": (
+                SECRETS_DIR / "deepseek.key"
+            ),
+            "url": (
+                "https://api.deepseek.com/v1"
+                "/chat/completions"
+            ),
+            "model": "deepseek-chat",
+        },
+        {
+            "name": "mistral",
+            "key_path": (
+                SECRETS_DIR / "mistral.key"
+            ),
+            "url": (
+                "https://api.mistral.ai/v1/chat/completions"
+            ),
+            "model": "mistral-small-latest",
+        },
+        {
+            "name": "groq",
+            "key_path": (
+                SECRETS_DIR / "groq.key"
+            ),
+            "url": (
+                "https://api.groq.com/openai/v1/chat/completions"
+            ),
+            "model": "llama-3.3-70b-versatile",
+        },
+        {
+            "name": "openrouter",
+            "key_path": (
+                SECRETS_DIR / "openrouter.key"
+            ),
+            "url": (
+                "https://openrouter.ai/api/v1/chat/completions"
+            ),
+            "model": (
+                "meta-llama/llama-3.3-70b-instruct:free"
+            ),
+        },
+        {
+            "name": "gemini",
+            "key_path": (
+                SECRETS_DIR / "gemini.key"
+            ),
+            "url": (
+                "https://generativelanguage.googleapis.com"
+                "/v1beta/openai/chat/completions"
+            ),
+            "model": "gemini-2.0-flash",
+        },
+    ]
+
+    CLOUD_NET_COOLDOWN_SEC = 90
+    CLOUD_BILLING_COOLDOWN_SEC = 1800
+    CLOUD_TIMEOUT_SEC = 90
+
+    def _cloud_chat(
+        self,
+        *,
+        system,
+        user,
+        options,
+        task=None,
+    ):
+        now = time.time()
+
+        matching = [
+            provider
+            for provider in self.CLOUD_PROVIDERS
+            if not provider.get("roles")
+            or (
+                task is not None
+                and task in provider["roles"]
+            )
+        ]
+
+        if not matching:
+            matching = self.CLOUD_PROVIDERS
+
+        print(
+            f"[cloud] попытка: {len(matching)} "
+            f"провайдеров (task={task})"
+        )
+
+        for provider in matching:
+            key_path = provider["key_path"]
+
+            if not key_path.exists():
+                print(
+                    f"[cloud] {provider['name']} "
+                    "пропущен: нет ключа"
+                )
+                continue
+
+            name = provider["name"]
+
+            if now < self._cloud_blocked.get(
+                name, 0.0
+            ):
+                remain = int(
+                    self._cloud_blocked[name]
+                    - now
+                )
+                print(
+                    f"[cloud] {name} пропущен: "
+                    f"cooldown ещё {remain}с"
+                )
+                continue
+
+            content = self._cloud_chat_provider(
+                provider,
+                system,
+                user,
+                options,
+                now,
+            )
+
+            if content is not None:
+                return content
+
+        return None
+
+    def _cloud_chat_provider(
+        self,
+        provider,
+        system,
+        user,
+        options,
+        now,
+    ):
+        name = provider["name"]
+
         try:
-            api_key = self.MISTRAL_KEY_PATH.read_text(
+            api_key = provider["key_path"].read_text(
                 encoding="utf-8"
             ).strip()
             payload = {
-                "model": self.MISTRAL_MODEL,
+                "model": provider["model"],
                 "messages": [
                     {
                         "role": "system",
@@ -74,7 +278,8 @@ class ModelOrchestrator:
                 ],
                 "temperature": options.get("temperature", 0.7),
                 "max_tokens": min(
-                    options.get("num_predict", 300), 512
+                    options.get("num_predict", 300),
+                    provider.get("max_tokens", 512),
                 ),
             }
             response_format = options.get(
@@ -84,19 +289,72 @@ class ModelOrchestrator:
                 payload["response_format"] = (
                     response_format
                 )
+            payload.update(
+                provider.get("extra_payload", {})
+            )
             req = urllib.request.Request(
-                "https://api.mistral.ai/v1/chat/completions",
+                provider["url"],
                 data=json.dumps(payload).encode("utf-8"),
                 headers={
-                    "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; "
+                        "Win64; x64) AppleWebKit/537.36 "
+                        "(KHTML, like Gecko) "
+                        "Chrome/131.0 Safari/537.36"
+                    ),
                 },
             )
-            with urllib.request.urlopen(req, timeout=25) as resp:
+            if api_key and api_key != "no-auth":
+                req.add_header(
+                    "Authorization", f"Bearer {api_key}"
+                )
+            with urllib.request.urlopen(
+                req,
+                timeout=self.CLOUD_TIMEOUT_SEC,
+            ) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
-            content = data["choices"][0]["message"]["content"]
-            return content.strip() if content else None
-        except Exception:
+            msg = data["choices"][0]["message"]
+            content = msg.get("content", "")
+            if not content:
+                content = msg.get(
+                    "reasoning_content", ""
+                )
+            content = content.strip() if content else None
+            if content is not None:
+                self._cloud_used = name
+                self._cloud_last_error[name] = ""
+            else:
+                print(
+                    f"[cloud] {name}: пустой ответ "
+                    "(thinking съел лимит токенов?)"
+                )
+            return content
+        except urllib.error.HTTPError as exc:
+            detail = ""
+            try:
+                detail = exc.read().decode(
+                    "utf-8", errors="replace"
+                )[:200]
+            except Exception:
+                pass
+            error = f"HTTP {exc.code}: {detail}"
+            cooldown = (
+                self.CLOUD_BILLING_COOLDOWN_SEC
+                if exc.code in (401, 402, 403)
+                else self.CLOUD_NET_COOLDOWN_SEC
+            )
+            self._cloud_blocked[name] = now + cooldown
+            self._cloud_last_error[name] = error
+            print(f"[cloud] {name} недоступен: {error}")
+            return None
+        except Exception as exc:
+            error = f"{type(exc).__name__}: {exc}"
+            self._cloud_blocked[name] = (
+                now + self.CLOUD_NET_COOLDOWN_SEC
+            )
+            self._cloud_last_error[name] = error
+            print(f"[cloud] {name} недоступен: {error}")
             return None
 
     def __init__(
@@ -104,6 +362,9 @@ class ModelOrchestrator:
         fallback_on_error: bool = True,
     ):
         self.fallback_on_error = fallback_on_error
+        self._cloud_blocked = {}
+        self._cloud_last_error = {}
+        self._cloud_used = ""
 
         self.llm_client = Client(
             timeout=600.0,
@@ -131,6 +392,33 @@ class ModelOrchestrator:
                 temperature=0.4,
             ),
         ]
+
+    MODEL_RAM_GB = {
+        "qwen3.5:4b": 3.6,
+        "phi4-mini:latest": 2.6,
+    }
+
+    @staticmethod
+    def available_ram_gb():
+        class MEMORYSTATUSEX(ctypes.Structure):
+            _fields_ = [
+                ("dwLength", ctypes.c_ulong),
+                ("dwMemoryLoad", ctypes.c_ulong),
+                ("ullTotalPhys", ctypes.c_ulonglong),
+                ("ullAvailPhys", ctypes.c_ulonglong),
+                ("ullTotalPageFile", ctypes.c_ulonglong),
+                ("ullAvailPageFile", ctypes.c_ulonglong),
+                ("ullTotalVirtual", ctypes.c_ulonglong),
+                ("ullAvailVirtual", ctypes.c_ulonglong),
+                ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+            ]
+
+        stat = MEMORYSTATUSEX()
+        stat.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+        ctypes.windll.kernel32.GlobalMemoryStatusEx(
+            ctypes.byref(stat)
+        )
+        return stat.ullAvailPhys / (1024 ** 3)
 
     # =========================================================
     # AVAILABLE MODELS
@@ -505,12 +793,16 @@ class ModelOrchestrator:
                 system=system,
                 user=user,
                 options=options or {},
+                task=task,
             )
             if cloud_content is not None:
                 return {
                     "status": "OK",
                     "content": cloud_content,
-                    "model": self.MISTRAL_MODEL,
+                    "model": (
+                        self._cloud_used
+                        or self.MISTRAL_MODEL
+                    ),
                 }
 
             qwen = next(
@@ -532,7 +824,26 @@ class ModelOrchestrator:
             else:
                 decision = self.select_model(profile)
         else:
-            decision = self.select_model(profile)
+            cloud_content = self._cloud_chat(
+                system=system,
+                user=user,
+                options=options or {},
+                task="deep",
+            )
+
+            if cloud_content is not None:
+                return {
+                    "status": "OK",
+                    "content": cloud_content,
+                    "model": (
+                        self._cloud_used
+                        or self.MISTRAL_MODEL
+                    ),
+                }
+
+            decision = self.select_model(
+                profile
+            )
 
         model = next(
             item
@@ -543,6 +854,48 @@ class ModelOrchestrator:
         # -----------------------------------------------------
         # RESOURCE POLICY
         # -----------------------------------------------------
+
+        free_gb = self.available_ram_gb()
+        required_gb = self.MODEL_RAM_GB.get(model.name)
+        if required_gb is not None and free_gb < required_gb:
+            lighter = "phi4-mini:latest"
+            lighter_need = self.MODEL_RAM_GB.get(lighter)
+            if (
+                model.name != lighter
+                and lighter_need is not None
+                and free_gb >= lighter_need
+            ):
+                print(
+                    f"[orchestrator] мало RAM ({free_gb:.1f} GB) "
+                    f"для {model.name}: даунгрейд на {lighter}"
+                )
+                decision = ModelDecision(
+                    model=lighter,
+                    provider="ollama-local",
+                    score=0.1,
+                    reason="Downgrade: insufficient free RAM.",
+                )
+                model = next(
+                    item
+                    for item in self.models
+                    if item.name == lighter
+                )
+                required_gb = lighter_need
+            else:
+                message = (
+                    f"[orchestrator] отказ: свободно "
+                    f"{free_gb:.1f} GB, модели {model.name} "
+                    f"нужно ~{required_gb} GB. Освободите память."
+                )
+                print(message)
+                return {
+                    "status": "ERROR",
+                    "content": "",
+                    "model": model.name,
+                    "provider": model.provider,
+                    "error": "insufficient_ram",
+                    "error_detail": message,
+                }
 
         is_fast = (
             metadata is not None

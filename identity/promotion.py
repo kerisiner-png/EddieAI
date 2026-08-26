@@ -41,15 +41,10 @@ class PromotionEngine:
                 candidate.source_types
             )
 
-        try:
-            record = self.evidence.get(
-                candidate.category,
-                candidate.value,
-            )
-        except ValueError:
-            return len(
-                candidate.source_types
-            )
+        if not hasattr(self.evidence, "memory") or not hasattr(
+            self.evidence.memory, "connection"
+        ):
+            return len(candidate.source_types)
 
         rows = self.evidence.memory.connection.execute(
             """

@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 
 
@@ -8,6 +9,15 @@ class BehavioralViolation:
     severity: float
 
 
+VERB_STOP = {
+    "что", "как", "меня", "себя", "мне", "тобой", "тебя",
+    "это", "вот", "только", "очень", "просто", "даже", "ещё",
+    "уже", "буду", "было", "был", "была", "который", "всегда",
+    "тут", "там", "здесь", "сейчас", "если", "чтобы", "все",
+    "они", "его", "её", "ее", "их", "наш", "ваш", "моя", "мой",
+}
+
+
 class BehavioralValidator:
     """
     Проверяет соответствие готового ответа
@@ -16,6 +26,84 @@ class BehavioralValidator:
     Validator не определяет эмоции.
     Он проверяет только наблюдаемое поведение.
     """
+
+    MIN_LEARNED = 2
+
+    def __init__(self, memory=None):
+        self.memory = memory
+
+    def _markers(self, static_markers, category):
+        markers = set(static_markers)
+
+        if self.memory is not None:
+            for row in self.memory.learned_get(
+                category,
+                self.MIN_LEARNED,
+            ):
+                markers.add(row["marker"])
+
+        return markers
+
+    def _hits(self, text, static_markers, category, all_static):
+        markers = self._markers(
+            static_markers,
+            category,
+        )
+
+        hits = [
+            marker
+            for marker in markers
+            if marker in text
+        ]
+
+        if hits and self.memory is not None:
+            self._learn_markers(
+                text,
+                category,
+                all_static,
+            )
+
+        return hits
+
+    def _learn_markers(
+        self,
+        text,
+        category,
+        all_static,
+    ):
+        if self.memory is None:
+            return
+
+        tokens = re.findall(
+            r"[\u0430-\u044f\u0451a-z0-9]+",
+            str(text or ""),
+        )
+
+        candidates = set()
+
+        for token in tokens:
+            if (
+                len(token) >= 3
+                and token not in all_static
+                and token not in VERB_STOP
+            ):
+                candidates.add(token)
+
+        for index in range(len(tokens) - 1):
+            bigram = (
+                tokens[index]
+                + " "
+                + tokens[index + 1]
+            )
+
+            if bigram not in all_static:
+                candidates.add(bigram)
+
+        for marker in candidates:
+            self.memory.learned_bump(
+                marker,
+                category,
+            )
 
     def validate(
         self,
@@ -197,23 +285,46 @@ class BehavioralValidator:
             "расскажи мне больше",
         )
 
-        help_hits = [
-            marker
-            for marker in help_markers
-            if marker in lowered
-        ]
+        absolute_markers = (
+            "точно",
+            "безусловно",
+            "однозначно",
+            "несомненно",
+            "гарантированно",
+        )
 
-        denial_hits = [
-            marker
-            for marker in identity_denial_markers
-            if marker in lowered
-        ]
+        all_static = (
+            set(help_markers)
+            | set(identity_denial_markers)
+            | set(role_inversion_markers)
+            | set(fabricated_activity_markers)
+            | set(formal_address_markers)
+            | set(support_desk_markers)
+            | set(internal_leak_markers)
+            | set(initiative_markers)
+            | set(absolute_markers)
+        )
 
-        initiative_hits = [
-            marker
-            for marker in initiative_markers
-            if marker in lowered
-        ]
+        help_hits = self._hits(
+            lowered,
+            help_markers,
+            "help",
+            all_static,
+        )
+
+        denial_hits = self._hits(
+            lowered,
+            identity_denial_markers,
+            "identity_denial",
+            all_static,
+        )
+
+        initiative_hits = self._hits(
+            lowered,
+            initiative_markers,
+            "initiative",
+            all_static,
+        )
 
         help_offer = bool(
             help_hits
@@ -316,19 +427,12 @@ class BehavioralValidator:
             # Здесь не пытаемся вычислять истинную
             # уверенность модели. Проверяем только
             # явные чрезмерно уверенные формулы.
-            absolute_markers = (
-                "точно",
-                "безусловно",
-                "однозначно",
-                "несомненно",
-                "гарантированно",
+            found = self._hits(
+                lowered,
+                absolute_markers,
+                "absolute",
+                all_static,
             )
-
-            found = [
-                marker
-                for marker in absolute_markers
-                if marker in lowered
-            ]
 
             if found:
                 violations.append(
@@ -386,7 +490,7 @@ class BehavioralValidator:
                             "интерес, поэтому при уместности "
                             "ожидается следующий содержательный шаг."
                         ),
-                        severity=0.45,
+                        severity=0.30,
                     )
                 )
 
@@ -489,9 +593,13 @@ class BehavioralValidator:
                 )
             )
 
-        role_inversion = any(
-            marker in lowered
-            for marker in role_inversion_markers
+        role_inversion = bool(
+            self._hits(
+                lowered,
+                role_inversion_markers,
+                "role_inversion",
+                all_static,
+            )
         )
 
         if role_inversion:
@@ -507,9 +615,13 @@ class BehavioralValidator:
                 )
             )
 
-        fabricated_activity = any(
-            marker in lowered
-            for marker in fabricated_activity_markers
+        fabricated_activity = bool(
+            self._hits(
+                lowered,
+                fabricated_activity_markers,
+                "fabricated_activity",
+                all_static,
+            )
         )
 
         if fabricated_activity:
@@ -526,9 +638,13 @@ class BehavioralValidator:
                 )
             )
 
-        formal_address = any(
-            marker in lowered
-            for marker in formal_address_markers
+        formal_address = bool(
+            self._hits(
+                lowered,
+                formal_address_markers,
+                "formal_address",
+                all_static,
+            )
         )
 
         import re
@@ -551,9 +667,13 @@ class BehavioralValidator:
                 )
             )
 
-        support_desk = any(
-            marker in lowered
-            for marker in support_desk_markers
+        support_desk = bool(
+            self._hits(
+                lowered,
+                support_desk_markers,
+                "support_desk",
+                all_static,
+            )
         )
 
         if support_desk:
@@ -570,9 +690,13 @@ class BehavioralValidator:
                 )
             )
 
-        internal_leak = any(
-            marker in lowered
-            for marker in internal_leak_markers
+        internal_leak = bool(
+            self._hits(
+                lowered,
+                internal_leak_markers,
+                "internal_leak",
+                all_static,
+            )
         )
 
         if internal_leak:

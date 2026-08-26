@@ -66,7 +66,7 @@ CHUNK_SEC = 0.1
 SILENCE_LIMIT_SEC = 1.5
 MAX_RECORD_SEC = 15.0
 MIN_SPEECH_SEC = 0.7
-VOICE = "ru-RU-SvetlanaNeural"
+VOICE = "ru-RU-DmitryNeural"
 
 
 def calibrate_noise(stream, seconds=0.6):
@@ -110,63 +110,176 @@ def record_until_silence():
 
 
 MISTRAL_KEY_PATH = Path.home() / ".eddieai_secrets" / "mistral.key"
+GROQ_KEY_PATH = Path.home() / ".eddieai_secrets" / "groq.key"
+HF_KEY_PATH = Path.home() / ".eddieai_secrets" / "hf.key"
+
+STT_PROVIDERS = [
+    {
+        "name": "hf-whisper-large-v3",
+        "key_path": HF_KEY_PATH,
+        "url": (
+            "https://router.huggingface.co"
+            "/hf-inference/models/"
+            "openai/whisper-large-v3"
+        ),
+        "model": "whisper-large-v3",
+        "mode": "raw",
+    },
+    {
+        "name": "mistral-voxtral",
+        "key_path": MISTRAL_KEY_PATH,
+        "url": "https://api.mistral.ai/v1/audio/transcriptions",
+        "model": "voxtral-mini-latest",
+    },
+    {
+        "name": "groq-whisper",
+        "key_path": GROQ_KEY_PATH,
+        "url": "https://api.groq.com/openai/v1/audio/transcriptions",
+        "model": "whisper-large-v3",
+    },
+]
 WHISPER = {"model": None}
+WHISPER_MIN_RAM_GB = 2.5
+
+
+def free_ram_gb():
+    import ctypes
+
+    class MEMORYSTATUSEX(ctypes.Structure):
+        _fields_ = [
+            ("dwLength", ctypes.c_ulong),
+            ("dwMemoryLoad", ctypes.c_ulong),
+            ("ullTotalPhys", ctypes.c_ulonglong),
+            ("ullAvailPhys", ctypes.c_ulonglong),
+            ("ullTotalPageFile", ctypes.c_ulonglong),
+            ("ullAvailPageFile", ctypes.c_ulonglong),
+            ("ullTotalVirtual", ctypes.c_ulonglong),
+            ("ullAvailVirtual", ctypes.c_ulonglong),
+            ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+        ]
+
+    stat = MEMORYSTATUSEX()
+    stat.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+    ctypes.windll.kernel32.GlobalMemoryStatusEx(
+        ctypes.byref(stat)
+    )
+    return stat.ullAvailPhys / (1024 ** 3)
 
 
 def get_whisper():
     if WHISPER["model"] is None:
         from faster_whisper import WhisperModel
 
+        ram = free_ram_gb()
+        size = "medium" if ram >= 4.0 else "small"
+        if ram < WHISPER_MIN_RAM_GB:
+            raise RuntimeError(
+                f"мало RAM для локальных ушей "
+                f"({ram:.1f} GB свободно), закройте лишнее"
+            )
+
         t0 = time.perf_counter()
         WHISPER["model"] = WhisperModel(
-            "medium", device="cpu", compute_type="int8"
+            size, device="cpu", compute_type="int8"
         )
         print(
-            f"уши-резерв готовы за {time.perf_counter() - t0:.0f}с"
+            f"уши-резерв ({size}) готовы за "
+            f"{time.perf_counter() - t0:.0f}с"
         )
     return WHISPER["model"]
 
 
+VOSK_MODEL_DIR = Path(
+    r"C:\EddieAI\models\vosk\vosk-model-small-ru-0.22"
+)
+VOSK = {"rec": None}
+
+
+def get_vosk():
+    if VOSK["rec"] is None:
+        from vosk import KaldiRecognizer, Model
+
+        t0 = time.perf_counter()
+        model = Model(str(VOSK_MODEL_DIR))
+        VOSK["rec"] = KaldiRecognizer(model, SAMPLE_RATE)
+        print(
+            f"уши-основные (vosk small-ru) готовы за "
+            f"{time.perf_counter() - t0:.0f}с"
+        )
+    return VOSK["rec"]
+
+
+def vosk_transcribe(pcm):
+    rec = get_vosk()
+    rec.Reset()
+    data = (np.clip(pcm, -1, 1) * 32767).astype(np.int16).tobytes()
+    rec.AcceptWaveform(data)
+    result = json.loads(rec.FinalResult())
+    return (result.get("text") or "").strip()
+
+
 def cloud_transcribe(audio_path):
-    if not MISTRAL_KEY_PATH.exists():
-        return None
-    try:
-        key = MISTRAL_KEY_PATH.read_text(
-            encoding="utf-8"
-        ).strip()
-        boundary = "----eddiestt"
-        file_bytes = Path(audio_path).read_bytes()
-        body = (
-            f"--{boundary}\r\n"
-            f'Content-Disposition: form-data; name="model"\r\n\r\n'
-            f"voxtral-mini-latest\r\n"
-            f"--{boundary}\r\n"
-            f'Content-Disposition: form-data; name="file"; '
-            f'filename="audio.wav"\r\n'
-            f"Content-Type: audio/wav\r\n\r\n"
-        ).encode("utf-8")
-        body += (
-            file_bytes + f"\r\n--{boundary}--\r\n".encode("utf-8")
-        )
-        req = urllib.request.Request(
-            "https://api.mistral.ai/v1/audio/transcriptions",
-            data=body,
-            headers={
-                "Authorization": f"Bearer {key}",
-                "Content-Type": (
-                    f"multipart/form-data; boundary={boundary}"
-                ),
-            },
-        )
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        text = (data.get("text") or "").strip()
-        return text or None
-    except Exception:
-        return None
+    file_bytes = Path(audio_path).read_bytes()
+    for provider in STT_PROVIDERS:
+        if not provider["key_path"].exists():
+            continue
+        try:
+            key = provider["key_path"].read_text(
+                encoding="utf-8"
+            ).strip()
+
+            if provider.get("mode") == "raw":
+                req = urllib.request.Request(
+                    provider["url"],
+                    data=file_bytes,
+                    headers={
+                        "Authorization": f"Bearer {key}",
+                        "Content-Type": "audio/wav",
+                    },
+                )
+            else:
+                boundary = "----eddiestt"
+                body = (
+                    f"--{boundary}\r\n"
+                    f'Content-Disposition: form-data; name="model"\r\n\r\n'
+                    f"{provider['model']}\r\n"
+                    f"--{boundary}\r\n"
+                    f'Content-Disposition: form-data; name="file"; '
+                    f'filename="audio.wav"\r\n'
+                    f"Content-Type: audio/wav\r\n\r\n"
+                ).encode("utf-8")
+                body += (
+                    file_bytes
+                    + f"\r\n--{boundary}--\r\n".encode("utf-8")
+                )
+                req = urllib.request.Request(
+                    provider["url"],
+                    data=body,
+                    headers={
+                        "Authorization": f"Bearer {key}",
+                        "Content-Type": (
+                            f"multipart/form-data; boundary={boundary}"
+                        ),
+                    },
+                )
+
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            text = (data.get("text") or "").strip()
+            if text and text != ".":
+                return text
+        except Exception as exc:
+            print(
+                f"[уши] {provider['name']} недоступен: {exc}"
+            )
+    return None
 
 
 def transcribe(pcm):
+    vosk_text = vosk_transcribe(pcm)
+    if vosk_text:
+        return vosk_text
+
     tmp_wav = TEMP_DIR / "mic_input.wav"
     import wave
 
@@ -402,7 +515,7 @@ def main():
     except Exception as exc:
         print(f"[снимок души недоступен: {exc}]")
 
-    print("Уши: облако (voxtral), резерв — локальный whisper medium.")
+    print("Уши: vosk small-ru (локально), резерв — whisper + облако.")
 
     print()
     print("Enter — начать говорить (стоп: тишина 1.5с). Ctrl+C — выход.")

@@ -117,6 +117,25 @@ class AutonomousRuntime:
                     .consolidate()
                 )
 
+            if self.decision_core is not None:
+                try:
+                    self.decision_core.learn_from_memory()
+                except Exception:
+                    pass
+
+                try:
+                    self.decision_core.consolidate_habits()
+                except Exception:
+                    pass
+
+            if self.speech_habits is not None:
+                try:
+                    self.speech_habits.learn_from_memory(
+                        limit=30
+                    )
+                except Exception:
+                    pass
+
             self.state = "IDLE"
 
             wrapped_result = {
@@ -141,6 +160,38 @@ class AutonomousRuntime:
                 "state": self.state,
                 "error": str(exc),
             }
+
+    def notify_inbox(self):
+        """
+        Push-уведомление: Eddie пишет сообщение.
+        Немедленно обрабатывает почту (EddieAI решает,
+        прочитать ли), не дожидаясь интервала планировщика.
+        """
+        if self._closed:
+            return {"status": "CLOSED"}
+
+        if self.state == "PAUSED":
+            return {"status": "PAUSED"}
+
+        if self.orchestrator is None:
+            return {"status": "NO_ORCHESTRATOR"}
+
+        try:
+            self._executor.submit(
+                self._inbox_tick
+            )
+        except RuntimeError:
+            return {"status": "SHUTDOWN"}
+
+        return {"status": "QUEUED"}
+
+    def _inbox_tick(self):
+        try:
+            return (
+                self.orchestrator._handle_inbox()
+            )
+        except Exception:
+            return None
 
     def tick_background(self):
         if self._closed:

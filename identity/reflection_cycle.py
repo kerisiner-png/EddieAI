@@ -80,16 +80,16 @@ class ReflectionCycle:
 Не изменяй self_state.
 
 Верни ТОЛЬКО JSON:
-{
+{{
   "candidate_decisions": [
-    {
+    {{
       "field": "точное поле",
       "value": "точное значение",
       "decision": "promote",
       "reason": "краткая причина"
-    }
+    }}
   ]
-}
+}}
 """
 
         cloud_content = (
@@ -109,6 +109,7 @@ class ReflectionCycle:
                         "type": "json_object"
                     },
                 },
+                task="reflection",
             )
         )
 
@@ -117,6 +118,36 @@ class ReflectionCycle:
             raw = cloud_content
 
         else:
+
+            orchestrator = (
+                self.agent.model_orchestrator
+            )
+
+            free_gb = (
+                orchestrator.available_ram_gb()
+            )
+
+            need_gb = (
+                orchestrator.MODEL_RAM_GB.get(
+                    "phi4-mini:latest"
+                )
+            )
+
+            if (
+                need_gb is not None
+                and free_gb < need_gb
+            ):
+                print(
+                    "[reflection] мало RAM для "
+                    f"локального анализа "
+                    f"({free_gb:.1f} GB), "
+                    "решения по кандидатам "
+                    "переносятся"
+                )
+
+                return {
+                    "candidate_decisions": [],
+                }
 
             response = chat(
                 model=MODEL_NAME,
@@ -321,7 +352,7 @@ class ReflectionCycle:
             ],
             options=MODEL_OPTIONS,
             format="json",
-            keep_alive=-1,
+            keep_alive="3m",
         )
 
         raw = (

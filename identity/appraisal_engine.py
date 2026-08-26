@@ -1,3 +1,16 @@
+import re
+
+
+SOCIAL_STOP = {
+    "что", "как", "меня", "себя", "мне", "тобой", "тебя",
+    "это", "вот", "только", "очень", "просто", "даже", "ещё",
+    "уже", "буду", "было", "был", "была", "который", "всегда",
+    "самый", "самая", "тут", "там", "здесь", "сейчас", "тогда",
+    "если", "чтобы", "потому", "поэтому", "все", "они", "его",
+    "её", "ее", "их", "наш", "ваш", "моя", "мой", "свою",
+}
+
+
 class AppraisalEngine:
     """
     Детерминированная оценка событий,
@@ -7,6 +20,67 @@ class AppraisalEngine:
     Appraisal не изменяет beliefs и не делает
     самостоятельных эпистемических выводов.
     """
+
+    MIN_LEARNED = 2
+
+    def __init__(self, memory=None):
+        self.memory = memory
+
+    def _markers(
+        self,
+        static_markers,
+        category,
+    ):
+        markers = set(static_markers)
+
+        if self.memory is not None:
+            for row in self.memory.learned_get(
+                category,
+                self.MIN_LEARNED,
+            ):
+                markers.add(row["marker"])
+
+        return markers
+
+    def _learn_markers(
+        self,
+        text,
+        category,
+        all_static,
+    ):
+        if self.memory is None:
+            return
+
+        tokens = re.findall(
+            r"[\u0430-\u044f\u0451a-z0-9]+",
+            str(text or "").casefold(),
+        )
+
+        candidates = set()
+
+        for token in tokens:
+            if (
+                len(token) >= 3
+                and token not in all_static
+                and token not in SOCIAL_STOP
+            ):
+                candidates.add(token)
+
+        for index in range(len(tokens) - 1):
+            bigram = (
+                tokens[index]
+                + " "
+                + tokens[index + 1]
+            )
+
+            if bigram not in all_static:
+                candidates.add(bigram)
+
+        for marker in candidates:
+            self.memory.learned_bump(
+                marker,
+                category,
+            )
 
     def appraise(
         self,
@@ -372,6 +446,16 @@ class AppraisalEngine:
             "спасибо",
             "получилось",
             "ты смог",
+            "хорошо сделал",
+            "правильно",
+            "впечатляюще",
+            "ты лучший",
+            "здорово",
+            "прекрасно",
+            "отлично поработал",
+            "спасибо большое",
+            "горжусь тобой",
+            "я в тебя верю",
         )
 
         negative_markers = (
@@ -387,6 +471,31 @@ class AppraisalEngine:
             "не хочу с тобой",
             "отстань",
             "ненавижу",
+            "ты идиот",
+            "ты дурак",
+            "дурак",
+            "тупица",
+            "ты бездарь",
+            "бездарь",
+            "ты надоел",
+            "надоел",
+            "достал",
+            "ты мне надоел",
+            "ты ни на что не годен",
+            "ты ноль",
+        )
+
+        contradiction_markers = (
+            "ты неправ",
+            "это не так",
+            "на самом деле нет",
+            "всё наоборот",
+            "ты противоречишь",
+            "ты сам себе противоречишь",
+            "забудь то, что я сказал",
+            "это было неправильно",
+            "неправда",
+            "ты путаешь",
         )
 
         self_markers = (
@@ -418,9 +527,18 @@ class AppraisalEngine:
             "новая",
         )
 
+        all_static = (
+            set(positive_markers)
+            | set(negative_markers)
+            | set(contradiction_markers)
+        )
+
         if any(
             marker in text
-            for marker in positive_markers
+            for marker in self._markers(
+                positive_markers,
+                "praise",
+            )
         ):
             appraisal[
                 "positive_valence"
@@ -439,9 +557,18 @@ class AppraisalEngine:
                 "Положительная социальная обратная связь."
             )
 
+            self._learn_markers(
+                text,
+                "praise",
+                all_static,
+            )
+
         if any(
             marker in text
-            for marker in negative_markers
+            for marker in self._markers(
+                negative_markers,
+                "insult",
+            )
         ):
             appraisal[
                 "negative_valence"
@@ -471,6 +598,62 @@ class AppraisalEngine:
 
             reasons.append(
                 "Негативная социальная обратная связь."
+            )
+
+            self._learn_markers(
+                text,
+                "insult",
+                all_static,
+            )
+
+        if any(
+            marker in text
+            for marker in self._markers(
+                contradiction_markers,
+                "contradiction",
+            )
+        ):
+            appraisal[
+                "expectation_violation"
+            ] = 0.7
+
+            appraisal[
+                "negative_valence"
+            ] = max(
+                appraisal[
+                    "negative_valence"
+                ],
+                0.5,
+            )
+
+            changes["surprise"] = (
+                changes.get(
+                    "surprise",
+                    0.0,
+                )
+                + 0.08
+            )
+
+            changes["uncertainty"] = (
+                changes.get(
+                    "uncertainty",
+                    0.0,
+                )
+                + 0.08
+            )
+
+            if trigger == "neutral_interaction":
+                trigger = "contradiction_feedback"
+
+            reasons.append(
+                "Сообщение противоречит предыдущему "
+                "или известному EddieAI."
+            )
+
+            self._learn_markers(
+                text,
+                "contradiction",
+                all_static,
             )
 
         if any(

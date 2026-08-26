@@ -1,6 +1,5 @@
 import json
 
-from ollama import chat
 
 from memory.knowledge import Knowledge
 
@@ -15,8 +14,19 @@ MODEL_OPTIONS = {
 
 
 class SelfInterpretation:
-    def __init__(self, memory):
+    def __init__(
+        self,
+        memory,
+        model_orchestrator=None,
+    ):
+        from identity.llm_access import (
+            CloudFirstLlm,
+        )
+
         self.memory = memory
+        self.llm = CloudFirstLlm(
+            model_orchestrator
+        )
 
     def interpret(
         self,
@@ -76,31 +86,16 @@ class SelfInterpretation:
 }}
 """
 
-        response = chat(
-            model=MODEL_NAME,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Сравнивай источники строго "
-                        "по предоставленным данным. "
-                        "Верни только JSON."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": prompt,
-                },
-            ],
+        raw = self.llm.chat(
+            system=(
+                "Сравнивай источники строго "
+                "по предоставленным данным. "
+                "Верни только JSON."
+            ),
+            user=prompt,
             options=MODEL_OPTIONS,
-            keep_alive=-1,
+            task="deep",
         )
-
-        raw = response[
-            "message"
-        ][
-            "content"
-        ].strip()
 
         parsed = self._parse(raw)
 

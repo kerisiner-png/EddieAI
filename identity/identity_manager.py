@@ -105,7 +105,9 @@ class IdentityManager:
         if not value:
             return "rejected"
 
-        current = self.self_state.get(field, [])
+        current = list(
+            self.self_state.get(field, [])
+        )
 
         if value in current:
             return "already_present"

@@ -92,21 +92,27 @@ def main() -> int:
 
     finally:
 
-        with open(
-            out_path,
-            "w",
-            encoding="utf-8",
-        ) as handle:
+        try:
+            with open(
+                out_path,
+                "w",
+                encoding="utf-8",
+            ) as handle:
 
-            for item in results:
+                for item in results:
 
-                handle.write(
-                    json.dumps(
-                        item,
-                        ensure_ascii=False,
+                    handle.write(
+                        json.dumps(
+                            item,
+                            ensure_ascii=False,
+                        )
+                        + "\n"
                     )
-                    + "\n"
-                )
+        except Exception:
+            print(
+                f"ОШИБКА записи {out_path}",
+                file=sys.stderr,
+            )
 
         try:
             agent.close()

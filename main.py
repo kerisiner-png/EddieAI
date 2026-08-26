@@ -1,11 +1,66 @@
+import os
+import sys
+
 from core.agent import Agent
 from core.autonomy_runtime_factory import (
     AutonomyRuntimeFactory,
 )
 
+import traceback
+
+
+LOG_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "logs",
+)
+
+
+class Tee:
+    def __init__(self, stream, path):
+        self.stream = stream
+        self.file = open(
+            path,
+            "a",
+            encoding="utf-8",
+            buffering=1,
+        )
+
+    def write(self, data):
+        self.stream.write(data)
+        self.file.write(data)
+
+    def flush(self):
+        self.stream.flush()
+        self.file.flush()
+
 
 def main():
-    agent = Agent()
+    os.makedirs(
+        LOG_DIR,
+        exist_ok=True,
+    )
+    log_path = os.path.join(
+        LOG_DIR,
+        "eddie_session.log",
+    )
+
+    sys.stdout = Tee(
+        sys.stdout,
+        log_path,
+    )
+    sys.stderr = Tee(
+        sys.stderr,
+        log_path,
+    )
+
+    agent = None
+
+    try:
+        agent = Agent()
+    except Exception as exc:
+        print(f"Ошибка инициализации агента: {exc}")
+        traceback.print_exc()
+        return
 
     runtime = (
         AutonomyRuntimeFactory(
@@ -17,20 +72,50 @@ def main():
     print("EddieAI v0.1")
     print("=" * 60)
     print("Первичная стадия развития.")
+    print("Сообщение может быть многострочным.")
+    print("Отправка — пустая строка.")
     print("Для выхода напиши: exit")
     print()
 
     try:
         while True:
-            user_message = input(
-                "Эдди > "
-            ).strip()
+            first = input("Эдди > ").strip()
 
-            if user_message.lower() == "exit":
+            if first.lower() == "exit":
                 break
+
+            if not first:
+                continue
+
+            lines = [first]
+
+            while True:
+                line = input()
+
+                if not line.strip():
+                    break
+
+                lines.append(line)
+
+            user_message = (
+                "\n".join(lines).strip()
+            )
 
             if not user_message:
                 continue
+
+            if len(user_message) < 2:
+                print(
+                    "\n[EddieAI] Напиши что-нибудь "
+                    "подлиннее — я же хочу понять "
+                    "тебя правильно.\n"
+                )
+                continue
+
+            print(
+                f"[принято символов: "
+                f"{len(user_message)}]"
+            )
 
             try:
                 answer = agent.respond(
@@ -43,9 +128,11 @@ def main():
                 print(
                     f"\nОшибка агента: {exc}\n"
                 )
+                traceback.print_exc()
 
     finally:
-        agent.close()
+        if agent is not None:
+            agent.close()
 
 
 if __name__ == "__main__":

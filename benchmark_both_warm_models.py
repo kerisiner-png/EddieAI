@@ -62,6 +62,12 @@ try:
         print("=" * 80)
         print("EXPECTED MODEL:", expected_model)
 
+        if not hasattr(agent, "model_orchestrator") or not hasattr(
+            agent.model_orchestrator, "execute"
+        ):
+            print("SKIP: model_orchestrator.execute() недоступен")
+            continue
+
         started = perf_counter()
 
         result = agent.model_orchestrator.execute(

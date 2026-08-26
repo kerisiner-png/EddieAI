@@ -116,6 +116,47 @@ class ToolExperienceRecorder:
                     f"{summary}"
                 )
 
+            results = payload.get(
+                "results"
+            )
+
+            if (
+                isinstance(
+                    results,
+                    list,
+                )
+                and results
+            ):
+                lines = []
+
+                for item in results[:5]:
+                    if isinstance(
+                        item,
+                        dict,
+                    ):
+                        title = item.get(
+                            "title",
+                            "",
+                        )
+                        url = item.get(
+                            "url",
+                            "",
+                        )
+                        lines.append(
+                            f"- {title} ({url})"
+                        )
+
+                if lines:
+                    return (
+                        f"Инструмент {tool} "
+                        f"выполнил действие "
+                        f"'{action.target}'. "
+                        f"Найдено "
+                        f"{len(results)} "
+                        f"результатов:\n"
+                        + "\n".join(lines)
+                    )
+
         return (
             f"Инструмент {tool} "
             f"выполнил действие "

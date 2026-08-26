@@ -1,0 +1,77 @@
+{
+  "test": "EDDIEAI CORE REGRESSION TEST",
+  "duration": 36.146,
+  "summary": {
+    "total": 11,
+    "passed": 11,
+    "failed": 0
+  },
+  "results": [
+    {
+      "name": "direct_knowledge_no_llm",
+      "status": "PASS",
+      "seconds": 0.0288,
+      "details": "llm_calls=0, answer=Моя основная миссия — Быть и развиваться."
+    },
+    {
+      "name": "unknown_requires_reasoning",
+      "status": "PASS",
+      "seconds": 0.0,
+      "details": "DirectAnswer(found=False, answer='', source='none', confidence=0.0)"
+    },
+    {
+      "name": "self_change_intent_detection",
+      "status": "PASS",
+      "seconds": 0.0,
+      "details": "intents=['SELF_CHANGE', 'SELF_CHANGE', 'SELF_CHANGE']"
+    },
+    {
+      "name": "semantic_self_observation_clustering",
+      "status": "PASS",
+      "seconds": 0.0,
+      "details": "['self_model_is_revisable', 'self_model_is_revisable', 'self_model_is_revisable']"
+    },
+    {
+      "name": "evidence_accumulates",
+      "status": "PASS",
+      "seconds": 0.0,
+      "details": "EvidenceRecord(category='belief', value='REGRESSION_TEST_belief_evidence', count=3, weighted_score=3.0, confidence=0.742, source_types=['SELF_INTERPRETATION'], first_seen='2026-08-17T19:45:01.277269+00:00', last_seen='2026-08-17T19:45:01.288385+00:00')"
+    },
+    {
+      "name": "evidence_becomes_personality_candidate",
+      "status": "PASS",
+      "seconds": 0.0,
+      "details": "[PersonalityCandidate(field='belief', value='REGRESSION_TEST_belief_candidate', category='belief', strength=0.815, weighted_score=4.0, evidence_count=4, source_types=['SELF_INTERPRETATION'], reason=\"Сформирован устойчивый паттерн: 4 свидетельств, взвешенный балл 4.0, источники: ['SELF_INTERPRETATION'].\")]"
+    },
+    {
+      "name": "promotion_engine_accepts_strong_candidate",
+      "status": "PASS",
+      "seconds": 0.0,
+      "details": "PromotionDecision(action='PROMOTE', field='belief', value='REGRESSION_TEST_belief_promotion', confidence=0.803, reason='Кандидат имеет достаточную устойчивость и независимые основания.')"
+    },
+    {
+      "name": "reflection_snapshot_serializable",
+      "status": "PASS",
+      "seconds": 0.0,
+      "details": "candidate_count=2"
+    },
+    {
+      "name": "background_reflection_worker",
+      "status": "PASS",
+      "seconds": 0.2505,
+      "details": "status=ANALYZED, worker_error=None"
+    },
+    {
+      "name": "reflection_main_thread_application",
+      "status": "PASS",
+      "seconds": 0.0,
+      "details": "apply=REFLECTION_APPLIED, final=DONE"
+    },
+    {
+      "name": "dialogue_followup_context",
+      "status": "PASS",
+      "seconds": 0.0,
+      "details": "context='FOLLOW-UP CONTEXT\\n\\nPrevious user message:\\nЧто тебе сейчас нравится?\\n\\nPrevious EddieAI answer:\\nМне нравится помогать пользователям с информацией и задачами, это соответствует моим целям.\\n\\nThe current user message continues the previous topic. Answer the current message directly in that context.', answer='Мне нравится помогать пользователям с информацией и задачами, это соответствует моим целям.'"
+    }
+  ]
+}

@@ -1,9 +1,13 @@
 from core.agent_loop import AgentLoop
 from core.autonomy_arbitrator import AutonomyArbitrator
+from core.decision_core import DecisionCore
+from core.eddie_server import EddieServer
 from core.model_orchestrator import ModelOrchestrator
 from core.autonomy_orchestrator import AutonomyOrchestrator
 from core.autonomous_runtime import AutonomousRuntime
 from core.autonomy_scheduler import AutonomyScheduler
+from core.outbox import Outbox
+from core.speech_habits import SpeechHabits
 
 from identity.action_planner import ActionPlanner
 from identity.action_preference_detector import ActionPreferenceDetector
@@ -70,9 +74,21 @@ class AutonomyRuntimeFactory:
         self,
         agent,
         filesystem_root=r"C:\EddieAI",
+        scheduler_max_ticks_per_window=3,
+        scheduler_interval_seconds=300,
+        enable_decision_core=False,
     ):
         self.agent = agent
         self.filesystem_root = filesystem_root
+        self.scheduler_max_ticks_per_window = (
+            scheduler_max_ticks_per_window
+        )
+        self.scheduler_interval_seconds = (
+            scheduler_interval_seconds
+        )
+        self.enable_decision_core = (
+            enable_decision_core
+        )
 
     def build(self):
         # -----------------------------------------
@@ -95,10 +111,14 @@ class AutonomyRuntimeFactory:
         motivation = MotivationEngine(
             self.agent.self_state,
             self.agent.personality_lifecycle,
+            memory=self.agent.memory,
         )
 
         goal_plan_generator = GoalPlanGenerator(
-            goal_planner
+            goal_planner,
+            model_orchestrator=(
+                self.agent.model_orchestrator
+            ),
         )
 
         goal_generator = GoalGenerator(
@@ -110,7 +130,11 @@ class AutonomyRuntimeFactory:
             ),
         )
 
-        adaptive_planner = AdaptivePlanner()
+        adaptive_planner = AdaptivePlanner(
+            model_orchestrator=(
+                self.agent.model_orchestrator
+            ),
+        )
 
         adaptive_plan_controller = (
             AdaptivePlanController(
@@ -130,7 +154,11 @@ class AutonomyRuntimeFactory:
 
         self_interpreter = (
             SelfInterpretation(
-                self.agent.memory
+                self.agent.memory,
+                model_orchestrator=(
+                    self.agent
+                    .model_orchestrator
+                ),
             )
         )
 
@@ -262,6 +290,19 @@ class AutonomyRuntimeFactory:
         )
 
         # -----------------------------------------
+        # OUTBOX
+        # -----------------------------------------
+
+        outbox = Outbox(self.filesystem_root)
+
+        eddie_server = EddieServer(
+            agent=self.agent,
+            history_store=(
+                self.agent.memory
+            ),
+        )
+
+        # -----------------------------------------
         # TASK EXECUTION
         # -----------------------------------------
 
@@ -274,6 +315,9 @@ class AutonomyRuntimeFactory:
             self.agent.memory,
             self.agent.evidence,
             self.agent.personality_lifecycle,
+            model_orchestrator=(
+                self.agent.model_orchestrator
+            ),
         )
 
         evidence_consolidator = (
@@ -340,6 +384,7 @@ class AutonomyRuntimeFactory:
             affective_behavior_policy=(
                 self.agent.affective_behavior_policy
             ),
+            outbox=outbox,
         )
 
         runtime_agent_loop = agent_loop
@@ -347,6 +392,22 @@ class AutonomyRuntimeFactory:
         # -----------------------------------------
         # ORCHESTRATION
         # -----------------------------------------
+
+        if self.enable_decision_core:
+            decision_core = DecisionCore(
+                memory=self.agent.memory,
+                goal_manager=goal_manager,
+                model_orchestrator=(
+                    self.agent.model_orchestrator
+                ),
+                task_controller=task_controller,
+                agent_loop=agent_loop,
+                outbox=outbox,
+                server=eddie_server,
+                evidence=self.agent.evidence,
+            )
+        else:
+            decision_core = None
 
         orchestrator = AutonomyOrchestrator(
             goal_manager=goal_manager,
@@ -359,6 +420,9 @@ class AutonomyRuntimeFactory:
             affective_behavior_policy=(
                 self.agent.affective_behavior_policy
             ),
+            outbox=outbox,
+            server=eddie_server,
+            decision_core=decision_core,
         )
 
         # -----------------------------------------
@@ -367,8 +431,12 @@ class AutonomyRuntimeFactory:
 
         scheduler = AutonomyScheduler(
             autonomous_cycle=orchestrator,
-            interval_seconds=300,
-            max_ticks_per_window=3,
+            interval_seconds=(
+                self.scheduler_interval_seconds
+            ),
+            max_ticks_per_window=(
+                self.scheduler_max_ticks_per_window
+            ),
             window_seconds=3600,
         )
 
@@ -383,6 +451,9 @@ class AutonomyRuntimeFactory:
         )
 
         self.agent.autonomous_runtime = runtime
+
+        runtime.eddie_server = eddie_server
+        self.agent.eddie_server = eddie_server
 
         runtime.behavior_pattern_detector = (
             behavior_pattern_detector
@@ -439,6 +510,13 @@ class AutonomyRuntimeFactory:
         )
         runtime.experience_consolidator = (
             experience_consolidator
+        )
+        runtime.outbox = outbox
+
+        runtime.decision_core = decision_core
+
+        runtime.speech_habits = SpeechHabits(
+            self.agent.memory
         )
 
         runtime.reflection_engine = reflection_engine

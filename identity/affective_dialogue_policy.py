@@ -397,7 +397,7 @@ class AffectiveDialoguePolicy:
 
         if mode == "CONFLICTED":
             question_required = (
-                question_tendency >= 0.65
+                question_tendency >= 0.85
             )
 
         if mode in {

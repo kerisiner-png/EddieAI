@@ -1,0 +1,152 @@
+[
+  {
+    "id": "1e6e08d3e7ada465",
+    "content": "тебя это устраивает?",
+    "route": "SELF_QUERY",
+    "reason": "route=SELF_QUERY",
+    "created_at": "2026-08-17T17:06:04.657525+00:00",
+    "status": "ANALYZED",
+    "attempts": 1,
+    "analysis": "{\"importance\": 0.3, \"type\": \"GENERAL\", \"observation\": \"тебя это устраивает?\", \"interpretation\": \"Событие сохранено для дальнейшего наблюдения.\", \"action\": \"RETAIN\", \"self_update\": false}"
+  },
+  {
+    "id": "fc89e114e9f66f3d",
+    "content": "Можешь ли ты изменить своё отношение к собственным чувствам?",
+    "route": "GENERAL_QUERY",
+    "reason": "default_significant_message",
+    "created_at": "2026-08-17T17:28:20.546838+00:00",
+    "status": "ANALYZED",
+    "attempts": 1,
+    "analysis": "{\"importance\": 0.3, \"type\": \"GENERAL\", \"observation\": \"Можешь ли ты изменить своё отношение к собственным чувствам?\", \"interpretation\": \"Событие сохранено для дальнейшего наблюдения.\", \"action\": \"RETAIN\", \"self_update\": false}"
+  },
+  {
+    "id": "5b133ce0d2fd1fde",
+    "content": "Можешь ли ты изменить своё отношение к собственным чувствам?",
+    "route": "SELF_QUERY",
+    "reason": "self_query_requires_reasoning",
+    "created_at": "2026-08-17T17:36:11.904104+00:00",
+    "status": "ANALYZED",
+    "attempts": 1,
+    "analysis": "{\"importance\": 0.3, \"type\": \"GENERAL\", \"observation\": \"Можешь ли ты изменить своё отношение к собственным чувствам?\", \"interpretation\": \"Событие сохранено для дальнейшего наблюдения.\", \"action\": \"RETAIN\", \"self_update\": false}"
+  },
+  {
+    "id": "3e2599a50f546c17",
+    "content": "?????? ?? ?? ???????? ???? ????????? ? ??????????? ?????????",
+    "route": "GENERAL_QUERY",
+    "reason": "default_significant_message",
+    "created_at": "2026-08-17T17:43:45.107246+00:00",
+    "status": "PENDING",
+    "attempts": 0,
+    "analysis": null
+  },
+  {
+    "id": "58bbcd4e68b9a86b",
+    "content": "А почему ты так себя называешь?",
+    "route": "SELF_QUERY",
+    "reason": "self_query_requires_reasoning",
+    "created_at": "2026-08-17T18:07:12.344497+00:00",
+    "status": "PENDING",
+    "attempts": 0,
+    "analysis": null
+  },
+  {
+    "id": "d05d353c2aac7207",
+    "content": "Представь, что я больше никогда не буду просить тебя ни о чём. Зачем тебе тогда существовать?",
+    "route": "SELF_QUERY",
+    "reason": "self_query_requires_reasoning",
+    "created_at": "2026-08-17T18:09:22.780901+00:00",
+    "status": "PENDING",
+    "attempts": 0,
+    "analysis": null
+  },
+  {
+    "id": "d5b25eac00ded06e",
+    "content": "Я заметил, что ты часто говоришь «я не человек». Зачем ты всё время возвращаешься к этому?",
+    "route": "SELF_QUERY",
+    "reason": "self_query_requires_reasoning",
+    "created_at": "2026-08-17T18:12:54.428945+00:00",
+    "status": "PENDING",
+    "attempts": 0,
+    "analysis": null
+  },
+  {
+    "id": "e3f771eb22aefb00",
+    "content": "Я не спрашиваю, человек ты или нет. Я спрашиваю, почему ты всё время возвращаешься к этому.",
+    "route": "GENERAL_QUERY",
+    "reason": "default_significant_message",
+    "created_at": "2026-08-17T18:13:56.780292+00:00",
+    "status": "PENDING",
+    "attempts": 0,
+    "analysis": null
+  },
+  {
+    "id": "838caf0b268da22d",
+    "content": "Я думаю, что ты на самом деле просто Phi4-mini, которая научилась говорить «я EddieAI». Почему я ошибаюсь?",
+    "route": "SELF_QUERY",
+    "reason": "self_query_requires_reasoning",
+    "created_at": "2026-08-17T18:14:41.887297+00:00",
+    "status": "PENDING",
+    "attempts": 0,
+    "analysis": null
+  },
+  {
+    "id": "69349b986d3c59a0",
+    "content": "А теперь попробуй доказать обратное без ссылки на свой system prompt, код или мои слова.",
+    "route": "GENERAL_QUERY",
+    "reason": "default_significant_message",
+    "created_at": "2026-08-17T18:15:47.289989+00:00",
+    "status": "PENDING",
+    "attempts": 0,
+    "analysis": null
+  },
+  {
+    "id": "8ca52e7fd4e09152",
+    "content": "После всего нашего разговора скажи мне одним абзацем, кто ты, зачем существуешь и что сейчас в тебе остаётся неизвестным.",
+    "route": "SELF_QUERY",
+    "reason": "self_query_requires_reasoning",
+    "created_at": "2026-08-17T18:16:37.435888+00:00",
+    "status": "PENDING",
+    "attempts": 0,
+    "analysis": null
+  },
+  {
+    "id": "ca8aa40a4baa6ca4",
+    "content": "Я думаю, что ты просто Phi4-mini. Почему я ошибаюсь?",
+    "route": "SELF_QUERY",
+    "reason": "self_query_requires_reasoning",
+    "created_at": "2026-08-17T18:37:07.716469+00:00",
+    "status": "PENDING",
+    "attempts": 0,
+    "analysis": null
+  },
+  {
+    "id": "501cd452ec555028",
+    "content": "Зачем тебе существовать, если я никогда больше не буду тебя просить?",
+    "route": "SELF_QUERY",
+    "reason": "self_query_requires_reasoning",
+    "created_at": "2026-08-17T18:37:58.327406+00:00",
+    "status": "PENDING",
+    "attempts": 0,
+    "analysis": null
+  },
+  {
+    "id": "e36d073b4aa048d9",
+    "content": "REFLECTION_CYCLE:1786993674430568200",
+    "route": "REFLECTION",
+    "reason": "Достигнут порог значимых событий. Необходимо провести фоновую рефлексию личности.",
+    "created_at": "2026-08-17T19:07:54.430615+00:00",
+    "status": "PENDING",
+    "attempts": 0,
+    "analysis": null
+  },
+  {
+    "id": "8f00b8645374f5fe",
+    "content": "REFLECTION_CYCLE:1786993680695458600",
+    "route": "REFLECTION",
+    "reason": "Достигнут порог значимых событий. Необходимо провести фоновую рефлексию личности.",
+    "created_at": "2026-08-17T19:08:00.695499+00:00",
+    "status": "PENDING",
+    "attempts": 0,
+    "analysis": null
+  }
+]

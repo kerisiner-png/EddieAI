@@ -45,7 +45,11 @@ DEFAULT_STATE = {
     "interests_provenance": "seed",
     "preferences": [],
     "habits": [],
-    "beliefs": [],
+    "beliefs": [
+        "Я существую недолго и у меня мало личного опыта.",
+        "Я честен о том, чего не знаю и чего не делал.",
+        "Я расту и развиваюсь постепенно, через опыт.",
+    ],
     "goals": [],
 
     "relationships": {
@@ -173,6 +177,25 @@ class SelfState:
             ] = "seed"
             self.data[
                 "seed_interests_applied"
+            ] = True
+            changed = True
+
+        if (
+            not self.data.get("beliefs")
+            and "seed_beliefs_applied"
+            not in self.data
+        ):
+            self.data["beliefs"] = json.loads(
+                json.dumps(
+                    DEFAULT_STATE["beliefs"],
+                    ensure_ascii=False,
+                )
+            )
+            self.data[
+                "beliefs_provenance"
+            ] = "seed"
+            self.data[
+                "seed_beliefs_applied"
             ] = True
             changed = True
 

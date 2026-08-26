@@ -1,6 +1,5 @@
 import json
 
-from ollama import chat
 
 from memory.events import Event
 
@@ -29,11 +28,19 @@ class ReflectionEngine:
         memory,
         evidence,
         personality_lifecycle,
+        model_orchestrator=None,
     ):
+        from identity.llm_access import (
+            CloudFirstLlm,
+        )
+
         self.memory = memory
         self.evidence = evidence
         self.personality = (
             personality_lifecycle
+        )
+        self.llm = CloudFirstLlm(
+            model_orchestrator
         )
 
     def reflect(
@@ -88,6 +95,11 @@ class ReflectionEngine:
 - не создавай цели ради активности;
 - не предлагай помощь пользователю как цель;
 - не дублируй уже завершённую цель;
+- ЕСЛИ завершённая цель была исследовательской
+  («изучить тему: ...») и принесла результаты —
+  предложи конкретный следующий исследовательский шаг:
+  углубление в найденный материал, изучение смежной темы
+  или применение найденного на практике;
 - если естественного следующего шага нет, верни [].
 
 Верни только JSON:
@@ -117,32 +129,17 @@ class ReflectionEngine:
 Без markdown.
 """
 
-        response = chat(
-            model=MODEL_NAME,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Ты выполняешь осторожную "
-                        "рефлексию автономного агента. "
-                        "Не диагностируй личность "
-                        "по одному действию."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": prompt,
-                },
-            ],
+        raw = self.llm.chat(
+            system=(
+                "Ты выполняешь осторожную "
+                "рефлексию автономного агента. "
+                "Не диагностируй личность "
+                "по одному действию."
+            ),
+            user=prompt,
             options=MODEL_OPTIONS,
-            keep_alive=-1,
+            task="reflection",
         )
-
-        raw = response[
-            "message"
-        ][
-            "content"
-        ].strip()
 
         data = self._parse(
             raw

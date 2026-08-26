@@ -74,7 +74,7 @@ class AgentLoop:
         affective_state=None,
         belief_challenge_detector=None,
         affective_behavior_policy=None,
-
+        outbox=None,
     ):
 
         self.goal_manager = goal_manager
@@ -95,6 +95,8 @@ class AgentLoop:
         self.affective_behavior_policy = (
             affective_behavior_policy
         )
+
+        self.outbox = outbox
 
         self.goal_affective_memory = (
             getattr(
@@ -481,6 +483,31 @@ class AgentLoop:
 
 
 
+        if (
+
+            goal is not None
+
+            and goal.status != "ACTIVE"
+
+        ):
+
+            activation = self.goal_manager.activate(
+
+                goal.value
+
+            )
+
+
+            if activation.get(
+
+                "status"
+
+            ) != "ACTIVATED":
+
+                goal = None
+
+
+
         if goal is None:
 
             active = self.goal_manager.active()
@@ -518,36 +545,6 @@ class AgentLoop:
                 reverse=True,
 
             )[0]
-
-
-
-        if goal.status != "ACTIVE":
-
-            activation = self.goal_manager.activate(
-
-                goal.value
-
-            )
-
-
-
-            if activation.get(
-
-                "status"
-
-            ) != "ACTIVATED":
-
-                return LoopResult(
-
-                    status="GOAL_NOT_ACTIVATED",
-
-                    goal=goal.value,
-
-                    actions_executed=0,
-
-                    steps=[],
-
-                )
 
 
 
@@ -600,6 +597,16 @@ class AgentLoop:
                     == "COMPLETED"
 
                 ):
+
+                    if self.outbox is not None:
+
+                        self.outbox.send(
+
+                            f"Цель завершена: "
+
+                            f"{goal.value}"
+
+                        )
 
                     return LoopResult(
 
@@ -1240,6 +1247,16 @@ class AgentLoop:
                 == "COMPLETED"
 
             ):
+
+                if self.outbox is not None:
+
+                    self.outbox.send(
+
+                        f"Цель завершена: "
+
+                        f"{goal.value}"
+
+                    )
 
                 return LoopResult(
 

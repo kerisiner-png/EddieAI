@@ -481,7 +481,7 @@ class SelfConsistency:
                     **claim,
                     "status": "consistent",
                     "reason": (
-                        "Capability ????????."
+                        "Capability подтверждена."
                     ),
                 }
 
@@ -490,8 +490,8 @@ class SelfConsistency:
                     **claim,
                     "status": "contradiction",
                     "reason": (
-                        "????? ?????????? ?????????? "
-                        "????????? capability."
+                        "Утверждение противоречит "
+                        "доступной capability."
                     ),
                 }
 
@@ -500,8 +500,8 @@ class SelfConsistency:
                     **claim,
                     "status": "consistent",
                     "reason": (
-                        "????????? capability "
-                        "????????????? ??????????."
+                        "Отсутствие capability "
+                        "подтверждается историей."
                     ),
                 }
 
@@ -509,8 +509,8 @@ class SelfConsistency:
                 **claim,
                 "status": "contradiction",
                 "reason": (
-                    "????? ?????????? ??????? capability, "
-                    "??????? ??? ????? ?????????."
+                    "Утверждение о наличии capability, "
+                    "нет подтверждающих свидетельств."
                 ),
             }
 

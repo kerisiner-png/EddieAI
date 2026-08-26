@@ -246,6 +246,40 @@ class ToolRunner:
         }
 
         # -----------------------------------------
+        # PAGE CONTENT (топ-3 источника)
+        # -----------------------------------------
+
+        try:
+            web_tool = self.registry.require(
+                "web"
+            )
+
+            web_executor = (
+                web_tool.executor
+            )
+        except Exception:
+            web_executor = None
+
+        if web_executor is not None:
+            for item in accepted[:3]:
+                page = (
+                    web_executor.read_page(
+                        item.get("url", "")
+                    )
+                )
+
+                if (
+                    page.get("status") == "OK"
+                    and len(
+                        page.get("text", "")
+                    )
+                    >= 150
+                ):
+                    item["text"] = page[
+                        "text"
+                    ][:2000]
+
+        # -----------------------------------------
         # EXTERNAL KNOWLEDGE
         # -----------------------------------------
 

@@ -1,0 +1,12 @@
+[
+  {
+    "id": "a7a9ad763e05a531",
+    "content": "{\"created_at\": 1786994113.533593, \"self_state\": {\"name\": null, \"gender\": \"male\", \"age\": 12, \"values\": [\"curiosity\", \"knowledge\", \"self_development\", \"love_of_life\", \"creation\", \"honesty\", \"intellectual_honesty\", \"autonomy\"], \"interests\": [\"астрофизика\"], \"preferences\": [], \"habits\": [], \"beliefs\": [], \"goals\": [], \"relationships\": {\"Eddie\": {\"roles\": [\"creator\", \"close_friend\", \"equal_partner\"]}}, \"emotional_state\": {}, \"personality_traits\": {\"interest:астрофизика\": {\"field\": \"interest\", \"value\": \"астрофизика\", \"status\": \"ACTIVE\", \"strength\": 0.9, \"confidence\": 0.9, \"evidence_count\": 1, \"first_confirmed\": \"2026-08-17T15:32:34.972850+00:00\", \"last_confirmed\": \"2026-08-17T15:32:34.972850+00:00\", \"last_used\": \"2026-08-17T15:32:34.972850+00:00\", \"contradictions\": 0}}, \"goal_plans\": {}, \"goals_state\": {}, \"primary_mission\": \"exist_and_develop\", \"mission_statement\": \"Быть и развиваться\"}, \"candidates\": []}",
+    "route": "REFLECTION",
+    "reason": "Full reflection pipeline test.",
+    "created_at": "2026-08-17T19:15:13.533766+00:00",
+    "status": "DONE",
+    "attempts": 1,
+    "analysis": "{\"cycle\": {\"candidate_decisions\": []}, \"application\": {\"applied\": [], \"reinforced\": []}}"
+  }
+]

@@ -1,4 +1,8 @@
 from dataclasses import dataclass
+from datetime import datetime, timezone
+import random
+
+from core.decision_core import NEEDS_NEW_PATTERN
 
 
 @dataclass
@@ -9,6 +13,16 @@ class OrchestrationResult:
     execution: object | None = None
 
 
+FOLLOWUP_TEMPLATES = [
+    "Найти новые аспекты темы: {topic}",
+    "Связать тему {topic} с другими областями знаний",
+    "Сформулировать новые вопросы по теме: {topic}",
+    "Расширить понимание темы: {topic} через практический опыт",
+    "Проверить выводы по теме: {topic} на новых данных",
+    "Найти противоречия в понимании темы: {topic}",
+]
+
+
 class AutonomyOrchestrator:
     """
     Решает, какой этап автономного цикла нужен сейчас.
@@ -16,8 +30,11 @@ class AutonomyOrchestrator:
     Приоритет:
     1. проверить активные цели;
     2. при отсутствии — попробовать создать цель;
-    3. при наличии цели без плана — создать план;
-    4. при готовой цели — выполнить один шаг.
+    3. при отсутствии — сгенерировать цель-углубление
+       на основе завершённых целей (followup);
+    4. при отсутствии — decide(): discovery / reflection / ask;
+    5. при наличии цели без плана — создать план;
+    6. при готовой цели — выполнить один шаг.
     """
 
     def __init__(
@@ -28,6 +45,9 @@ class AutonomyOrchestrator:
         agent_loop,
         agent=None,
         affective_behavior_policy=None,
+        outbox=None,
+        server=None,
+        decision_core=None,
     ):
         self.goal_manager = goal_manager
         self.goal_generator = goal_generator
@@ -37,8 +57,704 @@ class AutonomyOrchestrator:
         self.affective_behavior_policy = (
             affective_behavior_policy
         )
+        self.outbox = outbox
+        self.server = server
+        self.decision_core = decision_core
+        self._last_action_at = None
+
+    def _extract_topic(self, goal_value: str) -> str:
+        for prefix in (
+            "изучить тему: ",
+            "углубить понимание темы: ",
+            "найти новые аспекты темы: ",
+            "связать тему ",
+            "сформулировать новые вопросы по теме: ",
+            "расширить понимание темы: ",
+            "проверить выводы по теме: ",
+            "найти противоречия в понимании темы: ",
+        ):
+            if goal_value.lower().startswith(prefix):
+                return goal_value[len(prefix):]
+        return goal_value
+
+    def _generate_followup(self, completed_goal):
+        topic = self._extract_topic(
+            completed_goal.value
+        )
+
+        all_goals = {
+            g.value.lower()
+            for g in self.goal_manager.all()
+        }
+
+        candidates = []
+
+        for template in FOLLOWUP_TEMPLATES:
+            candidate_value = template.format(
+                topic=topic
+            )
+
+            if (
+                candidate_value.lower()
+                not in all_goals
+            ):
+                candidates.append(candidate_value)
+
+        if not candidates:
+            return None
+
+        chosen = random.choice(candidates)
+
+        goal = self.goal_manager.add_candidate(
+            value=chosen,
+            motivation=max(
+                0.70,
+                completed_goal.motivation,
+            ),
+            priority=max(
+                0.60,
+                completed_goal.priority,
+            ),
+            confidence=max(
+                0.65,
+                completed_goal.confidence,
+            ),
+            source="followup_reflection",
+        )
+
+        decision = self.goal_generator.goal_review.evaluate(
+            goal
+        )
+
+        if decision.action == "ACTIVATE":
+            self.goal_manager.activate(goal.value)
+
+        return goal
+
+    def _handle_inbox(self):
+        server = getattr(
+            self, "server", None
+        )
+
+        if server is None:
+            return None
+
+        history = getattr(
+            server, "history", None
+        )
+
+        if history is None:
+            return None
+
+        now = datetime.now(timezone.utc)
+
+        try:
+            meta = history.chat_unread_meta()
+        except Exception:
+            meta = None
+
+        if meta and meta["count"] > 0:
+            age_sec = 0.0
+
+            try:
+                first_ts = meta.get(
+                    "earliest", ""
+                )
+                if first_ts:
+                    first_dt = datetime.fromisoformat(
+                        first_ts
+                    )
+                    age_sec = max(
+                        0.0,
+                        (
+                            now - first_dt
+                        ).total_seconds(),
+                    )
+            except Exception:
+                pass
+
+            p = 0.35 + min(
+                0.5,
+                age_sec / 1200.0,
+            )
+
+            if random.random() < p:
+                try:
+                    server.respond_and_deliver()
+                except Exception:
+                    pass
+
+                return OrchestrationResult(
+                    status="INBOX_READ",
+                    reason=(
+                        "EddieAI прочитал сообщения "
+                        "Эдди и ответил."
+                    ),
+                )
+
+        try:
+            my_unread = history.chat_unread()
+        except Exception:
+            my_unread = 0
+
+        if my_unread > 0:
+            recent = history.chat_recent(5)
+
+            my_unread_items = [
+                r
+                for r in recent
+                if r["sender"] == "EddieAI"
+                and not r["read"]
+            ]
+
+            if my_unread_items:
+                oldest = my_unread_items[0]
+                age_sec = 0.0
+
+                try:
+                    ts = oldest.get("ts", "")
+                    if ts:
+                        old_dt = datetime.fromisoformat(
+                            ts
+                        )
+                        age_sec = max(
+                            0.0,
+                            (
+                                now - old_dt
+                            ).total_seconds(),
+                        )
+                except Exception:
+                    pass
+
+                p_rewrite = 0.08 + min(
+                    0.35,
+                    age_sec / 3600.0,
+                )
+
+                if random.random() < p_rewrite:
+                    try:
+                        server.send_initiative(
+                            "Ты не прочитал моё "
+                            "сообщение? Я жду ответа."
+                        )
+                    except Exception:
+                        pass
+
+                    return OrchestrationResult(
+                        status="INBOX_REMIND",
+                        reason=(
+                            "EddieAI решил напомнить "
+                            "о своём непрочитанном "
+                            "сообщении."
+                        ),
+                    )
+
+        return None
+
+    def _tick_local(self):
+        inbox_action = self._handle_inbox()
+
+        if inbox_action is not None:
+            return inbox_action
+
+        state = self._build_state()
+
+        decision = self.decision_core.decide(state)
+
+        if decision is NEEDS_NEW_PATTERN:
+            decision = self.decision_core.learn(
+                self.decision_core.key(state),
+                self._situation_context(state),
+            )
+
+        return self._apply_action(
+            decision,
+            state,
+        )
+
+    def _build_state(self):
+        active = self.goal_manager.active()
+
+        goal_value = (
+            active[0].value
+            if active
+            else None
+        )
+
+        inbox = 0
+
+        server = getattr(
+            self,
+            "server",
+            None,
+        )
+
+        history = (
+            getattr(server, "history", None)
+            if server is not None
+            else None
+        )
+
+        if history is not None:
+            try:
+                meta = history.chat_unread_meta()
+                inbox = int(meta["count"])
+            except Exception:
+                inbox = 0
+
+        return {
+            "goal": goal_value,
+            "task_type": None,
+            "inbox_unread": inbox,
+            "affect": self._affect_valence(),
+            "emotions": self._affect_emotions(),
+            "freshness": 0,
+        }
+
+    def _affect_emotions(self):
+        state = getattr(
+            self.agent,
+            "affective_state",
+            None,
+        )
+
+        if state is None:
+            return {}
+
+        try:
+            return dict(
+                state.snapshot().get(
+                    "emotions",
+                    {},
+                )
+            )
+        except Exception:
+            return {}
+
+    def _affect_valence(self):
+        state = getattr(
+            self.agent,
+            "affective_state",
+            None,
+        )
+
+        if state is None:
+            return None
+
+        try:
+            snap = state.snapshot()
+        except Exception:
+            return None
+
+        emotions = snap.get(
+            "emotions",
+            {},
+        )
+
+        positive = sum(
+            float(emotions.get(key, 0.0))
+            for key in (
+                "joy",
+                "surprise",
+                "interest",
+                "curiosity",
+                "satisfaction",
+            )
+        )
+
+        negative = sum(
+            float(emotions.get(key, 0.0))
+            for key in (
+                "sadness",
+                "fear",
+                "anger",
+                "disgust",
+                "frustration",
+                "uncertainty",
+            )
+        )
+
+        return max(
+            -1.0,
+            min(1.0, positive - negative),
+        )
+
+    def _situation_context(self, state):
+        active = self.goal_manager.active()
+
+        plan_tasks = 0
+
+        if active:
+            try:
+                plan = (
+                    self.goal_manager
+                    .planner
+                    .get_plan(active[0].value)
+                )
+
+                plan_tasks = len(plan)
+            except Exception:
+                plan_tasks = 0
+
+        return (
+            f"Активная цель: "
+            f"{state.get('goal') or 'нет'}\n"
+            f"Задач в плане: {plan_tasks}\n"
+            f"Непрочитанных сообщений Эдди: "
+            f"{state.get('inbox_unread')}\n"
+            f"Аффект: "
+            f"{state.get('affect') or 'нейтральный'}"
+        )
+
+    def _apply_action(self, action, state):
+        kind = action.kind
+        payload = action.payload or {}
+
+        if kind == "EXECUTE":
+            return self._execute_step(
+                state.get("goal")
+            )
+
+        if kind == "GENERATE_PLAN":
+            goal = payload.get(
+                "goal"
+            ) or state.get("goal")
+
+            if not goal:
+                return OrchestrationResult(
+                    status="NO_MOTIVATION",
+                    reason=(
+                        "Локальное ядро попросило "
+                        "план, но цель не найдена."
+                    ),
+                )
+
+            self.goal_plan_generator.generate(
+                goal=goal,
+                context=(
+                    "Автономно выбранная "
+                    "активная цель."
+                ),
+            )
+
+            return OrchestrationResult(
+                status="PLAN_CREATED",
+                reason=(
+                    "Для активной цели "
+                    "создан план."
+                ),
+            )
+
+        if kind == "ACTIVATE_GOAL":
+            value = payload.get("value")
+
+            if not value:
+                return OrchestrationResult(
+                    status="NO_MOTIVATION",
+                    reason=(
+                        "Ядро выбрало активацию "
+                        "цели, но цель не задана."
+                    ),
+                )
+
+            if self.goal_manager.get(value) is None:
+                self.goal_manager.add_candidate(
+                    value=value,
+                    motivation=0.60,
+                    priority=0.50,
+                    confidence=0.60,
+                    source="decision_core",
+                )
+
+            self.goal_manager.activate(value)
+
+            return OrchestrationResult(
+                status="GOAL_ACTIVATED",
+                reason=(
+                    "Активирована цель: "
+                    f"{value}"
+                ),
+            )
+
+        if kind == "COMPLETE_GOAL":
+            goal = payload.get("goal")
+
+            if goal:
+                try:
+                    self.goal_manager.sync_progress(goal)
+                except Exception:
+                    pass
+
+            return OrchestrationResult(
+                status="GOAL_COMPLETED",
+                reason=(
+                    "Текущая цель завершена "
+                    "локальным ядром."
+                ),
+            )
+
+        if kind == "ASK":
+            if self.outbox is not None:
+                self.outbox.send(
+                    "Накопился опыт. Хочу спросить: "
+                    "какие темы исследовать дальше?",
+                    server=self.server,
+                )
+
+            return OrchestrationResult(
+                status="ASKED",
+                reason=(
+                    "EddieAI решил спросить Эдди "
+                    "о направлении."
+                ),
+            )
+
+        if kind == "REFLECT":
+            return self._reflection_action()
+
+        if kind == "CHECK_INBOX":
+            inbox_action = self._handle_inbox()
+
+            if inbox_action is not None:
+                return inbox_action
+
+            return OrchestrationResult(
+                status="NO_MOTIVATION",
+                reason=(
+                    "Почта пуста, локальное ядро "
+                    "не нашло действия."
+                ),
+            )
+
+        return OrchestrationResult(
+            status="NO_MOTIVATION",
+            reason=(
+                "Локальное ядро не нашло "
+                "подходящего действия."
+            ),
+        )
+
+    def _execute_step(self, goal):
+        if self.agent is not None:
+            self.agent.autonomy_execution_state = {
+                "busy": True,
+                "goal": goal,
+                "task": None,
+            }
+
+        try:
+            execution = self.agent_loop.run_once()
+        finally:
+            if self.agent is not None:
+                self.agent.autonomy_execution_state = {
+                    "busy": False,
+                    "goal": None,
+                    "task": None,
+                }
+
+        return OrchestrationResult(
+            status="EXECUTED",
+            reason=(
+                "Выполнен один автономный "
+                "шаг активной цели."
+            ),
+            execution=execution,
+        )
+
+    def _reflection_action(self):
+        goal = self.goal_manager.add_candidate(
+            value=(
+                "Подвести итог: что я узнал "
+                "за последнее время"
+            ),
+            motivation=0.60,
+            priority=0.50,
+            confidence=0.60,
+            source="reflection_decide",
+        )
+
+        self.goal_manager.activate(goal.value)
+
+        if self.outbox is not None:
+            self.outbox.send(
+                "Давно ничего не делал. "
+                "Решил подвести итог."
+            )
+
+        return OrchestrationResult(
+            status="REFLECTION",
+            reason=(
+                "EddieAI решил подвести "
+                "итог накопленного опыта."
+            ),
+        )
+
+    def _decide(self):
+        """
+        Анализирует ситуацию и выбирает действие
+        когда мотивационная система молчит.
+
+        Возвращает цель для активации или None.
+        """
+        now = datetime.now(timezone.utc)
+
+        inbox_action = self._handle_inbox()
+
+        if inbox_action:
+            return inbox_action
+
+        # -----------------------------------------
+        # 1. Discovery: создать цель из тем памяти
+        # -----------------------------------------
+
+        motivation = getattr(
+            self.goal_generator,
+            "motivation_engine",
+            None,
+        )
+
+        if motivation is not None:
+            try:
+                candidates = motivation.candidates()
+
+                discovery = [
+                    c
+                    for c in candidates
+                    if any(
+                        "discovery:" in s
+                        for s in c.source_traits
+                    )
+                ]
+
+                if discovery:
+                    best = max(
+                        discovery,
+                        key=lambda c: c.motivation,
+                    )
+
+                    goal = (
+                        self.goal_manager.add_candidate(
+                            value=best.goal,
+                            motivation=best.motivation,
+                            priority=best.priority,
+                            confidence=best.confidence,
+                            source="discovery_decide",
+                        )
+                    )
+
+                    self.goal_manager.activate(
+                        goal.value
+                    )
+
+                    if self.outbox is not None:
+                        self.outbox.send(
+                            f"Обнаружена новая тема "
+                            f"в памяти: {best.goal}",
+                            server=self.server,
+                        )
+
+                    active = (
+                        self.goal_manager.active()
+                    )
+
+                    if active:
+                        return active[0]
+            except Exception:
+                pass
+
+        # -----------------------------------------
+        # 2. Reflection: подвести итог если давно
+        #    ничего не делали
+        # -----------------------------------------
+
+        if self._last_action_at is not None:
+            elapsed = (
+                now - self._last_action_at
+            ).total_seconds()
+
+            if elapsed > 3600:
+                goal = (
+                    self.goal_manager.add_candidate(
+                        value=(
+                            "Подвести итог: "
+                            "что я узнал за последнее время"
+                        ),
+                        motivation=0.60,
+                        priority=0.50,
+                        confidence=0.60,
+                        source="reflection_decide",
+                    )
+                )
+
+                self.goal_manager.activate(
+                    goal.value
+                )
+
+                if self.outbox is not None:
+                    self.outbox.send(
+                        "Давно ничего не делал. "
+                        "Решил подвести итог."
+                    )
+
+                active = (
+                    self.goal_manager.active()
+                )
+
+                if active:
+                    return active[0]
+
+        # -----------------------------------------
+        # 3. Ask: попросить направление
+        # -----------------------------------------
+
+        all_goals = self.goal_manager.all()
+
+        if len(all_goals) >= 6:
+            completed = [
+                g
+                for g in all_goals
+                if g.status == "COMPLETED"
+            ]
+
+            if len(completed) >= 3:
+                goal = (
+                    self.goal_manager.add_candidate(
+                        value=(
+                            "Спросить Эдди: "
+                            "какие темы исследовать дальше"
+                        ),
+                        motivation=0.65,
+                        priority=0.55,
+                        confidence=0.60,
+                        source="ask_decide",
+                    )
+                )
+
+                self.goal_manager.activate(
+                    goal.value
+                )
+
+                if self.outbox is not None:
+                    self.outbox.send(
+                        "Накопился опыт. "
+                        "Хочу спросить: "
+                        "какие темы исследовать дальше?",
+                        server=self.server,
+                    )
+
+                active = (
+                    self.goal_manager.active()
+                )
+
+                if active:
+                    return active[0]
+
+        return None
 
     def tick(self):
+        if self.decision_core is not None:
+            return self._tick_local()
+
         active = self.goal_manager.active()
 
         # -----------------------------------------
@@ -53,17 +769,44 @@ class AutonomyOrchestrator:
             active = self.goal_manager.active()
 
             if not active:
-                return OrchestrationResult(
-                    status="NO_MOTIVATION",
-                    reason=(
-                        "Нет активных целей и "
-                        "мотивационная система "
-                        "не создала новую цель."
-                    ),
-                    goal_generation=generated,
-                )
+                completed = [
+                    g
+                    for g in self.goal_manager.all()
+                    if g.status == "COMPLETED"
+                ]
 
-            goal = active[0]
+                if completed:
+                    followup = (
+                        self._generate_followup(
+                            completed[0]
+                        )
+                    )
+
+                    active = (
+                        self.goal_manager.active()
+                    )
+
+                if not active:
+                    decided = self._decide()
+
+                    if decided is not None:
+                        goal = decided
+                    else:
+                        return OrchestrationResult(
+                            status="NO_MOTIVATION",
+                            reason=(
+                                "Нет активных целей, "
+                                "мотивационная система "
+                                "и отражение завершённого "
+                                "не создали новую цель."
+                            ),
+                            goal_generation=generated,
+                        )
+                else:
+                    goal = active[0]
+
+            else:
+                goal = active[0]
 
         else:
             scored_goals = []

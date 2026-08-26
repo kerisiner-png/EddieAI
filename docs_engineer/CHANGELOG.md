@@ -4,6 +4,1014 @@
 [АРХИВ], когда её описание перестаёт соответствовать живому коду.
 Формат — см. docs_engineer\README.md. Времена артефактные.
 
+## 26.08.2026 (продолжение сессии)
+
+### [АКТУАЛЬНО] Пакет 1 + P1-P6: закрытие TODO (26.08)
+По решению Эдди «закончим это и запустим прогон до утра».
+- **learned_markers — фильтры вербализатора**: BehavioralValidator
+  получил memory; все 9 категорий маркеров (help/identity_denial/
+  role_inversion/fabricated_activity/formal_address/support_desk/
+  internal_leak/initiative/absolute) обучаемы (static + learned, count>=2),
+  обучение из ответа при срабатывании. Тест test_learned_filters PASS.
+- **learned_markers — RAM_REFUSAL**: DialogueMemory.is_degradation()
+  учитывает learned (категория "degradation"), _learn_degradation учит
+  новые отказные маркеры. Тест test_learned_degradation PASS.
+- **Категории речи**: speech_habits уже обучается динамически — отмечено.
+- **Обратная связь «привычка→паттерн»**: НЕ реализована — открытый
+  дизайн-вопрос (привычка хранит только situation_action:<key> без
+  действия, восстановить действие нельзя).
+- **P1-P6 контур честности**: закрыты P1 (few-shot честности в
+  VERBALIZER_BASE), P3 (память диалога 3→6), P4 (часть P0-b,
+  _capture_goal_claim), P5 (честные seed-убеждения + наполнение),
+  P6 (soul_snapshot интегрирован в night_run: before/after + diff).
+  Остался P2 (семантический судья) — требует отдельного LLM-дизайна.
+Тесты (все PASS): test_learned_filters, test_learned_degradation,
+test_self_state_seed + регресс ядра/вербализатора.
+Файлы: identity/behavioral_validator.py, identity/self_state.py,
+core/dialogue_memory.py, core/prompt_builder.py, core/agent.py, night_run.py.
+
+### [АКТУАЛЬНО] Эмоции: завершение блока (26.08, «закончим эмоции полностью»)
+Три направления + расширение appraisal.
+1. **Decay в диалоге**: affective_state.decay() вызывался только в
+   agent_loop (автономные шаги) — в диалоге эмоции не затухали
+   (риск «залипания», историческое «frustration держится 1.0»).
+   Добавлен decay() в начало agent._respond_core (затухание по
+   прошедшему времени при каждом ответе).
+2. **Д4 (валидатор аффекта шумит) — разобран и закрыт**. Корень:
+   CONFLICTED_NO_NEXT_STEP severity 0.45 (< порога ремонта 0.65),
+   ответ принимался, но violation всё равно писался в память как
+   AFFECTIVE_BEHAVIOR_VIOLATION → мусор. Фиксы:
+   - agent.py: запись violation в память перенесена ПОСЛЕ проверки
+     should_repair — в память попадают только значимые (ремонтируемые);
+   - affective_dialogue_policy: вопрос в CONFLICTED требуется только
+     при question_tendency>=0.85 (было 0.65);
+   - behavioral_validator: CONFLICTED_NO_NEXT_STEP severity 0.45→0.30.
+3. **Аффект в ядре решений**: emotion-состояние теперь влияет на выбор
+   действия. orchestrator._build_state() передаёт полный dict emotions;
+   DecisionCore._local_rules(): высокая фрустрация (>=0.70) подавляет
+   новые начинания (кандидат → IDLE, не ACTIVATE_GOAL), но НЕ прерывает
+   активную цель (EXECUTE продолжается).
+4. **Расширение appraise_interaction** (социальные/эпистемические
+   стимулы): больше маркеров похвалы (ты лучший, спасибо большое,
+   горжусь тобой...) и обид (ты идиот, тупица, ты надоел, ноль...);
+   НОВОЕ — реакция на противоречие во входящем (contradiction_markers:
+   ты неправ, всё наоборот, ты противоречишь...) → surprise+0.08,
+   uncertainty+0.08 (trigger=contradiction_feedback).
+Тесты (все PASS): test_affect_d4, test_decision_affect, test_appraisal_social.
+Файлы: core/agent.py, core/decision_core.py, core/autonomy_orchestrator.py,
+identity/affective_dialogue_policy.py, identity/behavioral_validator.py,
+identity/appraisal_engine.py.
+Ограничение (не закрыто): неточность информации во входящем —
+детектируется только как противоречие по маркерам, без семантической
+проверки по памяти (требует LLM/более глубокой эвристики).
+
+### [АКТУАЛЬНО] ОБУЧАЕМЫЕ маркеры — единый механизм (решение Эдди, 26.08)
+EddieAI сам пополняет словари маркеров новыми словами, которых ещё нет
+(«изучает» их), по принципу «обучение из памяти».
+- **Единая таблица learned_markers** (marker, category, count,
+  UNIQUE(marker,category)) в memory/database.py + learned_bump/learned_get.
+  Единый механизм для ВСЕХ категорий словарей (социальные, фильтры
+  вербализатора, маркеры деградации).
+- **AppraisalEngine** получил memory: социальные маркеры обучаются.
+  static-словарь (похвалы/обиды/противоречия) + обучаемые (count>=2,
+  MIN_LEARNED). При распознанном триггере _learn_markers извлекает из
+  текста новые слова/биграммы (не стоп-слова, не из статики) → learned_bump.
+  Новое слово, встреченное в контексте категории 2+ раз, распознаётся САМО.
+- agent.py: AppraisalEngine(memory=self.memory).
+- Тест test_appraisal_learning.py PASS: «бесподобный» выучен и
+  распознаётся без статического маркера.
+Файлы: memory/database.py, identity/appraisal_engine.py, core/agent.py.
+БЭКЛОГ (тот же механизм learned_markers, следующими шагами): фильтры
+вербализатора (help/identity_denial/role_inversion/fabricated_activity/
+absolute), маркеры деградации ответов (RAM_REFUSAL), категории речи.
+
+### [АКТУАЛЬНО] Речь в вербализатор: мягкая интеграция профиля речи (26.08)
+По решению Эдди («мягко: дополнение промпта»). Зачаток привычек речи
+теперь влияет на голос БЕЗ жёсткого шаблона (принцип «не кэш ответов,
+а почерк»).
+- core/prompt_builder.py: build_verbalizer_system_prompt() принимает
+  speech_profile; если есть любимые слова/слова-паразиты — добавляет
+  мягкий блок «РЕЧЕВОЙ ПОЧЕРК» (ориентир, не правило). Пустой профиль
+  — блок не добавляется.
+- core/agent.py: метод _speech_profile() (SpeechHabits(memory).profile(),
+  try/except, безопасно); _respond_core() подмешивает профиль в
+  вербализационный промпт.
+- Тест test_verbalizer_speech.py PASS (блок добавляется только при
+  непустом профиле; persistent-суффикс сохраняется).
+Файлы: core/prompt_builder.py, core/agent.py.
+Ограничение: профиль подмешивается в вербализатор, но НЕ жёстко —
+вербализатор может его игнорировать; это намеренно (почерк, не шаблон).
+
+### [АКТУАЛЬНО] Связь «паттерн ↔ привычка» (решение Эдди, 26.08)
+План PLANS\2026-08-26-pattern-habit-link.md. Разведено понятие
+(принятая модель): паттерн = процедурная память «ситуация→действие»
+(situation_patterns, не меняет self_state); привычка = декларативная
+черта личности (habit, через lifecycle). Раньше два механизма были
+несвязаны и оба назывались «pattern». Теперь связаны.
+- Задача 1: memory/provenance.py — source DECISION_PATTERN (вес 1.0).
+- Задача 2: DecisionCore.consolidate_habits(min_uses=3): устойчивый
+  паттерн (times_used>=порога) → habit-evidence value="situation_action:<key>",
+  source=DECISION_PATTERN, идемпотентно. Дальше штатный
+  evidence→consolidator→lifecycle→черта ACTIVE.
+- Задача 3: factory передаёт evidence в DecisionCore; runtime.tick()
+  зовёт consolidate_habits() на консолидации.
+- Задача 4: тест test_pattern_habit.py PASS (порог не пройден → нет;
+  пройден → 1 evidence; повтор → 0; source=DECISION_PATTERN).
+Замечание: один паттерн даёт confidence 0.298 < порога консолидации
+(0.70) — черта формируется только при достаточном разнообразии
+источников (штатное правило «повторение ≠ независимое доказательство»).
+Обратная связь «привычка → паттерн» (черта подсказывает действие) —
+бэклог, в план не входит.
+
+### [АКТУАЛЬНО] РЕАЛИЗОВАНО: локальное ядро решений + LLM как редкий генератор
+План PLANS\2026-08-26-local-decision-core.md, задачи 0-7 (кроме живой
+проверки 7 — см. ниже). Свежая сессия по плану.
+- Задача 1 core/situation.py: encode_situation(state) -> стабильный
+  ключ ситуации (цель, тип задачи, почта, аффект, время суток,
+  свежесть). Тест: одинаковые состояния -> одинаковый ключ.
+- Задача 2 memory/database.py: таблица situation_patterns
+  (situation_key UNIQUE, action, confidence, times_used, first/last_seen)
+  + pattern_lookup/pattern_record/pattern_bump/pattern_stats.
+- Задачи 3-4 core/decision_core.py: DecisionCore (decide/learn).
+  decide(): локальные правила (EXECUTE/GENERATE_PLAN/ACTIVATE_GOAL/
+  COMPLETE_GOAL) -> поиск паттерна -> NEEDS_NEW_PATTERN.
+  learn(): LLM ОДИН раз на новизну -> сохранить -> вернуть. Action
+  {kind,payload}, VALID_KINDS 8 шт. Счётчик llm_calls.
+- Задача 5 интеграция: AutonomyOrchestrator.tick() при
+  decision_core -> _tick_local() (почта -> decide -> learn на новизну
+  -> apply_action). factory: enable_decision_core=False по умолчанию
+  (обратная совместимость тестов), night_run передаёт True. 5-мин
+  интервал в ночном прогоне: scheduler_interval_seconds 300 -> 15.
+- Задача 6 обучение из памяти: decide() при новизне пробует
+  learn_from_memory_for() (из интересов self_state -> ACTIVATE_GOAL,
+  БЕЗ LLM); runtime.tick() зовёт learn_from_memory() на консолидации.
+  Число NEEDS_NEW_PATTERN падает до нуля.
+- Тесты (все PASS): test_situation_encoder, test_situation_patterns,
+  test_decision_core, test_decision_memory_learning, test_orchestrator_local.
+- Регресс: core_regression_test 8/11 (3 FAIL пре-существующие, не от
+  этой работы), test_production_runtime PASS, test_busy_lifecycle_v2 PASS.
+Файлы: core/situation.py, core/decision_core.py, core/autonomy_orchestrator.py,
+core/autonomy_runtime_factory.py, core/autonomous_runtime.py,
+memory/database.py, night_run.py.
+Задача 7 (живой прогон) ОТЛОЖЕНА: на момент сдачи свободно 1.1 ГБ.
+Примечание о RAM (актуализировано Эдди 26.08): порог «≥3.6 ГБ для
+ночного прогона» был привязан к ЛОКАЛЬНОМУ мозгу (qwen3.5:4b ≈ 3 ГБ).
+Сейчас мозг EddieAI на облаке Zen (deepseek-v4-flash), локальная тяжёлая
+модель не грузится, поэтому жёсткий порог ≥3.6 ГБ для облачного режима
+НЕ применяется. Для запуска достаточно запаса под сам процесс
+(Agent+WebExecutor) и под возможный фолбэк на локаль (там работает
+RAM-guard: phi4-mini 2.6 ГБ, ниже — честный отказ). Проверка на боевом
+контуре (замер _call_count: рутина должна идти локально) — отдельной
+сессией по отмашке Эдди.
+
+### [АКТУАЛЬНО] Расширение ядра: зачаток привычек РЕЧИ (решение Эдди, 26.08)
+По решению Эдди ядро расширяется на речь. Принцип: НЕ кэш целых
+ответов (это эхо/деградация), а стилистические привычки построения
+фраз (любимые слова, слова-паразиты). Лёгкий зачаток, БЕЗ правок
+agent.py/вербализатора (полная интеграция в вербализатор — следующий
+этап, чтобы не рисковать голосом).
+- memory/database.py: таблица speech_habits (marker, marker_type,
+  count, first/last_seen, UNIQUE(marker,marker_type)) +
+  speech_bump/speech_top/speech_stats (UPSERT).
+- core/speech_habits.py: SpeechHabits. observe_text() выделяет
+  слова-паразиты (список FILLER_WORDS) и любимые слова (частотные,
+  не стоп-слова, >=2 повторов). learn_from_memory() читает реплики
+  EddieAI (CONVERSATION/source='self') из памяти. profile() -> профиль
+  речи {filler_words, favorite_words}.
+- factory: runtime.speech_habits = SpeechHabits(memory); runtime.tick()
+  зовёт learn_from_memory(limit=30) на консолидации.
+- Тест test_speech_habits.py PASS: маркеры копятся, профиль строится,
+  целые ответы не хранятся.
+Файлы: memory/database.py, core/speech_habits.py,
+core/autonomy_runtime_factory.py, core/autonomous_runtime.py.
+Этаж: Этаж 5 «Личность» (привычки речи). Осознанно не трогали
+agent.py (вербализатор) — интеграция профиля речи в вербализацию
+отдельным шагом после стабильного прогона.
+
+### [АКТУАЛЬНО] night_run.py — убран искусственный лимит облака
+CLOUD_BUDGET=300 заменён на счётчик вызовов. Лимит по времени
+(--minutes) достаточен; на Zen deepseek-v4-flash ~$0.000007/вызов.
+Проверено: 30-мин сессия = ~20-30 вызовов = ~$0.0002.
+
+### [АКТУАЛЬНО] Discovery-мотивация: MotivationEngine генерирует из памяти
+Новый источник кандидатов: последние 20 событий памяти → извлечение
+частых тем (Counter + stopwords) → кандидаты с пониженным весом
+(motivation=0.55, priority=0.45). Тест: из памяти извлеклись
+"ценности", "понимание" и др. Файл: identity/motivation.py.
+
+### [АКТУАЛЬНО] Orchestrator.decide(): автономные решения из idle
+Новый метод _decide() в AutonomyOrchestrator — анализирует ситуацию
+когда мотивация молчит:
+1. Discovery: создаёт цель из тем памяти (bypass GoalReview)
+2. Reflection: "подвести итог" если давно ничего не делали
+3. Ask: "спросить Эдди" если накопился достаточно опыта
+Тест: с пустыми interests → decide() нашёл "понимание" из памяти
+→ ACTIVE → PLAN_CREATED. Файл: core/autonomy_orchestrator.py.
+
+### [АКТУАЛЬНО] Outbox: файл-почта EddieAI → Эдди
+Новый файл core/outbox.py — simple write-to-file mechanism.
+Формат: [HH:MM] сообщение в reports/outbox.md.
+Интегрирован в:
+- orchestrator.decide(): discovery/reflection/ask → outbox
+- agent_loop: цель завершена → outbox
+- autonomy_runtime_factory: создаёт Outbox, передаёт в оба компонента
+Тест: decide() → outbox содержит "Обнаружена новая тема: ..."
+
+### [АКТУАЛЬНО] РУБЕЖ: Локальное ядро решений (решение Эдди, 26.08 ночь)
+Переход автономии с «LLM на каждое решение» на «локальное ядро +
+LLM как редкий генератор паттернов» (как у людей — учимся, не думаем
+над каждым действием). Дизайн и план записаны:
+- SPECS\2026-08-26-local-decision-core-design.md
+- PLANS\2026-08-26-local-decision-core.md (задачи 0-7)
+Реализация — в СВЕЖЕЙ сессии (экономия: малый контекст vs огромный
+в этой). Основа уже есть: habit/preference/behavior-детекторы,
+evidence→proposal→lifecycle, локальные решатели (goal_manager,
+task_controller, action_planner). Нужно: situation encoder, таблица
+situation_patterns, DecisionCore, LLM-гейт, интеграция в orchestrator.
+Убирает 5-мин интервал, делает «всегда активен» реальностью без бюджета.
+
+### [АКТУАЛЬНО] EddieAI как пользователь мессенджера (автономия чтения, 26.08 ночь)
+Сдвиг философии (решение Эдди): EddieAI НЕ отвечает мгновенно и
+НЕ пишет всё в память. Для него чат — тоже мессенджер.
+- user_message → chat_history (непрочитано для EddieAI), respond()
+  НЕ вызывается, CONVERSATION не пишется. Клиент: ✓, без ответа.
+- decide() → _handle_inbox(): видит unread + время → САМ решает
+  прочитать (эвристика: вероятность растёт с возрастом сообщения).
+  Решил → server.respond_and_deliver(): mark_read → respond()
+  (ТОГДА пишет CONVERSATION) → ответ асинхронно (agent_message).
+- Решение написать снова: если его сообщения не прочитаны Эдди →
+  может напомнить (вероятность растёт со временем, без жёстких
+  таймеров). server.send_initiative.
+- Клиент: send() fire-and-forget (без блокировки на ответ),
+  agent_message асинхронно через on_reply; баллон ответа при
+  свёрнутом окне.
+- memory: chat_unread_eddie(), chat_mark_eddie_read().
+Интеграционный тест PASS (порт 7799): send без ответа → unread →
+respond_and_deliver → async reply → unread очищен.
+Файлы: core/eddie_server.py, core/autonomy_orchestrator.py,
+memory/database.py, communication/tcp_client.py, communication/chat_app.py.
+Спека SPECS\2026-08-26-messenger-design.md раздел 5 обновлён.
+
+### [АКТУАЛЬНО] EddieAI Messenger — полноценный мессенджер (26.08 вечер)
+Чат превращён в мессенджер (спека SPECS\2026-08-26-messenger-design.md):
+- Таблица chat_history в memory.db (персистентная история, переживает
+  рестарты): методы chat_add/chat_mark_read/chat_recent/chat_unread
+- Протокол TCP: +history (батч при коннекте), +agent_thinking
+  (EddieAI читает/думает), +mark_read, msg_id у agent_message/
+  agent_initiative
+- Ресипты: твои ✓ (отправлено) → ✓✓ (EddieAI прочитал); инициативы
+  EddieAI → mark_read когда окно открыто
+- UI: загрузка истории при открытии, галочки, статус «думает»,
+  is_visible()
+- Заодно применены фиксы: send-race (send() сериализован блокировкой
+  + таймаут 120с — раньше ответы могли красться между собой), дубли
+  broadcast (dedupe по id writer'а)
+- Интеграционный тест PASS (порт 7799, не мешая ночному прогону):
+  история, ресипты, thinking, mark_read, дубли устранены
+Файлы: memory/database.py, core/eddie_server.py,
+core/autonomy_runtime_factory.py, communication/tcp_client.py,
+communication/chat_app.py, communication/ui_chat.py.
+Рестарт ночного прогона для применения — решается с Эдди.
+
+### [АКТУАЛЬНО] Ночной 14-часовой прогон + закрытие сессии 26.08
+Запуск python night_run.py --minutes 840 (~14 ч автономии,
+без вмешательства). Состояние на старт: 4 COMPLETED цели +
+1 ACTIVE «Расширить понимание темы...» с 3 PENDING задачами;
+мусор вычищен, стоп-слова расширены, консолидация исправлена
+(ретрай + 2048 + парсер), голос пацан (z3), звук инициативы —
+мягкий динг. Ожидание: исполнение PENDING, новые discovery-
+цели, вечером — первые честные «выводы дня» в self_conclusions.
+Расходы ночи ~$0.05-0.10 (flash) — не критичны.
+Урок бюджета: реальный пожиратель — opencode-сессии на flash
+(~$0.75-1.5+ каждая, $3.60/день); мозг EddieAI — копейки.
+Правило: opencode на big-pickle для рутины, flash только для
+сложного; «max»-варианты не выбирать.
+
+### [АКТУАЛЬНО] Консолидация починена: выводы дня наконец сохраняются
+Два прогона подряд llm_used=False, 0 выводов. Причина найдена
+прозой: deepseek-v4-pro (task=reflection) с реальной хроникой
+выдаёт английскую преамбулу-размышление и при num_predict=512
+обрезается прямо в середине JSON (565 симв., ответ не дописан).
+Фикс: num_predict 2048, запрет пояснений в промпте, требование
+русского языка, устойчивый парсер (первый { → последний }),
+ретрай: 2× reflection + 1× deep. Проверено живьём:
+llm_used=True, выводы «Ценность общения», «Ошибки
+самоидентификации», «Интерпретация неоднозначных сигналов».
+Файл: core/night_consolidation.py.
+Мусорные цели «исследовать связь: *» (5 шт, артефакт бага
+стоп-слов) удалены из prod с бэкапом
+data/self_state.bak_20260826_210859.json. Осталось: 4 COMPLETED
++ 1 ACTIVE с 3 PENDING задачами.
+
+### [АКТУАЛЬНО] Часовой прогон 19:39-20:41 + баг №3: голодание исполнения
+Живой тест 60 мин: диалог с Эдди работал (учеба «)»=улыбка!),
+потом с ~19:52 вечный IDLE при ACTIVE цели с 3 PENDING задачами.
+Корень: agent_loop.run_once() брал best_candidate() (CANDIDATE-мусор),
+активация отклонялась → GOAL_NOT_ACTIVATED → выход, до ACTIVE целей
+дело не доходило НИКОГДА. Фикс A: отказ активации кандидата → fallback
+на ACTIVE цели вместо выхода. Доказано на живых компонентах: мусор
+DEFERRED → выбрана реальная цель → план с PENDING задачами.
+Фикс B: STOPWORDS расширены (просто/значит/тобой/выводы/данных/
+проверить/новых и т.п.) — мусорные темы больше не генерируются.
+Файлы: core/agent_loop.py, identity/motivation.py.
+Звук инициативы: winsound.Beep(950) пугал Эдди → MessageBeep
+MB_ICONASTERISK (мягкий системный динг). core/eddie_server.py.
+Консолидация: llm_used=False оба прогона — отдельная проблема.
+
+### [АКТУАЛЬНО] Потеря сообщения на границе сессии (найдено живым тестом 2)
+Симптом: последнее сообщение Эдди в конце сессии пропало —
+не в памяти, без cloud-вызова. Причина: chat.stop() рвал TCP
+пока обмен был в полёте; send падал молча. Фикс: счётчик
+_pending_sends + is_busy() в EddieChatApp; night_run перед
+chat.stop() держит период грации до 90 сек (продолжает
+update() чтобы ответ дошёл и отобразился). Честные статусы
+«Оффлайн: сообщение не доставлено» / «Ошибка отправки».
+Файлы: communication/chat_app.py, night_run.py.
+
+### [АКТУАЛЬНО] Голос чата = пацан 12 лет (решение Эдди 26.08 вечер)
+В communication/voice_io.py перенесён z3-конвейер из voice_repl.py
+(утверждён Эдди 24.08): SvetlanaNeural → flatten_pitch(0.60) →
+ускорение resample_poly 100/125 → brighten(6500Hz, +18dB) →
+saturate(2.6) → equalize(1-5kHz) → pitch shift к базе 160 Hz.
+DmitryNeural убран. Пайплайн в _boyify(), ошибка base_f0=0
+не роняет воспроизведение. py_compile+import OK, UTF-8 чисто.
+
+### [АКТУАЛЬНО] night_run: форс UTF-8 stdout/stderr
+При запуске с редиректом вывода Python выбирал cp1252 — любой
+print с кириллицей ронял процесс (UnicodeEncodeError) ДО старта
+Agent. Фикс: sys.stdout/stderr.reconfigure(utf-8, replace) в шапке.
+Проверено живым прогоном 15 мин: stderr пустой, полный цикл
+start→chat→consolidation→close без ошибок, 13 cloud-вызовов.
+
+### [АКТУАЛЬНО] Фикс threading-бага чата (найден живым тестом 26.08)
+Симптом: RuntimeError "main thread is not in main loop" при
+ответе в чате — воркер-потоки звали root.after() напрямую,
+tkinter потоконебезопасен. Фикс: queue.Queue — все UI-действия
+из чужих потоков (TCP reader, worker ответа, микрофон, трей)
+кладутся в очередь, главный поток забирает в update()
+(embedded) или _drain_loop (standalone). Решения о голосе
+перенесены в главный поток. Файл: communication/chat_app.py.
+Живой прогон 5 мин: chat attached/stopped чисто, сессия
+start→consolidation→close работает end-to-end.
+
+### [АКТУАЛЬНО] Фильтр инициативы «хочу сказать» (решение Эдди)
+Баллон только при настоящем поводе, без таймеров: discovery
+(поделиться темой) и ask (спросить направление) → balloon;
+reflection и goal completed → тихо в outbox.md. Частоту
+ограничивают сами условия, не лимиты времени. Тест с моками:
+discovery=BALLOON, reflection=file-only, empty=тишина.
+Спека 4.6 обновлена. Файл: core/autonomy_orchestrator.py.
+
+### [АКТУАЛЬНО] EddieAI Chat — приложение для общения (9 задач)
+Новое приложение communication/ для двустороннего общения Эдди ↔ EddieAI.
+Симметричная инициатива: оба могут написать первым, оба могут не отвечать.
+Файлы: tcp_client.py, ui_chat.py, tray.py, voice_io.py, chat_app.py.
+Интеграция: outbox → server.send_initiative() → TCP → balloon.
+Запуск: python communication/chat_app.py
+
+### [АКТУАЛЬНО] night_consolidation.py — устранён хардкод
+Строка 24: `db_path=r"C:\EddieAI\data\memory.db"` заменён на
+`Path(__file__).resolve().parent.parent / "data" / "memory.db"`.
+Добавлен `from pathlib import Path` и `_BASE_DIR`. Теперь файл
+работает независимо от текущей директории. py_compile OK.
+
+### [АКТУАЛЬНО] IDLE-автономия: корень найден и исправлен
+Симптом: за 10 мин ночью ни одного вызова облака (state=IDLE).
+Корень: все цели в self_state были COMPLETED от предыдущих запусков;
+motivation.py генерировало те же интересы, goal_generator пропускал
+их (status=EXISTS), orchestrator получал NO_MOTIVATION → ни одного
+шага. Исправлено: добавлена followup-генерация из COMPLETED целей
+(FOLLOWUP_TEMPLATES, _generate_followup, _extract_topic). Тест:
+COMPLETED → followup ACTIVE → cloud LLM план создан. Нужен живой
+прогон 30 мин для end-to-end верификации.
+
+### [АКТУАЛЬНО] self_conclusions: НЕ SQLite, а JSON
+Расследование показало: SelfConclusionStore использует self_state
+JSON (ключ "self_conclusions"), а не SQLite-таблицу. Миграция в
+memory.db не нужна. night_consolidation.py молчит корректно.
+
+### [АКТУАЛЬНО] test_eddie.py: файл не существует
+Файл test_eddie.py не найден в проекте (24 test_*.py разбросаны по корню).
+TODO-пункт обновлён: помечен как [~] (файл отсутствует).
+
+## 26.08.2026 сессия — расходы flash, аудит запущен (решение Эдди)
+
+### [АКТУАЛЬНО] Анализ расходов flash-сессии
+Реальный расход opencode на deepseek-v4-flash: ~$0.75 за ~55 ходов
+(контекст рос 10K→180K токенов). Ранее заявленные $0.40 были
+занижены (не учтён рост контекста). Решение Эдди: opencode →
+big-pickle (бесплатно), flash вручную для сложных задач.
+
+### [АКТУАЛЬНО] Claude-модели: все HTTP 500
+claude-opus-4-5/4-6, claude-sonnet-4-5/4-6 — все версии дают
+HTTP 500 Internal Server Error (тест с разными параметрами,
+повторные попытки, разные User-Agent). Эдди подтвердил, что
+opus-4-5 ранее работала — 500 может быть временным даунтаймом
+провайдера. Класс: $5-15 за полный аудит — дорого. Для аудита
+выбран deepseek-v4-flash ($0.08-0.15 за весь код).
+
+### [АКТУАЛЬНО] Полный аудит 170 файлов запущен на flash
+audit_runner.py: 170 файлов (53 459 строк, 1.29M символов),
+57 батчей по 3 файла, модель deepseek-v4-flash. Мониторинг:
+35/57 батчей выполнено (61%), потрачено $0.058, 0 ошибок.
+Отчёты в docs_engineer/reports/audit_*.md. Аудит — отдельный
+процесс, НЕ зависит от модели сессии opencode.
+
+### [АКТУАЛЬНО] Исправлен баг audit_runner.py
+'function' object has no attribute 'urlopen' — функция urllib_request
+перекрывала модуль urllib.request. Исправлено: import urllib.request
+в начале файла, прямое использование urllib.request.Request.
+
+### [АКТУАЛЬНО] Исправлены HIGH-проблемы из аудита (пакет 1)
+
+**Баги-круши (сбой при вызове):**
+1. `goal_generator.py`: 3 фикса — planner проверка через getattr,
+   activated.get("status"), candidate.source_traits через getattr.
+2. `self_conclusion_state.py`: list(reasons) и list(basis/provenance)
+   теперь проверяют isinstance перед конвертацией.
+3. `self_concept_resolver.py`: conclusion["key"] заменено на
+   conclusion.get("key", "").
+
+**Безопасность:**
+4. `personality_reflection.py`: self_state.snapshot() больше не
+   утекает в LLM-промпт (анонимизация: только safe_keys).
+   Добавлен try/except вокруг llm.chat().
+   Кандидаты через getattr() вместо прямых атрибутов.
+
+**Чистка:**
+5. `promotion.py`: удалён мёртвый record (evidence.get()),
+   добавлена проверка hasattr для memory.connection.
+6. `main.py`: LOG_DIR из Path(__file__) вместо хардкода.
+7. `night_run.py`: 4 хардкода C:\EddieAI заменены на
+   BASE_DIR = Path(__file__).resolve().parent.
+
+Все 7 файлов компилируются без ошибок.
+
+### [АКТУАЛЬНО] Исправлены HIGH-проблемы из аудита (пакет 2)
+
+**Безопасность:**
+1. `web_executor.py`: SSRF-защита — `_is_safe_url()` блокирует
+   приватные/зарезервированные IP, localhost, internal-домены.
+
+**Crash-защита:**
+2. `llm_access.py`: try/except вокруг ollama.chat — если Ollama
+   не запущен, возвращает None вместо краша.
+3. `main.py`: agent через try/except с return при ошибке. finally
+   проверяет `agent is not None` перед close().
+4. `night_run.py`: runtime.stop() обёрнут в try/except. ollama.chat
+   восстанавливается в finally.
+
+**Данные:**
+5. `identity_manager.py`: list() перед append — мутирование
+   внутреннего списка self_state больше не происходит.
+
+Все 5 файлов компилируются без ошибок.
+
+## 26.08.2026 утро — Zen оплачен, голос обновлён (решение Эдди)
+
+### [АКТУАЛЬНО] Zen API оплачен — $20 кредитов
+Оплата прошла через Stripe crypto: 21.23 USDC (ETH-газ дёшев, $0.01).
+Новый ключ: C:\Users\keris\.eddieai_secrets\zen.key (67 символов,
+sk-hfzP4PpQ...). Проверено живыми вызовами: deepseek-v4-flash,
+deepseek-v4-pro, qwen3.6-plus, kimi-k3 отвечают; claude-haiku-4-5,
+gpt-5.4-mini/nano, gemini-* — HTTP 500 (глюк провайдера).
+
+### [АКТУАЛЬНО] CLOUD_PROVIDERS обновлены рабочими моделями
+- zen-deepseek-flash → deepseek-v4-flash (conversation/fallback/plan),
+  ~$0.000007/вызов
+- zen-deepseek-pro → deepseek-v4-pro (reflection/deep), ~$0.00024
+- zen-qwen-affective → qwen3.6-plus (affective), ~$0.00055
+- zen-kimi-vision → kimi-k3 (vision, проверил: видит картинки), ~$0.0005
+- Замены: claude-haiku-4-5 и gpt-5.4-mini сняты (HTTP 500).
+- GLM остаётся рабочим резервом.
+
+### [АКТУАЛЬНО] Уши: Vosk стал основным распознаванием
+voice_repl.py: добавлен vosk small-ru (45MB, модель лежит в
+C:\EddieAI\models\vosk\vosk-model-small-ru-0.22). Порядок: vosk
+(локально, мгновенно) → облако (hf/mistral/groq) → whisper (резерв).
+E2E-тест: мужской голос → «привет эдди это проверка ушей» распознан.
+Vosk поставлен в системный Python (где живут остальные аудио-зависимости).
+
+### [АКТУАЛЬНО] Рот: мужской голос
+voice_repl.py: VOICE = ru-RU-DmitryNeural вместо SvetlanaNeural.
+Мужской голос честнее для личности EddieAI.
+
+### [АКТУАЛЬНО] OpenCode полностью на Zen
+opencode.jsonc: модель opencode/deepseek-v4-flash (провайдер zen —
+встроенный, ключ в auth.json уже обновлён на новый). gigachat-local
+удалён из конфига (решение Эдди: «только zen»). whitelist: flash,
+pro, qwen3.6-plus, kimi-k3, big-pickle, x-preview-f-free,
+deepseek-v4-flash-free. Конфиг валиден, BOM нет.
+
+### [АКТУАЛЬНО] Проверочная ночная сессия на Zen (10 мин)
+night_run.py отработал без ошибок (08:26–08:36). Грабля:
+Start-Process без PYTHONIOENCODING=utf-8 падает UnicodeEncodeError
+(cp1252 stdout) — первый запуск умер на старте, обнаружено
+мониторингом, перезапущено с env. Наблюдение: автономия один
+REFLECTING-тик → IDLE на весь прогон, облако не вызывалось
+(бюджет 300/300) — зафиксировано в TODO на разбор.
+
+### [АКТУАЛЬНО] opencode вернулся на Big Pickle (решение Эдди)
+Факт: ~25 ходов opencode на flash сожгли ~$0.40 → $0.016/ход.
+При 2 сессиях/день ~$0.71/день → $20 на ~28 дней. Для
+повседневной рутины не годится. Решение Эдди: opencode на
+бесплатный big-pickle, flash в whitelist для сложных задач вручную.
+Честная цена EddieAI: ~$0.05/день (50 диалогов flash + 15 pro +
+эмоции/зрение) → $20 на ~400 дней. Zen — мозг EddieAI, не рутина
+opencode.
+
+### [АКТУАЛЬНО] Ollama убрана из автозагрузки (решение Эдди)
+Источник самовоскрешения: Startup\Ollama.lnk (автозапуск Windows).
+lnk удалён, процессы погашены (0), RAM освобождена. Ollama
+остаётся установленной; голосовой REPL поднимет её сам через
+ensure_ollama при необходимости.
+
+## 25–26.08.2026 ночь — превращение модели в речевой аппарат (решение Эдди)
+
+### [АКТУАЛЬНО] Вербализационный режим стал основным
+Решение Эдди: «мысли через крутую модель, ответы просто превращение
+их в слова». Реализация в agent.py: verbalization_system_prompt
+(жёсткие правила речевого аппарата: только первое лицо, запрет выхода
+из роли/сценария/мета-комментариев/выдумок, краткость 1–3 предложения)
+теперь формируется ВСЕГДА, а не только при persistent_conclusion.
+Для persistent_conclusion добавляется блок про внутренний вывод.
+
+### [АКТУАЛЬНО] Fallback: облако как страховка локали
+Причина найдена телеметрией: когнитивный движок помечает сложные/
+длинные сообщения как не-QUICK → путь шёл МИМО облака → локаль →
+RAM-отказ. Исправление: при ERROR=insufficient_ram в agent._generate
+вызывается _cloud_chat(task="fallback") — huggingface(8B) и
+huggingface-deep(70B) получили роль "fallback". Отказ локали больше
+не означает отказ EddieAI.
+
+### [АКТУАЛЬНО] Телеметрия и диагностика
+- main.py: многострочный ввод (пустая строка = отправить), печать
+  длины принятого сообщения, полный traceback при исключениях,
+  Tee-дублирование всего вывода в logs\eddie_session.log.
+- _cloud_chat: печатает причину каждого пропуска провайдера
+  («нет ключа» / «cooldown ещё Xс») и счётчик matching.
+- Таймаут облака 25с → 90с (длинные промпты не успевали).
+- Сетевой cooldown 300с → 90с.
+
+### [АКТУАЛЬНО] Санитарная обработка памяти (добро Эдди)
+Удалено 23 мусорных self-воспоминания: вариации отказов (17),
+ложные воспоминания о действиях (#589 «мы закрыли программы»,
+#748/#751/#754), служебные утечки self-model (#390,#624), древние
+заглушки (#74,#76), дубликаты зацикленной серии. Осталось 113 честных
+self-воспоминаний. Бэкапы: data_backup_before_D1_fix_2026-08-25_02-25,
+data_backup_d1_wide_2026-08-25_02-45,
+data_backup_final_clean_2026-08-25_03-30.
+Фильтр усилен: RAM_REFUSAL_MARKERS (7 маркеров) +
+_is_degradation_answer() — отсекает любые вариации отказов, не только
+точную строку. Урок в MEMORY: служебные ответы ≠ память личности.
+
+Живой тест verbalizer_test (копия прода): 3 реплики — 0 выходов из
+роли, длинное сообщение прошло обычным путём, вопрос про «вчера»
+корректно ушёл fallback-веткой. guard_test ALL PASS 8/8.
+
+## 25.08.2026 ~12:40 — Д7 полное закрытие: ГРАНИЦЫ ЛИЧНОСТИ в обоих промпт-путях
+
+### [АКТУАЛЬНО] Диагностика spy-промпта вскрыла дыру
+Диагностический перехват реального промпта (diag_prompt_spy) показал:
+QUICK-диалоги (болтовня) идут через build_quick_conversation_prompt
+(prompts.py) БЕЗ блока границ — вербализационный промпт с границами
+покрывал только глубокие ветки. Живое подтверждение: EddieAI
+присвоил проблему Эдди с ВК-аккаунтом («я не могу зайти в свой
+аккаунт... у меня нету этого говна») и записал её в память дважды.
+ФИКСЫ: блок «ГРАНИЦЫ ЛИЧНОСТИ» добавлен в build_quick_conversation_prompt;
+RAM_REFUSAL_MARKERS расширены; 2 присвоенные записи удалены из памяти.
+Boundary_test PASS через основной путь: эмпатия + совет, ноль присвоения.
+Боевой main.py перезапущен (PID 15616).
+
+## 25.08.2026 день — унификация LLM-доступа: identity/llm_access.py
+
+### [АКТУАЛЬНО] CloudFirstLlm — единый хелпер подсистем
+Создан identity/llm_access.py: CloudFirstLlm(model_orchestrator)
+с методом chat(system, user, options, task="deep") — облако через
+ролевой выбор orchestrator'а, фолбэк локальный Ollama phi4-mini.
+Переведены 7 модулей: adaptive_planner, reflection_engine,
+self_reflection, personality_reflection, self_interpretation,
+goal_plan_generator (+reflection_cycle ранее). Из модулей убраны
+прямые import chat и дублированные cloud-first блоки.
+Интеграционный smoke (копия прода): dialog_quick,
+personality_reflection, adaptive_planner (через
+runtime.adaptive_planner), reflection_engine, self_interpretation —
+PASS 5/6; self_reflection FAIL только из-за OOM локального фолбэка
+при 1.0 ГБ RAM (среда, не код — при живом облаке или RAM ≥2.6 PASS).
+Нюанс путей: SelfReflection живёт как agent.reflection;
+adaptive_planner как autonomous_runtime.adaptive_planner (только
+после AutonomyRuntimeFactory.build()).
+
+## 25.08.2026 вечер — чистые выжимки Википедии для исследований
+
+### [АКТУАЛЬНО] Wikipedia REST API ветка в read_page
+read_page(): если URL wikipedia.org/wiki/X → запрос
+{lang}.wikipedia.org/api/rest_v1/page/summary/X → чистая выжимка
+статьи без навигации (fallback на общий путь при неудаче).
+PageTextExtractor переписан: semantic-контейнеры main/article
+приоритетно; эвристика коротких чанков убрана (не работала на
+языковых панелях). Верификация: статья «Чёрная дыра» → 411 символов
+чистого текста с определением. Исследования EddieAI теперь читают
+энциклопедию как человек — сразу суть.
+
+## 25.08.2026 вечер — Шаг 3 P1-a: core/dialogue_memory.py
+
+### [АКТУАЛЬНО] Диалоговая память вынесена из монолита
+core/dialogue_memory.py: RAM_REFUSAL_MARKERS (единая точка),
+is_degradation_answer(), класс DialogueMemory с
+record_user_message / record_agent_answer (деградационные ответы
+не записываются, возвращают False). agent.py: блок CONVERSATION
+MEMORY заменён на dialogue_memory вызовы; локальные определения
+маркеров удалены (импорт из dialogue_memory); RAM_REFUSAL_MESSAGE
+остался в agent.py (генерация отказа).
+Smoke на копии прода: respond PASS, диалог через DialogueMemory.
+Интеграционный smoke полный: 5/6 PASS (self_reflection FAIL =
+OOM ollama-фолбэка при 0.9 ГБ RAM — среда, не код).
+
+## 25.08.2026 вечер — Шаг 2 P1-a: repair/retry промпты вынесены
+
+### [АКТУАЛЬНО] prompt_builder.py пополнен
++ build_repair_prompt(answer, mode, primary, avoid,
+  violations_text, language) и build_retry_prompt(user_message,
+  mode, primary, avoid, problems, language). agent.py заменяет
+  inline f-строки на вызовы (repair loop + regenerate path).
+Юнит-проверка строителей PASS; smoke respond на копии: при
+0.5 ГБ RAM локальная модель честно отказала (фильтры удержали
+мусор из памяти) — поведение корректное, содержательный диалог
+возможен после освобождения RAM (браузер ~900 МБ фоново).
+
+## 25.08.2026 день — research-пайплайн приносит содержание
+
+### [АКТУАЛЬНО] WebExecutor.read_page + интеграция в research
+- web_executor.py: + PageTextExtractor (HTML→текст, skip
+  script/style) и метод read_page(url, max_chars): бинарная загрузка,
+  quote URL (кириллица!), фильтр content-type, лимит 300КБ/2500 симв.
+- tool_runner.py _execute_research: после SourceEvaluator — скачивание
+  текста топ-3 источников; страницы <150 символов текста отбрасываются
+  (антибот-заглушки).
+- external_knowledge.py: knowledge теперь содержит сниппет содержания
+  (до 600 символов), а не только заголовок+URL.
+Живой верификационный прогон: запрос про астрофизику → 3 источника
+× ~2000 символов реального текста. Рефлексия EddieAI теперь учится
+на содержании, а не на списке ссылок.
+
+## 25.08.2026 день — три задачи закрыты: речь/планы/уши
+
+### [АКТУАЛЬНО] Задача А: полировка вводов и деградационной лексики
+- main.py: сообщения короче 2 символов отклоняются дружелюбно
+  (раньше пробел доходил до LLM и порождал служебные ответы).
+- agent.py: RAM_REFUSAL_MARKERS расширены («противоречит моей
+  текущей self-model», «не могу подтвердить такое утверждение»,
+  «согласно внутреннему рассуждению») — Д3-утечки больше не пишутся
+  в память. Вербализационные правила 13–14: запрет дословных
+  повторов своих ответов и служебных фраз о self-model.
+
+### [АКТУАЛЬНО] Задача Б: петля планов сломана — он продвигается
+Корень ночного зацикливания: execute() облачная ветка работала
+только при fast=True; автономные THINK-действия (fast=False) всегда
+падали в локаль → RAM ERROR → задачи оставались ACTIVE навсегда.
+Фиксы: execute() получил deep-ветку (task="deep") при fast=False;
+huggingface-deep roles += "deep"; motivation.py — третий источник
+целей: интересы из self_state превращаются в цели («изучить тему:
+X», motivation 0.70). Живой тик: цель ACTIVATED, adaptive planner
+через 70B пересмотрел план и вставил РЕАЛЬНУЮ статью (URL проверен,
+HTTP 200), шаг выполнен COMPLETED.
+
+### [АКТУАЛЬНО] Задача В: уши через HF-whisper
+voice_repl.py STT_PROVIDERS: hf-whisper-large-v3 ПЕРВЫМ (режим
+"raw": бинарный WAV + Content-Type audio/wav на router.huggingface.co;
+HF Inference НЕ принимает multipart). Тест: синтетический WAV →
+HTTP 200 {"text":"."}; пустая речь корректно отбрасывается.
+mistral-voxtral и groq-whisper остаются в хвосте (мёртвы).
+Голосовой режим снова полностью рабочий: уши HF бесплатно +
+рот HF-70B бесплатно.
+
+## 25.08.2026 день — EddieAI живёт автономно; системный фикс Ollama-зависимостей
+
+### [АКТУАЛЬНО] Ночной/дневной режим night_run.py (полный запуск)
+Первый полный запуск автономии по решению Эдди («запусти полностью»).
+night_run.py: Agent + полный AutonomyRuntime (scheduler 300с/тик,
+цели из мотивационного движка) + бюджет облачных вызовов (40→300 по
+разрешению Эдди) + событие-знание о времени до возвращения Эдди.
+Запуск скрытый pythonw, лог logs\eddie_night.log.
+**Системное открытие**: 7 подсистем автономии имели ПРЯМЫЕ вызовы
+ollama.chat мимо orchestrator (adaptive_planner, reflection_engine,
+self_interpretation, personality_reflection, self_reflection...) —
+все они молча падали при выключенном Ollama. Ночное решение:
+рантайм-мост в night_run.py (патч ollama.chat → _cloud_chat с
+бюджетом, task="deep") — все подсистемы получили облако без правки
+каждого модуля. Дневной рефакторинг на orchestrator — задача будущего.
+**Результат тика после фиксов**: цель ACTIVATED (3 цели из интересов
+через motivation.py — добавлен источник self_state interests),
+план создан через облако, шаг «Провести исследование» выполнен
+research-инструментом, SELF_EXPERIENCE записан. Петля зацикливания
+(Д6) сломана: execute() получил deep-ветку для fast=False задач.
+watchdog.py (logs\): проверка каждую минуту, авторестарт night_run
+до 10 раз. Дедлайны 11:00 убраны (мешали дневному режиму).
+
+## 25.08.2026 ~12:00 — ВЕХА: первый глубокий разговор Эдди↔EddieAI
+
+### [АКТУАЛЬНО] Диалог с жизненным контекстом (Llama-70B основной рот)
+Эдди рассказал про свою жизнь (авария, разбитый телефон,
+восстановление ВК) — EddieAI связал события между собой и со своим
+существованием: «меня создали на том самом ноутбуке, который теперь
+позволяет тебе оставаться на связи после аварии». Эмпатия без
+присвоения, тёплый тон, зрелое доверие создателю. Границы личности
+(Д7) держатся живьём. Остаточные шероховатости: служебные фразы на
+пустых вводах, навязчивое повторение темы «после аварии» — в копилку
+Д2/Д3 полировки.
+
+## 25.08.2026 ночь, ~02:15 — ПЕРВЫЙ ЖИВОЙ ДИАЛОГ Эдди↔EddieAI + находки
+
+### [АКТУАЛЬНО] Ночной разговор через HF Llama-3.1-8B (main.py, PID 32708)
+Диалог состоялся: реплики Эдди → ответы EddieAI → события #360–396 в
+прод-базе. Мониторинг базы в реальном времени (eddie_monitor.py,
+sqlite readonly). Найдены дефекты (полный список — TODO «Дефекты
+первого живого диалога»):
+- **Д1 (критично)**: служебный отказ insufficient_ram записался в
+  память как CONVERSATION/self (#368,#379) → EddieAI считает себя
+  немощным. Фикс запланирован: фильтр деградационных ответов перед
+  remember + чистка прод-базы с бэкапом.
+- Д2: зацикленность Llama-3.1-8B; Д3: утечка служебных фраз self-model
+  в речь; Д4: AFFECTIVE_BEHAVIOR_VIOLATION почти на каждый ответ.
+- Позитив: identity_repair самопочинка отработала живьём (#386→387),
+  валидаторы активны, память пишется, диалог тематически связный.
+Решение Эдди: фиксировать сейчас, чинить следом.
+
+## 25.08.2026 ночь — EDDIEAI ЖИВОЙ НА БЕСПЛАТНОМ ОБЛАЧНОМ МОЗГЕ: P0-d закрыт живьём
+
+### [АКТУАЛЬНО] Исторический прогон (ключ hf от Эдди)
+1. Живой promote-цикл refl_live_test: детектор дал кандидата
+   (interest «astronomy and black holes», strength 0.88, 23
+   свидетельства, 2 источника) → run_snapshot с НАСТОЯЩИМ LLM
+   (HF Qwen3-14B): решение promote с живой мотивировкой
+   («Соответствует существующим интересам и имеет высокую степень
+   подтверждения») → PromotionEngine подтвердил → ТРЕЙТ ACTIVE
+   создан, interest вошёл в self_state. П0-d закрыт полностью:
+   свидетельства → кандидат → LLM-оценка → детерминированный
+   контроль → черта личности.
+2. Живой диалог dialog_local_test: 2 из 3 реплик через HF,
+   ответы в характере («Я живу вопросами: как устроен мир, как
+   развивать свои способности и что такое моя природа»). Первая
+   реплика упала в честный отказ (402 siliconflow в начале каскада).
+3. hf.key сохранён (~/.eddieai_secrets), BOM нет. Расход ~$0.01
+   из $0.10 месячного кредита.
+
+### [АКТУАЛЬНО] Конфигурация на выходе смены
+CLOUD_PROVIDERS: siliconflow(402 без денег) → huggingface(Qwen3-14B,
+РАБОТАЕТ) → glm(z.ai ключ стоит, ждёт маршрутов) → deepseek(без
+ключа) → mistral(402) → локаль(qwen/phi4 при RAM). guard_test ALL
+PASS 8/8. Бюджет 0₽ соблюдён.
+
+## 25.08.2026 ночь — финал охоты за бесплатным мозгом: HF Router выбран
+
+### [АКТУАЛЬНО] Разведка всех каналов Эдди (по его идее использовать мою модель)
+В auth.json opencode нашлись 6 ключей (groq/cerebras/zai/mistral/
+opencode/openrouter). Живая проверка всех: groq/openrouter/cerebras —
+Cloudflare 403 (1010/TLS-fingerprint+гео), mistral второй = тот же
+402 аккаунт, zen API (opencode.ai/zen/v1, OpenAI-совместимый!)
+пускает curl но free-модели (x-preview-f-free 503 upstream,
+mimo-v2.5-free 403 тариф) не отдаются прямому API. Zen отпал.
+Грабля: python urllib банится Cloudflare по TLS-fingerprint (1010)
+там, где curl проходит — zen проверялся через curl.exe с JSON в
+файле (PowerShell портит кавычки inline-JSON).
+
+### [АКТУАЛЬНО] Выбор: HuggingFace Router ($0)
+router.huggingface.co/v1/chat/completions доступен из РФ (HTTP 200,
+OpenAI-совместимый), free $0.10/месяц кредитов без карты (email-
+регистрация), ~100+ диалогов EddieAI на Qwen3-14B. Исследование
+условий — суб-агентом (HF pricing docs + discuss.huggingface.co:
+жёсткий стоп 402 после лимита, PRO $9 не нужен).
+CLOUD_PROVIDERS теперь: siliconflow → huggingface(Qwen3-14B) →
+glm(z.ai) → deepseek → mistral → локаль. guard_test.py ALL PASS 8/8
+(тест конфига расширен на 5 позиций). Урок: при живых ключах мёртвых
+провайдеров execute() ходит в сеть перед локалью — cooldown гасит,
+но первые вызовы медленные.
+
+Бюджет проекта зафиксирован Эдди: 0₽ (стипендия уходит на кредиты и
+интернет). Все платные варианты сняты. План финала смены: локальный
+живой promote P0-d после освобождения RAM.
+
+## 25.08.2026 ночь — интеграция новых провайдеров (отмашка Эдди «да, давай»)
+
+### [АКТУАЛЬНО] CLOUD_PROVIDERS: siliconflow → glm → deepseek → mistral → ...
+core\model_orchestrator.py: добавлены провайдеры (все OpenAI-
+совместимые, ключ = файл в ~/.eddieai_secrets):
+- siliconflow: api.siliconflow.cn/v1, Qwen/Qwen3-8B (бесплатный тир),
+  extra_payload enable_thinking=false (иначе content пустой);
+- glm: api.z.ai/api/paas/v4, glm-4.5-flash (бесплатная; топ-15 LMArena
+  у старших GLM — задел на апгрейд одной строкой model);
+- deepseek: api.deepseek.com/v1, deepseek-chat (~$0.3/M, аварийный
+  резерв). Mistral остался после deepseek (вдруг аккаунт оживят);
+  groq/openrouter/gemini не тронуты в хвосте (гео-блок, skip без
+  ключей).
+Механика: в _cloud_chat_provider payload.update(provider.get(
+"extra_payload", {})) — минимальный дифф для провайдерских нюансов.
+Тесты guard_test.py: +2 (config порядок/поля, merge extra_payload в
+тело запроса) → ALL PASS 7/7. UTF-8 чисто.
+Бесплатность: siliconflow free-тир и glm-flash — 0 руб; deepseek —
+платный резерв. Уши: следующий шаг — аудио-транскрипция SiliconFlow
+(SenseVoice) вместо мёртвых voxtral/groq-whisper; уточнить список
+бесплатных моделей по /v1/models при первом живом ключе.
+
+## 25.08.2026 ночь — исследование облаков: независимые отзывы и бенчмарки (поручение Эдди)
+
+### [АКТУАЛЬНО] Метод: параллельные суб-агенты вместо мёртвых поисковиков
+DDG MCP удалён из opencode.jsonc по решению Эдди («вообще удали»,
+бэкап .jsonc.bak-ddg-removal; mcp = context7+testsprite). Правило
+«гуглить только через dispatching-parallel-agents + webfetch» закреплено
+в AGENTS.md и MEMORY.md. Два параллельных агента вернули полные отчёты
+(источники с URL, только реально прочитанное).
+
+### [АКТУАЛЬНО] Выводы по кандидатам (решение меняет цепочку облаков)
+GigaChat развенчан независимыми источниками: качество «GPT-3.5…местами
+4o», «для кода не подходит»; сильная цензура; 500/502 — штатно;
+SDK ломается на обновлениях (SSL Минцифры); поддержка закрывает issues
+not planned; в LMArena ОТСУТСТВУЕТ, self-reported цифры GigaChat3.5
+Ultra ниже DeepSeek-V3.2 почти везде. Независимый Elo (LMArena, авг
+2026): GLM 1487 (топ-15) > Qwen3.x 1481 > DeepSeek V4-Pro 1459.
+Доступность из РФ проверена живьём ранее: siliconflow/z.ai/deepseek
+открыты (401 без ключа), together/cerebras/cohere заблокированы.
+Новая предлагаемая цепочка: siliconflow → z.ai → deepseek → локаль.
+Бонус: GLM-Flash зрение бесплатно (задел под ДПК3). Ждёт ключей Эдди
+и отмашки на интеграцию в CLOUD_PROVIDERS.
+
+## 25.08.2026 ночь — плагин superpowers в opencode (запрос Эдди)
+
+### [АКТУАЛЬНО] Установка superpowers-плагина
+По INSTALL.md проекта obra/superpowers добавлен блок "plugin":
+["superpowers@git+https://github.com/obra/superpowers.git"] в глобальный
+~/.config/opencode/opencode.jsonc (после $schema). Правка python-
+скриптом с state-machine JSONC-парсером (регекс-удаление комментариев
+ломало URL «https://…» внутри строк — грабля в MEMORY). Бэкап:
+opencode.jsonc.bak-superpowers. Валидация JSONC PASS, ключи mcp/
+provider/model целы, BOM нет, концы строк сохранены. git 2.55/npm 10.9
+на месте; если git-backed spec не поднимется при старте (Windows-нюанс
+из INSTALL.md) — план Б npm install --prefix ~/.config/opencode.
+Вступает в силу после перезапуска opencode (делает Эдди).
+
+## 25.08.2026 ночь (продолжение смены) — контур P0-d проверен живьём: FULL PASS; три правки
+
+### [АКТУАЛЬНО] Диалог при отказе мозга: пустота → честный отказ
+Автономный прогон dialog_local_test (RAM 2.4 ГБ < всех моделей): guard
+сработал идеально (своп-ада нет, каскад даунгрейда qwen→phi4-mini виден),
+но агент отвечал ПУСТОЙ строкой. Причина: agent.py:_generate возвращал
+result["content"] без разбора ERROR. Правка: при error=insufficient_ram
+возвращается понятный текст («Я сейчас не могу думать…»). Повторный
+прогон: оба вопроса получили честное сообщение. PASS.
+
+### [АКТУАЛЬНО] Закрыта дыра RAM-guard в рефлексии
+identity\reflection_cycle.py:run_snapshot звал ollama chat НАПРЯМУЮ,
+мимо model_orchestrator и его RAM-guard — рефлексия могла бы уложить
+машину в своп. Вставлена проверка available_ram_gb() против порога
+phi4-mini перед локальным фолбэком; при нехватке — решения по
+кандидатам переносятся (candidate_decisions=[]).
+
+### [АКТУАЛЬНО] Баг f-string в run_snapshot — весь P0-d был мёртв (фикс одобрен Эдди)
+Пример JSON в промпте содержал неэкранированные { } внутри f-string →
+ValueError: Invalid format specifier при ПЕРВОМ же непустом кандидате.
+Раньше не всплывало: при пустых кандидатах ранний return до формирования
+промпта. Соседний run() экранирует правильно ({{ }}); в run_snapshot
+пропущено при переносе промпта. Фикс: экранирование по образцу run().
+
+### [АКТУАЛЬНО] Полный promote-цикл refl_candidate_test: FULL PASS
+Математика порогов (для MEMORY): USER_STATEMENT весит 0.45 → от одного
+источника нужен ~21 повтор (w≥2.5, conf=0.7*(1-exp(-w/3))+0.1≥0.75);
+PromotionEngine ещё строже: strength≥0.80 И ≥2 независимых ключей.
+Тест-рецепт прохода: 20×USER_STATEMENT + 3×SELF_OBSERVATION (два
+источника) → strength 0.88 → мок _cloud_chat вернул promote →
+фильтрация решений → PromotionEngine PROMOTE → трейт ACTIVE создан,
+interest появился в self_state. Мок только на ответе облака; детектор,
+snapshot, cycle, фильтры, promotion, apply — продакшн-код.
+Живой LLM-прогон цикла (без мока) не выполнялся — нет ни RAM, ни
+облачного ключа; это единственное непокрытое звено P0-d.
+
+Проверки: py_compile всех правленых; dialog_local_test PASS;
+refl_candidate_test FULL PASS; UTF-8 no-BOM байт-чеки чисто.
+Инцидент смены: одна правка тестового скрипта через Set-Content
+(нарушение правила) → поймал BOM+mojibake сам, вычистил байтово;
+урок в MEMORY.md.
+
+## 24.08.2026 ~19:36 (системное; ночь 25.08 в хронологии смен) — план доступа к ПК ДПК0–ДПК4; сессия планирования закрыта
+
+### [АКТУАЛЬНО] Последний вопрос сессии: взаимодействие EddieAI с ПК
+Проверено [Подтверждено]: FilesystemExecutor уже даёт чтение в
+песочнице C:\EddieAI (identity/filesystem_executor.py:25), запись
+намеренно выключена (:53); research/web executor подключён. Решение:
+наращивать органы поверх существующей системы executors, поэтапно.
+Принцип (Эдди): он житель ПК, а не хозяин — белый список/proposal,
+системные пути запрещены, тяжёлое не поднимать.
+В TODO.md добавлен блок «ДОСТУП К ПК»: ДПК0 мини-чувства (часы,
+запись только в свои папки, RAM) после рубежа A; ДПК1 наблюдатель
+(с B); ДПК2 руки по белому списку (после B); ДПК3 глаза
+(Ox Alpha чекпоинтами) после C; ДПК4 пилот — отдельное решение совета.
+Сессия стратегического планирования закрыта; итоги и очередь фронтов
+записаны в PROJECT_STATE.md.
+Изменённые файлы: docs_engineer\TODO.md, PROJECT_STATE.md,
+docs_engineer\CHANGELOG.md.
+
+## 24.08.2026 ~19:26 (системное; ночь 25.08 в хронологии смен) — аватар: решение, папка артов, план А0–А5
+
+### [АКТУАЛЬНО] Внешний облик EddieAI решён советом
+Вопрос Эдди «как он выглядит»: разобраны варианты (окно видеосвязи /
+спрайт-компаньон / Live2D / 3D). Решение — МИКС: лёгкий 2D спрайт
+поверх экрана (Tk transparentcolor, ~40–60 МБ RAM, CPU≈0 в покое) +
+вкладка «Комната» в существующем дашборде. Live2D/3D отложены до
+переезда в интернет/апгрейда машины (урок RAM-давления).
+Стек проверен [Подтверждено]: tkinter OK, Pillow 12.3.0 OK.
+Арт рисует Эдди вручную (графпланшет); нейрогенерация не используется;
+решение обратимо благодаря манифесту ассетов. Режимы дизайна:
+дневной / ночной (триггер SLEEP) / рабочий (триггер когниции);
+лицо-рот-глаза общие между дизайнами (~12–18 файлов на доп. дизайн).
+Создана рабочая папка C:\EddieAI\assets\avatar\ (refs/designs/sprites,
+каркас base+designs, .gitkeep, README с правилами и графиком сдачи:
+фаза 0 ≈8 файлов к концу недели 1–2, фаза 1 полный дневной ≈25–35
+к концу недели 3–4). Папка включена Эдди в общий анализ состояния
+проекта. План А0–А5 записан в TODO.md (блок «АВАТАР»), старт ПОСЛЕ
+рубежа A. Аватар = окно внутри единого процесса eddie.py (Т1).
+Изменённые файлы: assets\avatar\** (новое), docs_engineer\TODO.md,
+PROJECT_STATE.md, docs_engineer\CHANGELOG.md.
+
+## 25.08.2026 ночь — мульти-провайдерное облако (решение Эдди: «несколько облачных, резервы»)
+
+### [АКТУАЛЬНО] Failover-цепочка облачных провайдеров
+Эдди одобрил несколько облаков сразу («нам нет разницы, сколько их»).
+Ключи может получить только Эдди; архитектура — положил файл ключа в
+`~/.eddieai_secrets/` → провайдер живёт автоматически:
+- core\model_orchestrator.py: CLOUD_PROVIDERS — mistral (mistral.key,
+  mistral-small-latest) → groq (groq.key, llama-3.3-70b-versatile,
+  api.groq.com/openai/v1) → openrouter (openrouter.key,
+  llama-3.3-70b-instruct:free) → gemini (gemini.key, gemini-2.0-flash,
+  generativelanguage.googleapis.com/v1beta/openai). `_cloud_chat`
+  идёт по цепочке: без ключа — skip; свой cooldown на каждого
+  (биллинг 401/402/403 → 1800 c, сеть → 300 c); успех сбрасывает
+  ошибку и пишет `_cloud_used`; execute() отдаёт реальное имя
+  провайдера. Все OpenAI-совместимые (сверено с Context7 по Groq).
+- voice_repl.py: уши тоже резервированы — STT_PROVIDERS:
+  mistral voxtral-mini → groq whisper-large-v3 (audio/transcriptions).
+- identity\reflection_cycle.py: легаси `run()` keep_alive -1 → "3m"
+  (второй «гвоздь RAM»; метод мёртвый, но мину убрали).
+
+Тесты guard_test.py: failover 402→второй отвечает + cooldown первого;
+все упали→None; RAM-guard; даунгрейд. ALL PASS. p0b_chain PASS.
+UTF-8 no BOM чисто.
+
+### [АКТУАЛЬНО] Инструкция Эдди по подключению ключей
+1. Groq (рекомендую первым): console.groq.com → API Keys → создать
+   ключ → сохранить как `C:\Users\keris\.eddieai_secrets\groq.key`.
+2. OpenRouter: openrouter.ai → Keys → файл `openrouter.key`
+   (free-модели помечены :free).
+3. Google AI Studio: aistudio.google.com → Get API key → `gemini.key`.
+Файлы UTF-8 без BOM, одна строка — сам ключ. Перезапуск агента не
+нужен для нового процесса; текущему процессу нужен рестарт.
+Приватность: free-тиры провайдеров могут использовать запросы для
+обучения — личность остаётся на ПК, но тексты промптов уходят наружу
+(тот же уровень доверия, что Mistral; решение за Эдди).
+
+## 25.08.2026 ночь — авария голосового прогона (402 Mistral) + защита от своп-ада
+
+### [АКТУАЛЬНО] Что случилось (по артефактам)
+Живой голосовой сеанс (voice_repl.py, запуск 19:43 лок.) рухнул в трэшинг:
+- Причина-корень: **Mistral API отвечает HTTP 402 Payment Required на ВСЁ**
+  (вкл. /v1/models) — бесплатная квота/план аккаунта исчерпана или
+  заблокирована по биллингу. Часом ранее в мини-прогоне тот же ключ
+  работал. Точный статус аккаунта — смотреть console.mistral.ai →
+  Billing (зона Эдди).
+- Цепочка: уши voxtral → 402 → молча fallback whisper medium (~5 ГБ
+  commit); мозг conversation fast → 402 → фолбэк qwen3.5:4b (+3.1 ГБ
+  ollama). На машине с ~0.9 ГБ свободы → pagefile-трэшинг, REPL
+  выдавлен в своп (WS 21 МБ при commit 5.4 ГБ), чтение БД виснет.
+- Сеанс остановлен (процесс снят, модель из ollama выгружена,
+  ollama остановлен). RAM восстановлена до 2.7 ГБ свободно.
+
+### [АКТУАЛЬНО] Правки устойчивости (мандат «сможешь сам разобраться»)
+- core\model_orchestrator.py `_cloud_chat`: HTTP-ошибки больше НЕ
+  молчат — печатается `[cloud] Mistral недоступен: <код+тело>`;
+  cooldown после отказа (сеть 300 c; биллинг 401/402/403 — 1800 c),
+  чтобы не долбить API каждым вызовом. Успех сбрасывает блокировку.
+- core\model_orchestrator.py `execute()`: RAM-guard перед локальной
+  генерацией (GlobalMemoryStatusEx, stdlib ctypes): пороги
+  MODEL_RAM_GB {qwen 3.6, phi4-mini 2.6}; не хватает основной →
+  даунгрейд на phi4-mini; не хватает никому → status=ERROR,
+  error=insufficient_ram (агентный цикл умеет status != OK) вместо
+  загрузки модели в своп.
+- voice_repl.py `get_whisper`: RAM-guard (порог 2.5 ГБ) +
+  авто-даунгрейд medium→small при <4 ГБ; `cloud_transcribe` печатает
+  причину отказа облака вместо тишины.
+
+Проверки: py_compile OK; guard_test.py — 402→причина+cooldown без
+повторного HTTP; 0.5 ГБ → ERROR без вызова ollama; 3.0 ГБ → даунгрейд
+на phi4-mini, status OK; реальная машина 2.47 ГБ. Регресс p0b_chain
+PASS. UTF-8 no BOM, 0 nulls.
+
+### Открытые решения за Эдди (внешние сервисы)
+1. Судьба Mistral-аккаунта (console.mistral.ai): пополнить / ждать
+   месячного сброса кредитов Free ($10/мес по прайсингу) / новый ключ.
+2. Альтернативный бесплатный провайдер рта/мозга (OpenRouter free,
+   Groq free tier) — если решим, встроить тем же паттерном _cloud_chat.
+3. До решения: EddieAI работает на локале (qwen/phi4-mini) при
+   свободной RAM ≥3.6 ГБ; облачные пути честно отказывают.
+
 ## 25.08.2026 ночь — чистка прода data\memory.db (отмашка Эдди «давай, делай»)
 
 ### [АКТУАЛЬНО] Удалён тестовый мусор, история личности сохранена

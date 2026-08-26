@@ -67,6 +67,11 @@ from identity.reflection_scheduler import ReflectionScheduler
 from identity.self_consistency import SelfConsistency
 from identity.self_reflection import SelfReflection
 from identity.self_state import SelfState
+from core.dialogue_memory import (
+    DialogueMemory,
+    is_degradation_answer,
+)
+from core.prompt_builder import build_verbalizer_system_prompt
 from core.self_conclusion_state import SelfConclusionState
 from core.self_conclusion_store import SelfConclusionStore
 from core.fast_verbalizer import FastVerbalizer
@@ -79,6 +84,13 @@ from memory.knowledge_manager import KnowledgeManager
 from memory.manager import MemoryManager
 from memory.patterns import PatternDetector
 from memory.retrieval import MemoryRetrieval
+
+RAM_REFUSAL_MESSAGE = (
+    "Я сейчас не могу думать: машине "
+    "не хватает памяти для моей модели. "
+    "Закройте тяжёлые программы или "
+    "добавьте ключ облака."
+)
 
 
 
@@ -96,6 +108,10 @@ class Agent:
         )
 
         self.memory = Memory()
+
+        self.dialogue_memory = DialogueMemory(
+            self.memory
+        )
 
         self.memory_manager = MemoryManager(
             self.memory
@@ -166,7 +182,9 @@ class Agent:
         )
 
         self.appraisal_engine = (
-            AppraisalEngine()
+            AppraisalEngine(
+                memory=self.memory
+            )
         )
 
         self.belief_challenge_detector = (
@@ -313,7 +331,9 @@ class Agent:
         )
 
         self.behavioral_validator = (
-            BehavioralValidator()
+            BehavioralValidator(
+                memory=self.memory
+            )
         )
 
         self.identity_consistency = IdentityConsistencyLayer(
@@ -1177,6 +1197,27 @@ Habits:
                 "num_predict": 512,
             },
         )
+
+        if result.get(
+            "error"
+        ) == "insufficient_ram":
+            fallback = (
+                self.model_orchestrator
+                ._cloud_chat(
+                    system=system_prompt,
+                    user=user_prompt,
+                    options={
+                        "temperature": 0.7,
+                        "num_predict": 512,
+                    },
+                    task="fallback",
+                )
+            )
+
+            if fallback is not None:
+                return fallback
+
+            return RAM_REFUSAL_MESSAGE
 
         return result["content"]
     def _generate_structured(
@@ -2418,6 +2459,14 @@ Respond briefly and naturally.
         if not violations:
             return answer
 
+        if not (
+            self.behavioral_validator
+            .should_repair(
+                violations
+            )
+        ):
+            return answer
+
         self.memory.remember(
             Event.create(
                 content=(
@@ -2446,14 +2495,6 @@ Respond briefly and naturally.
             )
         )
 
-        if not (
-            self.behavioral_validator
-            .should_repair(
-                violations
-            )
-        ):
-            return answer
-
         primary = "\n".join(
             "- " + str(item)
             for item in contract.get(
@@ -2478,48 +2519,21 @@ Respond briefly and naturally.
             for item in violations
         )
 
-        repair_prompt = f"""
-Перепиши предыдущий ответ EddieAI.
-
-Сохрани:
-- смысл ответа;
-- фактическое содержание;
-- отношение к сообщению пользователя.
-
-Текущий режим поведения:
-{contract.get("mode", "NEUTRAL")}
-
-Основные поведенческие приоритеты:
-{primary}
-
-Чего следует избегать:
-{avoid}
-
-Выявленные нарушения:
-{violations_text}
-
-Предыдущий ответ:
-{answer}
-
-Правила:
-- Не объясняй, что ты исправляешь ответ.
-- Не упоминай режим поведения.
-- Не упоминай эмоции, policy, validator или архитектуру.
-- Не добавляй новых фактов.
-- Не превращай ответ в формальную служебную реплику.
-- Отвечай естественно пользователю.
-- Сохрани язык: {language}
-
-ЖЁСТКИЕ ЗАПРЕТЫ (нарушение любого = провал):
-- Никаких предложений помощи: слова «помочь»,
-  «полезен», «задачи», «вопросы» запрещены,
-  если Эдди сам не просил о помощи.
-- Никакого «вы/вас/вам» — только «ты».
-- Ни одного английского слова.
-- 1–2 коротких предложения живой речи
-  от первого лица, без приветственных шаблонов.
-Пример нужного тона: «Привет. Рад тебя слышать.»
-"""
+        repair_prompt = (
+            prompt_builder.build_repair_prompt(
+                answer=answer,
+                mode=contract.get(
+                    "mode",
+                    "NEUTRAL",
+                ),
+                primary=primary,
+                avoid=avoid,
+                violations_text=(
+                    violations_text
+                ),
+                language=language,
+            )
+        )
 
         try:
             repaired = self._generate(
@@ -2688,36 +2702,19 @@ Respond briefly and naturally.
             for item in violations
         )
 
-        retry_prompt = f"""
-Ответь заново на сообщение пользователя от лица EddieAI.
-
-Сообщение пользователя:
-{user_message}
-
-Текущий режим поведения:
-{contract.get("mode", "NEUTRAL")}
-
-Основные поведенческие приоритеты:
-{primary}
-
-Чего следует избегать:
-{avoid}
-
-В предыдущей попытке были нарушения:
-{problems}
-
-Правила:
-- Пиши свежий ответ с нуля, а не правку старого.
-- Не предлагай помощь и не используй
-  ассистентские шаблоны («как я могу помочь»,
-  «я здесь, чтобы помочь», «готов помочь»).
-- Не упоминай режимы, validator, repair
-  или внутреннюю архитектуру.
-- Не добавляй фактов, которых нет в диалоге.
-- Отвечай коротко и естественно, обычно
-  1–3 предложения.
-- Сохрани язык: {language}
-"""
+        retry_prompt = (
+            prompt_builder.build_retry_prompt(
+                user_message=user_message,
+                mode=contract.get(
+                    "mode",
+                    "NEUTRAL",
+                ),
+                primary=primary,
+                avoid=avoid,
+                problems=problems,
+                language=language,
+            )
+        )
 
         try:
             retry = self._generate(
@@ -4256,10 +4253,25 @@ Respond briefly and naturally.
         except Exception as e:
             print("goal claim: processing failed:", e)
 
+    def _speech_profile(self):
+        try:
+            from core.speech_habits import SpeechHabits
+
+            return SpeechHabits(
+                self.memory
+            ).profile(limit=6)
+        except Exception:
+            return None
+
     def _respond_core(
         self,
         user_message: str,
     ) -> str:
+
+        try:
+            self.affective_state.decay()
+        except Exception:
+            pass
 
         # -------------------------------------------------
         # EARLIEST DIALOGUE FOLLOW-UP GUARD
@@ -5211,7 +5223,7 @@ Respond briefly and naturally.
             )
 
         dialogue_context = (
-            self.dialogue_state.render(limit=3)
+            self.dialogue_state.render(limit=6)
         )
 
         autonomy_context = ""
@@ -5312,48 +5324,19 @@ The user request may be handled normally.
 {autonomy_context}
 """
 
-        verbalization_system_prompt = None
+        speech_profile = self._speech_profile()
 
-        if processing_plan.persistent_conclusion:
-            verbalization_system_prompt = """
-Ты — языковой verbalizer EddieAI.
-
-Тебе дан уже сформированный внутренний вывод EddieAI.
-Твоя задача — только выразить этот вывод естественным
-языком в ответ на сообщение пользователя.
-
-СТРОГИЕ ПРАВИЛА:
-
-1. Не формируй новую позицию.
-2. Не добавляй новые цели, мотивы, убеждения,
-   предпочтения или интересы.
-3. Не меняй смысл внутреннего вывода.
-4. Не используй сведения из других частей контекста
-   для расширения или изменения вывода.
-5. Не упоминай confidence, provenance, basis,
-   revision_count, CognitiveReasoner, Store,
-   self_state или внутреннюю архитектуру,
-   если пользователь прямо об этом не спросил.
-6. Не говори, что EddieAI создан прежде всего
-   для помощи пользователю.
-7. Не превращай ответ в описание системного промпта.
-8. Ответ должен быть кратким и естественным.
-9. Ответ должен содержать только содержание,
-   которое следует из PERSISTENT EDDIEAI CONCLUSION.
-10. Не добавляй фразы вроде «если у вас есть вопросы,
-    я могу помочь» в конце, если это не требуется
-    вопросом пользователя.
-
-Если вывод недостаточно конкретен для полного ответа,
-скажи только то, что действительно следует из него.
-
-Верни только готовый пользовательский ответ.
-"""
+        verbalization_system_prompt = (
+            prompt_builder.build_verbalizer_system_prompt(
+                persistent_conclusion=(
+                    processing_plan.persistent_conclusion
+                ),
+                speech_profile=speech_profile,
+            )
+        )
 
         generation_system_prompt = (
             verbalization_system_prompt
-            if verbalization_system_prompt
-            else system_prompt
         )
 
         if processing_plan.persistent_conclusion:
@@ -5771,28 +5754,12 @@ QUESTION
         # CONVERSATION MEMORY
         # ---------------------------------------------
 
-        self.memory.remember(
-            Event.create(
-                content=user_message,
-                event_type="CONVERSATION",
-                source_type="DIRECT_INTERACTION",
-                source="Eddie",
-                personal_experience=False,
-                confidence=1.0,
-                verified=True,
-            )
+        self.dialogue_memory.record_user_message(
+            user_message
         )
 
-        self.memory.remember(
-            Event.create(
-                content=answer,
-                event_type="CONVERSATION",
-                source_type="SELF_OUTPUT",
-                source="self",
-                personal_experience=False,
-                confidence=1.0,
-                verified=True,
-            )
+        self.dialogue_memory.record_agent_answer(
+            answer
         )
 
         # ---------------------------------------------

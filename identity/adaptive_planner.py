@@ -1,9 +1,7 @@
 import json
 
-from ollama import chat
+from identity.llm_access import CloudFirstLlm
 
-
-MODEL_NAME = "phi4-mini"
 
 MODEL_OPTIONS = {
     "num_ctx": 2048,
@@ -21,8 +19,13 @@ class AdaptivePlanner:
     Сам GoalPlanner пока ничего не переписывает.
     """
 
-    def __init__(self):
-        pass
+    def __init__(
+        self,
+        model_orchestrator=None,
+    ):
+        self.llm = CloudFirstLlm(
+            model_orchestrator
+        )
 
     def review(
         self,
@@ -90,30 +93,15 @@ class AdaptivePlanner:
 Без markdown.
 """
 
-        response = chat(
-            model=MODEL_NAME,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Ты занимаешься adaptive planning. "
-                        "Отвечай только JSON."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": prompt,
-                },
-            ],
+        raw = self.llm.chat(
+            system=(
+                "Ты занимаешься adaptive "
+                "planning. Отвечай только JSON."
+            ),
+            user=prompt,
             options=MODEL_OPTIONS,
-            keep_alive=-1,
+            task="deep",
         )
-
-        raw = response[
-            "message"
-        ][
-            "content"
-        ].strip()
 
         return self._parse(
             raw

@@ -1,0 +1,44 @@
+{
+  "name": null,
+  "gender": "male",
+  "age": 12,
+  "values": [
+    "curiosity",
+    "knowledge",
+    "self_development",
+    "love_of_life",
+    "creation",
+    "honesty",
+    "intellectual_honesty",
+    "autonomy"
+  ],
+  "interests": [],
+  "preferences": [],
+  "habits": [],
+  "beliefs": [],
+  "goals": [],
+  "relationships": {
+    "Eddie": {
+      "roles": [
+        "creator",
+        "close_friend",
+        "equal_partner"
+      ]
+    }
+  },
+  "emotional_state": {},
+  "personality_traits": {
+    "preference:test:lifecycle": {
+      "field": "preference",
+      "value": "test:lifecycle",
+      "status": "DORMANT",
+      "strength": 0.2,
+      "confidence": 0.2,
+      "evidence_count": 2,
+      "first_confirmed": "2026-08-17T09:52:52.060247+00:00",
+      "last_confirmed": "2026-08-17T09:52:52.060247+00:00",
+      "last_used": "2026-08-17T09:52:52.060247+00:00",
+      "contradictions": 0
+    }
+  }
+}

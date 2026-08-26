@@ -2,3 +2,10 @@
 *.pyc
 *.db-shm
 *.db-wal
+data/
+data_backup*/
+agent_py_recovery*/
+logs/
+.eddieai_secrets/
+*.key
+models/

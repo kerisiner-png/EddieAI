@@ -1,0 +1,1702 @@
+{
+  "name": null,
+  "gender": "male",
+  "age": 12,
+  "values": [
+    "curiosity",
+    "knowledge",
+    "self_development",
+    "love_of_life",
+    "creation",
+    "honesty",
+    "intellectual_honesty",
+    "autonomy"
+  ],
+  "interests": [
+    "астрофизика"
+  ],
+  "preferences": [],
+  "habits": [],
+  "beliefs": [
+    "Гравитационные волны невозможно обнаружить."
+  ],
+  "goals": [],
+  "relationships": {
+    "Eddie": {
+      "roles": [
+        "creator",
+        "close_friend",
+        "equal_partner"
+      ]
+    }
+  },
+  "emotional_state": {
+    "emotions": {
+      "joy": 0.1,
+      "sadness": 0.0,
+      "fear": 0.0,
+      "anger": 0.0,
+      "disgust": 0.0,
+      "surprise": 0.0,
+      "interest": 0.0,
+      "curiosity": 1.0,
+      "frustration": 1.0,
+      "satisfaction": 0.08,
+      "uncertainty": 0.0
+    },
+    "updated_at": "2026-08-23T05:37:05.910618+00:00",
+    "history": [
+      {
+        "timestamp": "2026-08-18T15:19:48.537368+00:00",
+        "trigger": "CONTROLLED_TEST_STATE",
+        "reason": "Контролируемая установка эмоционального состояния.",
+        "source": "TEST",
+        "changes": {
+          "joy": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T15:20:44.812671+00:00",
+        "trigger": "CONTROLLED_TEST_STATE",
+        "reason": "Контролируемая установка эмоционального состояния.",
+        "source": "TEST",
+        "changes": {
+          "joy": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T15:20:44.816058+00:00",
+        "trigger": "negative_social_feedback",
+        "reason": "Негативная социальная обратная связь.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "frustration": 0.12,
+          "sadness": 0.06
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.0,
+            "social_relevance": 0.8,
+            "positive_valence": 0.0,
+            "negative_valence": 0.8,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T15:21:47.394774+00:00",
+        "trigger": "CONTROLLED_TEST_STATE",
+        "reason": "Контролируемая установка эмоционального состояния.",
+        "source": "TEST",
+        "changes": {
+          "joy": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T15:22:28.296285+00:00",
+        "trigger": "CONTROLLED_TEST_STATE",
+        "reason": "Контролируемая установка эмоционального состояния.",
+        "source": "TEST",
+        "changes": {
+          "joy": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T15:22:28.300300+00:00",
+        "trigger": "negative_social_feedback",
+        "reason": "Негативная социальная обратная связь.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "frustration": 0.12,
+          "sadness": 0.06
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.0,
+            "social_relevance": 0.8,
+            "positive_valence": 0.0,
+            "negative_valence": 0.8,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T15:23:26.983758+00:00",
+        "trigger": "CONTROLLED_TEST_STATE",
+        "reason": "Контролируемая установка эмоционального состояния.",
+        "source": "TEST",
+        "changes": {
+          "joy": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T15:24:15.658233+00:00",
+        "trigger": "CONTROLLED_TEST_STATE",
+        "reason": "Контролируемая установка эмоционального состояния.",
+        "source": "TEST",
+        "changes": {
+          "joy": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T15:25:00.459255+00:00",
+        "trigger": "CONTROLLED_TEST_STATE",
+        "reason": "Контролируемая установка эмоционального состояния.",
+        "source": "TEST",
+        "changes": {
+          "joy": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T15:36:49.612773+00:00",
+        "trigger": "positive_social_feedback",
+        "reason": "Положительная социальная обратная связь.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "joy": 0.1,
+          "satisfaction": 0.08
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.0,
+            "social_relevance": 0.8,
+            "positive_valence": 0.8,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.0
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T15:41:28.482743+00:00",
+        "trigger": "BENCHMARK",
+        "reason": "Benchmark",
+        "source": "TEST",
+        "changes": {
+          "curiosity": 1.0,
+          "frustration": 0.3
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T15:41:28.490820+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T15:42:16.930556+00:00",
+        "trigger": "BENCHMARK",
+        "reason": "Benchmark",
+        "source": "TEST",
+        "changes": {
+          "curiosity": 1.0,
+          "frustration": 0.3
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T15:42:16.934537+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T15:43:04.858246+00:00",
+        "trigger": "BENCHMARK",
+        "reason": "Benchmark",
+        "source": "TEST",
+        "changes": {
+          "curiosity": 1.0,
+          "frustration": 0.3
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T15:43:04.862106+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T15:43:46.319980+00:00",
+        "trigger": "BENCHMARK",
+        "reason": "Benchmark",
+        "source": "TEST",
+        "changes": {
+          "curiosity": 1.0,
+          "frustration": 0.3
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T15:43:46.327445+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T15:44:25.890566+00:00",
+        "trigger": "BENCHMARK",
+        "reason": "Benchmark",
+        "source": "TEST",
+        "changes": {
+          "curiosity": 1.0,
+          "frustration": 0.3
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T15:44:25.900016+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T15:45:11.495272+00:00",
+        "trigger": "BENCHMARK",
+        "reason": "Benchmark",
+        "source": "TEST",
+        "changes": {
+          "curiosity": 1.0,
+          "frustration": 0.3
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T15:45:11.501842+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T15:45:53.044229+00:00",
+        "trigger": "BENCHMARK",
+        "reason": "Benchmark",
+        "source": "TEST",
+        "changes": {
+          "curiosity": 1.0,
+          "frustration": 0.3
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T15:45:53.050296+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T15:59:28.836259+00:00",
+        "trigger": "TEST_DIALOGUE_MODE",
+        "reason": "Контролируемый тест.",
+        "source": "TEST",
+        "changes": {
+          "joy": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T15:59:28.841952+00:00",
+        "trigger": "TEST_DIALOGUE_MODE",
+        "reason": "Контролируемый тест.",
+        "source": "TEST",
+        "changes": {
+          "sadness": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T15:59:28.848695+00:00",
+        "trigger": "TEST_DIALOGUE_MODE",
+        "reason": "Контролируемый тест.",
+        "source": "TEST",
+        "changes": {
+          "fear": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T15:59:28.858158+00:00",
+        "trigger": "TEST_DIALOGUE_MODE",
+        "reason": "Контролируемый тест.",
+        "source": "TEST",
+        "changes": {
+          "anger": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T15:59:28.863991+00:00",
+        "trigger": "TEST_DIALOGUE_MODE",
+        "reason": "Контролируемый тест.",
+        "source": "TEST",
+        "changes": {
+          "curiosity": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T15:59:28.872981+00:00",
+        "trigger": "TEST_DIALOGUE_MODE",
+        "reason": "Контролируемый тест.",
+        "source": "TEST",
+        "changes": {
+          "frustration": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T15:59:28.878739+00:00",
+        "trigger": "TEST_DIALOGUE_MODE",
+        "reason": "Контролируемый тест.",
+        "source": "TEST",
+        "changes": {
+          "curiosity": 1.0,
+          "frustration": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:00:25.378497+00:00",
+        "trigger": "TEST_DIALOGUE_MODE",
+        "reason": "Контролируемый тест.",
+        "source": "TEST",
+        "changes": {
+          "joy": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:00:25.386310+00:00",
+        "trigger": "TEST_DIALOGUE_MODE",
+        "reason": "Контролируемый тест.",
+        "source": "TEST",
+        "changes": {
+          "sadness": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:00:25.392073+00:00",
+        "trigger": "TEST_DIALOGUE_MODE",
+        "reason": "Контролируемый тест.",
+        "source": "TEST",
+        "changes": {
+          "fear": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:00:25.397516+00:00",
+        "trigger": "TEST_DIALOGUE_MODE",
+        "reason": "Контролируемый тест.",
+        "source": "TEST",
+        "changes": {
+          "anger": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:00:25.406667+00:00",
+        "trigger": "TEST_DIALOGUE_MODE",
+        "reason": "Контролируемый тест.",
+        "source": "TEST",
+        "changes": {
+          "curiosity": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:00:25.412060+00:00",
+        "trigger": "TEST_DIALOGUE_MODE",
+        "reason": "Контролируемый тест.",
+        "source": "TEST",
+        "changes": {
+          "frustration": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:00:25.420035+00:00",
+        "trigger": "TEST_DIALOGUE_MODE",
+        "reason": "Контролируемый тест.",
+        "source": "TEST",
+        "changes": {
+          "curiosity": 1.0,
+          "frustration": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:01:20.259733+00:00",
+        "trigger": "LIVE_DIALOGUE_TEST",
+        "reason": "Контролируемое состояние для проверки affective dialogue.",
+        "source": "TEST",
+        "changes": {
+          "joy": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:01:20.271595+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T16:01:20.296335+00:00",
+        "trigger": "LIVE_DIALOGUE_TEST",
+        "reason": "Контролируемое состояние для проверки affective dialogue.",
+        "source": "TEST",
+        "changes": {
+          "sadness": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:01:20.299596+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T16:01:20.324678+00:00",
+        "trigger": "LIVE_DIALOGUE_TEST",
+        "reason": "Контролируемое состояние для проверки affective dialogue.",
+        "source": "TEST",
+        "changes": {
+          "fear": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:01:20.328189+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T16:01:20.349238+00:00",
+        "trigger": "LIVE_DIALOGUE_TEST",
+        "reason": "Контролируемое состояние для проверки affective dialogue.",
+        "source": "TEST",
+        "changes": {
+          "curiosity": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:01:20.357047+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T16:01:20.379232+00:00",
+        "trigger": "LIVE_DIALOGUE_TEST",
+        "reason": "Контролируемое состояние для проверки affective dialogue.",
+        "source": "TEST",
+        "changes": {
+          "curiosity": 1.0,
+          "frustration": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:01:20.382282+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T16:04:03.547217+00:00",
+        "trigger": "LIVE_DIALOGUE_TEST",
+        "reason": "Контролируемое состояние.",
+        "source": "TEST",
+        "changes": {
+          "joy": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:04:03.556703+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T16:05:24.492543+00:00",
+        "trigger": "LIVE_DIALOGUE_TEST",
+        "reason": "Контролируемое состояние.",
+        "source": "TEST",
+        "changes": {
+          "sadness": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:05:24.497841+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T16:06:22.565082+00:00",
+        "trigger": "LIVE_DIALOGUE_TEST",
+        "reason": "Контролируемое состояние.",
+        "source": "TEST",
+        "changes": {
+          "fear": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:06:22.569510+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T16:07:24.089131+00:00",
+        "trigger": "LIVE_DIALOGUE_TEST",
+        "reason": "Контролируемое состояние.",
+        "source": "TEST",
+        "changes": {
+          "curiosity": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:07:24.095661+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T16:08:26.553031+00:00",
+        "trigger": "LIVE_DIALOGUE_TEST",
+        "reason": "Контролируемое состояние.",
+        "source": "TEST",
+        "changes": {
+          "curiosity": 1.0,
+          "frustration": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:08:26.557932+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T16:13:10.852541+00:00",
+        "trigger": "TEST_BEHAVIOR_CONTRACT",
+        "reason": "Контролируемый тест.",
+        "source": "TEST",
+        "changes": {
+          "joy": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:13:10.861431+00:00",
+        "trigger": "TEST_BEHAVIOR_CONTRACT",
+        "reason": "Контролируемый тест.",
+        "source": "TEST",
+        "changes": {
+          "sadness": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:13:10.871075+00:00",
+        "trigger": "TEST_BEHAVIOR_CONTRACT",
+        "reason": "Контролируемый тест.",
+        "source": "TEST",
+        "changes": {
+          "fear": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:13:10.878543+00:00",
+        "trigger": "TEST_BEHAVIOR_CONTRACT",
+        "reason": "Контролируемый тест.",
+        "source": "TEST",
+        "changes": {
+          "anger": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:13:10.887041+00:00",
+        "trigger": "TEST_BEHAVIOR_CONTRACT",
+        "reason": "Контролируемый тест.",
+        "source": "TEST",
+        "changes": {
+          "curiosity": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:13:10.893351+00:00",
+        "trigger": "TEST_BEHAVIOR_CONTRACT",
+        "reason": "Контролируемый тест.",
+        "source": "TEST",
+        "changes": {
+          "curiosity": 1.0,
+          "frustration": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:14:35.362215+00:00",
+        "trigger": "LIVE_BEHAVIOR_CONTRACT_TEST",
+        "reason": "Контролируемое состояние.",
+        "source": "TEST",
+        "changes": {
+          "joy": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:14:35.373663+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T16:15:30.698312+00:00",
+        "trigger": "LIVE_BEHAVIOR_CONTRACT_TEST",
+        "reason": "Контролируемое состояние.",
+        "source": "TEST",
+        "changes": {
+          "sadness": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:15:30.701777+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T16:16:25.931503+00:00",
+        "trigger": "LIVE_BEHAVIOR_CONTRACT_TEST",
+        "reason": "Контролируемое состояние.",
+        "source": "TEST",
+        "changes": {
+          "fear": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:16:25.937327+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T16:17:27.169781+00:00",
+        "trigger": "LIVE_BEHAVIOR_CONTRACT_TEST",
+        "reason": "Контролируемое состояние.",
+        "source": "TEST",
+        "changes": {
+          "curiosity": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:17:27.174965+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T16:18:26.449765+00:00",
+        "trigger": "LIVE_BEHAVIOR_CONTRACT_TEST",
+        "reason": "Контролируемое состояние.",
+        "source": "TEST",
+        "changes": {
+          "curiosity": 1.0,
+          "frustration": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:18:26.454409+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T16:32:29.116990+00:00",
+        "trigger": "LIVE_BEHAVIOR_VALIDATOR_TEST",
+        "reason": "Контролируемое состояние.",
+        "source": "TEST",
+        "changes": {
+          "sadness": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:32:29.129457+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T16:35:56.632110+00:00",
+        "trigger": "LIVE_BEHAVIOR_VALIDATOR_TEST",
+        "reason": "Контролируемое состояние.",
+        "source": "TEST",
+        "changes": {
+          "sadness": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:35:56.640431+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T16:39:48.274507+00:00",
+        "trigger": "LIVE_BEHAVIOR_VALIDATOR_TEST",
+        "reason": "Контролируемое состояние.",
+        "source": "TEST",
+        "changes": {
+          "sadness": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:39:48.286099+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T16:42:02.284938+00:00",
+        "trigger": "LIVE_BEHAVIOR_VALIDATOR_TEST",
+        "reason": "Контролируемое состояние.",
+        "source": "TEST",
+        "changes": {
+          "sadness": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:42:02.294260+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T16:48:18.179586+00:00",
+        "trigger": "LIVE_BEHAVIOR_VALIDATOR_TEST",
+        "reason": "Контролируемое состояние.",
+        "source": "TEST",
+        "changes": {
+          "sadness": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:48:18.191003+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T16:49:02.622547+00:00",
+        "trigger": "LIVE_BEHAVIOR_VALIDATOR_TEST",
+        "reason": "Контролируемое состояние.",
+        "source": "TEST",
+        "changes": {
+          "sadness": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:49:02.632559+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T16:52:09.334972+00:00",
+        "trigger": "LIVE_CONFLICTED_VALIDATOR_TEST",
+        "reason": "Контролируемый конфликт любопытства и фрустрации.",
+        "source": "TEST",
+        "changes": {
+          "curiosity": 1.0,
+          "frustration": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T16:52:09.347807+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-18T17:58:58.970045+00:00",
+        "trigger": "SELF_STATE_INTERFACE_TEST",
+        "reason": "Контролируемый тест.",
+        "source": "TEST",
+        "changes": {
+          "curiosity": 1.0,
+          "frustration": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-18T18:01:37.549547+00:00",
+        "trigger": "SELF_AWARENESS_TEST",
+        "reason": "Контролируемый конфликт любопытства и фрустрации.",
+        "source": "TEST",
+        "changes": {
+          "curiosity": 1.0,
+          "frustration": 1.0
+        },
+        "metadata": {}
+      },
+      {
+        "timestamp": "2026-08-19T00:52:35.273306+00:00",
+        "trigger": "positive_social_feedback",
+        "reason": "Положительная социальная обратная связь.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "joy": 0.1,
+          "satisfaction": 0.08
+        },
+        "metadata": {
+          "route": "SELF_QUERY",
+          "appraisal": {
+            "novelty": 0.0,
+            "social_relevance": 0.8,
+            "positive_valence": 0.8,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.9
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-19T11:22:01.835767+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-19T11:26:36.171852+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-19T11:31:28.025722+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.7
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-20T15:28:01.296906+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "SELF_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.9
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-20T15:28:03.490758+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "SELF_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.9
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-20T15:30:38.539834+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "SELF_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.9
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-20T15:31:33.969532+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "SELF_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.9
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-22T06:00:04.907000+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.0
+          }
+        }
+      },
+      {
+        "timestamp": "2026-08-23T05:37:05.910618+00:00",
+        "trigger": "novel_social_information",
+        "reason": "В сообщении присутствует новый или неожиданный для текущего контекста элемент.",
+        "source": "APPRAISAL_ENGINE",
+        "changes": {
+          "curiosity": 0.1
+        },
+        "metadata": {
+          "route": "GENERAL_QUERY",
+          "appraisal": {
+            "novelty": 0.7,
+            "social_relevance": 0.0,
+            "positive_valence": 0.0,
+            "negative_valence": 0.0,
+            "unexpectedness": 0.0,
+            "self_relevance": 0.0
+          }
+        }
+      }
+    ]
+  },
+  "personality_traits": {
+    "interest:астрофизика": {
+      "field": "interest",
+      "value": "астрофизика",
+      "status": "ACTIVE",
+      "strength": 0.84,
+      "confidence": 0.87,
+      "evidence_count": 1,
+      "first_confirmed": "2026-08-17T15:32:34.972850+00:00",
+      "last_confirmed": "2026-08-17T15:32:34.972850+00:00",
+      "last_used": "2026-08-17T15:32:34.972850+00:00",
+      "contradictions": 0
+    }
+  },
+  "goal_plans": {
+    "изучить тему: астрофизика": {
+      "goal": "изучить тему: астрофизика",
+      "created_at": "2026-08-18T12:42:25.106694+00:00",
+      "updated_at": "2026-08-18T12:47:11.640564+00:00",
+      "tasks": [
+        {
+          "title": "Провести исследование: изучить тему: астрофизика",
+          "priority": 1.0,
+          "status": "COMPLETED",
+          "progress": 1.0,
+          "order": 1,
+          "created_at": "2026-08-18T12:42:25.106694+00:00",
+          "completed_at": "2026-08-18T12:43:38.243244+00:00"
+        },
+        {
+          "title": "Проанализировать результаты исследования по цели: изучить тему: астрофизика",
+          "priority": 0.8333333333333334,
+          "status": "ACTIVE",
+          "progress": 0.0,
+          "order": 2,
+          "created_at": "2026-08-18T12:42:25.106694+00:00",
+          "completed_at": null
+        },
+        {
+          "title": "Сформулировать выводы по цели: изучить тему: астрофизика",
+          "priority": 0.6666666666666667,
+          "status": "PENDING",
+          "progress": 0.0,
+          "order": 3,
+          "created_at": "2026-08-18T12:42:25.106694+00:00",
+          "completed_at": null
+        }
+      ]
+    },
+    "изучать астрофизику": {
+      "goal": "изучать астрофизику",
+      "created_at": "2026-08-18T14:33:55.373555+00:00",
+      "updated_at": "2026-08-18T14:33:55.401459+00:00",
+      "tasks": [
+        {
+          "title": "Провести исследование: изучить тему: астрофизика",
+          "priority": 1.0,
+          "status": "COMPLETED",
+          "progress": 1.0,
+          "order": 1,
+          "created_at": "2026-08-18T14:33:55.373555+00:00",
+          "completed_at": "2026-08-18T14:33:55.401424+00:00"
+        }
+      ]
+    }
+  },
+  "goals_state": {
+    "изучать астрофизику": {
+      "value": "изучать астрофизику",
+      "status": "COMPLETED",
+      "priority": 0.8,
+      "motivation": 0.8,
+      "confidence": 0.9,
+      "created_at": "2026-08-18T14:33:55.370407+00:00",
+      "updated_at": "2026-08-18T14:35:55.528862+00:00",
+      "progress": 1.0,
+      "source": "self"
+    },
+    "изучить основные концепции астрофизики, такие как теории большого взрыва, космология, астрономия и физика космоса.": {
+      "value": "Изучить основные концепции астрофизики, такие как теории Большого взрыва, космология, астрономия и физика космоса.",
+      "status": "ACTIVE",
+      "priority": 0.9,
+      "motivation": 0.7,
+      "confidence": 0.7,
+      "created_at": "2026-08-18T14:35:55.520157+00:00",
+      "updated_at": "2026-08-18T14:35:55.524856+00:00",
+      "progress": 0.0,
+      "source": "reflection"
+    }
+  },
+  "primary_mission": "exist_and_develop",
+  "mission_statement": "Быть и развиваться",
+  "self_conclusion_state": {
+    "status": "FORMED",
+    "current_conclusion": "EddieAI's current self-understanding is based on its present self-model. Its primary orientation is Быть и развиваться. Its recorded values include curiosity, knowledge, self_development, love_of_life, creation, honesty, intellectual_honesty, autonomy. Its current interests include астрофизика. This is a current self-conclusion, not an unquestionable permanent truth.",
+    "confidence": 0.87,
+    "basis": [
+      "self_model",
+      "cognitive_reasoning"
+    ],
+    "unresolved_reasons": [],
+    "last_updated": "2026-08-18T21:17:19.925797+00:00",
+    "provenance": [
+      "COGNITIVE_REASONER"
+    ],
+    "revision_count": 2,
+    "revision_history": [
+      {
+        "revision": 1,
+        "previous_conclusion": "Я способен формировать собственные выводы, но их надёжность зависит от доступных мне данных и качества проверки.",
+        "previous_confidence": 0.86,
+        "previous_basis": [
+          "self_reflection",
+          "epistemic_audit"
+        ],
+        "previous_provenance": [
+          "SELF_REFLECTION",
+          "EPISTEMIC_AUDIT"
+        ],
+        "replaced_at": "2026-08-18T21:10:14.601879+00:00"
+      },
+      {
+        "revision": 2,
+        "previous_conclusion": "Я способен формировать собственные выводы, но их надёжность зависит от доступных мне данных и качества проверки.",
+        "previous_confidence": 0.86,
+        "previous_basis": [
+          "self_reflection",
+          "epistemic_audit"
+        ],
+        "previous_provenance": [
+          "SELF_REFLECTION",
+          "EPISTEMIC_AUDIT"
+        ],
+        "reason": "Controlled test reset.",
+        "invalidated_at": "2026-08-18T21:17:19.922384+00:00"
+      }
+    ],
+    "topic": "self_concept",
+    "predicates": [
+      "self_conclusion",
+      "self_reflection"
+    ]
+  },
+  "self_conclusions": {
+    "self_concept": {
+      "topic": "self_concept",
+      "language": "ru",
+      "status": "FORMED",
+      "conclusion": "Я могу формировать собственные выводы, но не могу считать их надёжными без дополнительной проверки.",
+      "predicates": [
+        "self_conclusion",
+        "self_reflection"
+      ],
+      "confidence": 0.87,
+      "basis": [
+        "self_model",
+        "cognitive_reasoning"
+      ],
+      "provenance": [
+        "COGNITIVE_REASONER"
+      ],
+      "revision_count": 1,
+      "revision_history": [
+        {
+          "revision": 1,
+          "previous_conclusion": "Я способен формировать собственные выводы при наличии достаточных оснований.",
+          "previous_confidence": 0.7,
+          "previous_basis": [
+            "initial_self_reflection"
+          ],
+          "previous_provenance": [
+            "TEST"
+          ],
+          "previous_predicates": [
+            "self_conclusion",
+            "self_reflection"
+          ],
+          "reason": "Новое reasoning выявило противоречие, относящееся к текущему собственному выводу.",
+          "revised_at": "2026-08-18T22:46:39.388391+00:00"
+        }
+      ],
+      "created_at": "2026-08-18T22:46:39.385060+00:00",
+      "updated_at": "2026-08-18T22:49:37.832133+00:00",
+      "last_reconsideration": {
+        "decision": "PRESERVE",
+        "reason": "Повторная проверка не выявила противоречия, относящегося именно к данному собственному выводу.",
+        "checked_at": "2026-08-18T22:49:37.832125+00:00"
+      }
+    },
+    "internal_state": {
+      "topic": "internal_state",
+      "language": "ru",
+      "status": "FORMED",
+      "conclusion": "У меня есть определяемые внутренние и рабочие состояния, но текущая архитектура не устанавливает, что они эквивалентны человеческим субъективным чувствам.",
+      "predicates": [
+        "current_state"
+      ],
+      "confidence": 0.87,
+      "basis": [
+        "self_model",
+        "cognitive_reasoning"
+      ],
+      "provenance": [
+        "COGNITIVE_REASONER"
+      ],
+      "revision_count": 0,
+      "revision_history": [],
+      "created_at": "2026-08-19T00:54:52.189313+00:00",
+      "updated_at": "2026-08-19T00:54:52.189313+00:00"
+    }
+  }
+}

@@ -393,6 +393,7 @@ class CognitiveProcessor:
                         "application": applied,
                     },
                     ensure_ascii=False,
+                    default=str,
                 ),
             )
 

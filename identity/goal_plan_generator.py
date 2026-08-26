@@ -1,9 +1,7 @@
 import json
 
-from ollama import chat
+from identity.llm_access import CloudFirstLlm
 
-
-MODEL_NAME = "phi4-mini"
 
 MODEL_OPTIONS = {
     "num_ctx": 2048,
@@ -24,8 +22,15 @@ class GoalPlanGenerator:
     MIN_TASKS = 3
     MAX_TASKS = 5
 
-    def __init__(self, goal_planner):
+    def __init__(
+        self,
+        goal_planner,
+        model_orchestrator=None,
+    ):
         self.goal_planner = goal_planner
+        self.llm = CloudFirstLlm(
+            model_orchestrator
+        )
 
     def generate(
         self,
@@ -88,34 +93,22 @@ class GoalPlanGenerator:
 Без markdown.
 """
 
-        response = chat(
-            model=MODEL_NAME,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Ты создаёшь исполнимые планы "
-                        "для автономного агента. "
-                        "Каждый шаг должен быть "
-                        "однозначно классифицируем."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": prompt,
-                },
-            ],
+        raw = self.llm.chat(
+            system=(
+                "Ты создаёшь исполнимые планы "
+                "для автономного агента. "
+                "Каждый шаг должен быть "
+                "однозначно классифицируем."
+            ),
+            user=prompt,
             options=MODEL_OPTIONS,
-            keep_alive=-1,
+            task="plan",
         )
 
-        raw = response[
-            "message"
-        ][
-            "content"
-        ].strip()
+        tasks = []
 
-        tasks = self._parse_tasks(raw)
+        if raw:
+            tasks = self._parse_tasks(raw)
 
         if not tasks:
             tasks = self._fallback(

@@ -1,9 +1,7 @@
 import json
 
-from ollama import chat
+from identity.llm_access import CloudFirstLlm
 
-
-MODEL_NAME = "phi4-mini"
 
 MODEL_OPTIONS = {
     "num_ctx": 2048,
@@ -22,6 +20,13 @@ class PersonalityReflection:
 
     def __init__(self, agent):
         self.agent = agent
+        self.llm = CloudFirstLlm(
+            getattr(
+                agent,
+                "model_orchestrator",
+                None,
+            )
+        )
 
     def analyze(self, candidates):
         if not candidates:
@@ -31,14 +36,20 @@ class PersonalityReflection:
 
         for candidate in candidates:
             candidate_data.append({
-                "field": candidate.field,
-                "value": candidate.value,
-                "category": candidate.category,
-                "strength": candidate.strength,
-                "weighted_score": candidate.weighted_score,
-                "evidence_count": candidate.evidence_count,
-                "source_types": candidate.source_types,
+                "field": getattr(candidate, "field", ""),
+                "value": getattr(candidate, "value", ""),
+                "category": getattr(candidate, "category", ""),
+                "strength": getattr(candidate, "strength", 0.0),
+                "weighted_score": getattr(candidate, "weighted_score", 0.0),
+                "evidence_count": getattr(candidate, "evidence_count", 0),
+                "source_types": getattr(candidate, "source_types", []),
             })
+
+        state = self.agent.self_state
+        snapshot = state.snapshot() if hasattr(state, "snapshot") else {}
+
+        safe_keys = {"age", "values", "interests", "beliefs"}
+        safe_state = {k: v for k, v in snapshot.items() if k in safe_keys}
 
         prompt = f"""
 Ты выполняешь внутреннюю рефлексию личности.
@@ -50,10 +61,10 @@ class PersonalityReflection:
 
 {json.dumps(candidate_data, ensure_ascii=False, indent=2)}
 
-Текущее состояние личности:
+Текущее состояние личности (сокращённое):
 
 {json.dumps(
-    self.agent.self_state.snapshot(),
+    safe_state,
     ensure_ascii=False,
     indent=2,
 )}
@@ -91,31 +102,19 @@ class PersonalityReflection:
 Без дополнительного текста.
 """
 
-        response = chat(
-            model=MODEL_NAME,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Ты выполняешь внутреннюю "
-                        "рефлексию личности. "
-                        "Верни только JSON."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": prompt,
-                },
-            ],
-            options=MODEL_OPTIONS,
-            keep_alive=-1,
-        )
-
-        raw = response[
-            "message"
-        ][
-            "content"
-        ].strip()
+        try:
+            raw = self.llm.chat(
+                system=(
+                    "Ты выполняешь внутреннюю "
+                    "рефлексию личности. "
+                    "Верни только JSON."
+                ),
+                user=prompt,
+                options=MODEL_OPTIONS,
+                task="reflection",
+            )
+        except Exception:
+            return []
 
         try:
             result = json.loads(raw)

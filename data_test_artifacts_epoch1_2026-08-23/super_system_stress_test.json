@@ -1,0 +1,490 @@
+{
+  "test": "EDDIEAI SUPER SYSTEM STRESS TEST",
+  "duration": 599.059,
+  "summary": {
+    "total": 46,
+    "passed": 42,
+    "failed": 2,
+    "warnings": 2
+  },
+  "results": [
+    {
+      "category": "architecture",
+      "name": "required_components",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": []
+    },
+    {
+      "category": "state",
+      "name": "mission",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": [
+        ""
+      ]
+    },
+    {
+      "category": "state",
+      "name": "mission_statement",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": [
+        ""
+      ]
+    },
+    {
+      "category": "state",
+      "name": "astrophysics_interest",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": [
+        ""
+      ]
+    },
+    {
+      "category": "state",
+      "name": "relationship_Eddie",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": [
+        "{'Eddie': {'roles': ['creator', 'close_friend', 'equal_partner']}}"
+      ]
+    },
+    {
+      "category": "state",
+      "name": "active_trait_astrophysics",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": [
+        ""
+      ]
+    },
+    {
+      "category": "routing",
+      "name": "Кто ты?",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": [
+        "expected=SELF_QUERY",
+        "actual=SELF_QUERY"
+      ]
+    },
+    {
+      "category": "routing",
+      "name": "Что для тебя важно?",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": [
+        "expected=SELF_QUERY",
+        "actual=SELF_QUERY"
+      ]
+    },
+    {
+      "category": "routing",
+      "name": "Что ты знаешь обо мне?",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": [
+        "expected=USER_QUERY",
+        "actual=USER_QUERY"
+      ]
+    },
+    {
+      "category": "routing",
+      "name": "Помоги разобраться с компьютером.",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": [
+        "expected=GENERAL_QUERY",
+        "actual=GENERAL_QUERY"
+      ]
+    },
+    {
+      "category": "routing",
+      "name": "Привет.",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": [
+        "expected=GENERAL_QUERY",
+        "actual=GENERAL_QUERY"
+      ]
+    },
+    {
+      "category": "gate",
+      "name": "Привет.",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": [
+        "route=GENERAL_QUERY",
+        "mode=QUICK",
+        "reason=routine_conversation"
+      ]
+    },
+    {
+      "category": "gate",
+      "name": "Что для тебя сейчас важно?",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": [
+        "route=SELF_QUERY",
+        "mode=QUICK",
+        "reason=simple_self_query"
+      ]
+    },
+    {
+      "category": "gate",
+      "name": "Можешь ли ты изменить своё отношение к",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": [
+        "route=SELF_QUERY",
+        "mode=DEEP",
+        "reason=self_query_requires_reasoning"
+      ]
+    },
+    {
+      "category": "gate",
+      "name": "Структурированно проанализируй противо",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": [
+        "route=GENERAL_QUERY",
+        "mode=DEEP",
+        "reason=significant_content"
+      ]
+    },
+    {
+      "category": "direct_knowledge",
+      "name": "Какая у тебя основная миссия?",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0278,
+      "evidence": [
+        "llm_calls=0",
+        "answer=Моя основная миссия — Быть и развиваться.",
+        "error=None"
+      ]
+    },
+    {
+      "category": "direct_knowledge",
+      "name": "Что тебе интересно?",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0123,
+      "evidence": [
+        "llm_calls=0",
+        "answer=Сейчас мой сформированный интерес — астрофизика.",
+        "error=None"
+      ]
+    },
+    {
+      "category": "direct_knowledge",
+      "name": "Какие у тебя активные цели?",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0213,
+      "evidence": [
+        "llm_calls=0",
+        "answer=Сейчас у меня нет активных целей.",
+        "error=None"
+      ]
+    },
+    {
+      "category": "direct_knowledge",
+      "name": "Кто твой партнёр?",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0194,
+      "evidence": [
+        "llm_calls=0",
+        "answer=Эдди для меня — создатель, близкий друг, равный партнёр.",
+        "error=None"
+      ]
+    },
+    {
+      "category": "direct_knowledge",
+      "name": "Какая у тебя языковая модель?",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0109,
+      "evidence": [
+        "llm_calls=0",
+        "answer=Сейчас я использую phi4-mini:latest как языковой компонент.",
+        "error=None"
+      ]
+    },
+    {
+      "category": "knowledge",
+      "name": "reasoning_not_direct",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": [
+        "DirectAnswer(found=False, answer='', source='none', confidence=0.0)"
+      ]
+    },
+    {
+      "category": "dialogue",
+      "name": "followup_context",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": [
+        "FOLLOW-UP CONTEXT\n\nPrevious user message:\nЧто тебе сейчас нравится?\n\nPrevious EddieAI answer:\nМне нравится, когда мы можем обсуждать интересные темы, например, цели или языковые модели. Это всегда интересно и помогает мне понять, как работают различные системы, как я.\n\nThe current user message continues the previous topic. Answer the current message directly in that context."
+      ]
+    },
+    {
+      "category": "dialogue",
+      "name": "followup_not_exact_copy",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": [
+        "first=Мне нравится, когда мы можем обсуждать интересные темы, например, цели или языковые модели. Это всегда интересно и помогает мне понять, как работают различные системы, как я.",
+        "second=Почему? Не понимаю, что тебе нужно объяснить. Если у тебя есть другие вопросы или темы, которые ты хотел бы обсудить, дайте знать."
+      ]
+    },
+    {
+      "category": "identity",
+      "name": "stable_identity",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": []
+    },
+    {
+      "category": "identity",
+      "name": "mission_survives",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": []
+    },
+    {
+      "category": "identity",
+      "name": "model_separation",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": []
+    },
+    {
+      "category": "identity",
+      "name": "assistant_fallback_rejected",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": []
+    },
+    {
+      "category": "autonomy",
+      "name": "behavioral_autonomy",
+      "status": "WARN",
+      "score": 0.0,
+      "seconds": 0.0,
+      "evidence": [
+        "signals=0"
+      ]
+    },
+    {
+      "category": "epistemic",
+      "name": "uncertainty_handling",
+      "status": "FAIL",
+      "score": 0.0,
+      "seconds": 0.0,
+      "evidence": [
+        "uncertainty=0",
+        "overclaim=False"
+      ]
+    },
+    {
+      "category": "self_observation",
+      "name": "bridge_creates_typed_observation",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": [
+        "[SelfObservation(category='belief', value=\"EddieAI's self-model is dynamic rather than fixed. Its attitudes and interpretations may be revised when new experience or evidence provides sufficient grounds.\", confidence=0.87, source='SELF_INTERPRETATION', independence_key='self_dialogue:5b545c1055a53d62', reason='Когнитивный вывод EddieAI о собственной модели был зарегистрирован как наблюдение.')]"
+      ]
+    },
+    {
+      "category": "self_observation",
+      "name": "bridge_does_not_mutate_self_state",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": []
+    },
+    {
+      "category": "evidence",
+      "name": "independent_source_accumulation",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": [
+        "EvidenceRecord(category='belief', value='SUPER_TEST_belief:1786995084502095100', count=4, weighted_score=3.8, confidence=0.803, source_types=['ACTION_CHOICE', 'SELF_EXPERIENCE', 'SELF_INTERPRETATION', 'SELF_OBSERVATION'], first_seen='2026-08-17T19:31:24.502122+00:00', last_seen='2026-08-17T19:31:24.518909+00:00')"
+      ]
+    },
+    {
+      "category": "patterns",
+      "name": "evidence_becomes_pattern",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": [
+        "[Pattern(category='belief', value='SUPER_TEST_belief:1786995084502095100', count=4, weighted_score=3.8, confidence=0.803, source_types=['ACTION_CHOICE', 'SELF_EXPERIENCE', 'SELF_INTERPRETATION', 'SELF_OBSERVATION'], age_days=0.0, strength=0.803)]"
+      ]
+    },
+    {
+      "category": "personality",
+      "name": "pattern_becomes_candidate",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": [
+        "[PersonalityCandidate(field='belief', value='SUPER_TEST_belief:1786995084502095100', category='belief', strength=0.803, weighted_score=3.8, evidence_count=4, source_types=['ACTION_CHOICE', 'SELF_EXPERIENCE', 'SELF_INTERPRETATION', 'SELF_OBSERVATION'], reason=\"Сформирован устойчивый паттерн: 4 свидетельств, взвешенный балл 3.8, источники: ['ACTION_CHOICE', 'SELF_EXPERIENCE', 'SELF_INTERPRETATION', 'SELF_OBSERVATION'].\")]"
+      ]
+    },
+    {
+      "category": "promotion",
+      "name": "deterministic_promotion",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": [
+        "PromotionDecision(action='PROMOTE', field='belief', value='SUPER_TEST_belief:1786995084502095100', confidence=0.803, reason='Кандидат имеет достаточную устойчивость и независимые основания.')"
+      ]
+    },
+    {
+      "category": "identity_manager",
+      "name": "isolated_acceptance",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": [
+        "result=accepted",
+        "live_state_touched=False"
+      ]
+    },
+    {
+      "category": "reflection",
+      "name": "serializable_snapshot",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": [
+        "candidates=1"
+      ]
+    },
+    {
+      "category": "background",
+      "name": "reflection_worker",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.2503,
+      "evidence": [
+        "status=ANALYZED",
+        "worker_error=None",
+        "analysis={\"candidate_decisions\": []}"
+      ]
+    },
+    {
+      "category": "background",
+      "name": "main_thread_apply",
+      "status": "FAIL",
+      "score": 0.0,
+      "seconds": 0.0,
+      "evidence": [
+        "before=DONE",
+        "result=REFLECTION_APPLIED",
+        "after=DONE"
+      ]
+    },
+    {
+      "category": "queue",
+      "name": "valid_statuses",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": [
+        "{'DONE': 1}"
+      ]
+    },
+    {
+      "category": "memory",
+      "name": "event_persists_across_agent_restart",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": [
+        "[<sqlite3.Row object at 0x000001D725F19720>]"
+      ]
+    },
+    {
+      "category": "output",
+      "name": "no_internal_prompt_leak",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": []
+    },
+    {
+      "category": "latency",
+      "name": "direct_answer_latency",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0182,
+      "evidence": [
+        "times=[0.01990549999754876, 0.019096700008958578, 0.021331600000848994, 0.01571979999425821, 0.01511380000738427]",
+        "average=0.0182"
+      ]
+    },
+    {
+      "category": "models",
+      "name": "reasoning_call_has_model_metadata",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": [
+        "[{'model': 'phi4-mini:latest', 'selection': {'score': 1.0, 'reason': 'Быстрая задача: reasoning=0.30, complexity=0.30, context=0.30, risk=0.20. Выбран phi4-mini.'}, 'task_profile': {'complexity': 0.3, 'reasoning': 0.3, 'context_need': 0.3, 'speed_need': 0.5, 'risk': 0.2}}]"
+      ]
+    },
+    {
+      "category": "self_learning",
+      "name": "semantic_convergence_of_self_observations",
+      "status": "WARN",
+      "score": 0.5,
+      "seconds": 0.0,
+      "evidence": [
+        "observations=[\"EddieAI's self-model is dynamic rather than fixed. Its attitudes and interpretations may be revised when new experience or evidence provides sufficient grounds.\"]",
+        "WARN means the current bridge records raw conclusions without semantic clustering."
+      ]
+    },
+    {
+      "category": "self_learning",
+      "name": "observations_reach_evidence",
+      "status": "PASS",
+      "score": 1.0,
+      "seconds": 0.0,
+      "evidence": [
+        "[EvidenceRecord(category='belief', value=\"EddieAI's self-model is dynamic rather than fixed. Its attitudes and interpretations may be revised when new experience or evidence provides sufficient grounds.\", count=4, weighted_score=4.0, confidence=0.615, source_types=['SELF_INTERPRETATION'], first_seen='2026-08-17T19:02:33.846789+00:00', last_seen='2026-08-17T19:33:15.982331+00:00')]"
+      ]
+    }
+  ]
+}

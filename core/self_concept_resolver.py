@@ -101,27 +101,27 @@ class SelfConceptResolver:
             "PERSISTENT SELF-CONCLUSION\n\n"
             "Current conclusion:\n"
             + str(
-                conclusion["conclusion"]
+                conclusion.get("conclusion", "")
             )
             + "\n\n"
             "Confidence:\n"
             + str(
-                conclusion["confidence"]
+                conclusion.get("confidence", 0.0)
             )
             + "\n\n"
             "Basis:\n"
             + str(
-                conclusion["basis"]
+                conclusion.get("basis", [])
             )
             + "\n\n"
             "Provenance:\n"
             + str(
-                conclusion["provenance"]
+                conclusion.get("provenance", [])
             )
             + "\n\n"
             "Revision count:\n"
             + str(
-                conclusion["revision_count"]
+                conclusion.get("revision_count", 0)
             )
             + "\n\n"
             "IMPORTANT:\n"

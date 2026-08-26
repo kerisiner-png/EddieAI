@@ -98,7 +98,7 @@ class MemoryManager:
         ).fetchall()
 
         if not rows:
-            return "??????? ?????? ???? ????."
+            return "Память пока пуста."
 
         lines = []
 
@@ -113,7 +113,7 @@ class MemoryManager:
 
             if source_type == "DIRECT_INTERACTION":
                 lines.append(
-                    f"????: {content}"
+                    f"Пользователь: {content}"
                 )
                 continue
 
@@ -124,7 +124,7 @@ class MemoryManager:
                 continue
 
         if not lines:
-            return "??????? ?????? ???? ????."
+            return "Память пока пуста."
 
         return "\n".join(lines)
 

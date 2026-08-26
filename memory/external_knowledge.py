@@ -60,10 +60,25 @@ class ExternalKnowledgeRecorder:
             if not url:
                 continue
 
-            content = (
-                f"Внешний источник по запросу "
-                f"'{query}': {title} — {url}"
-            )
+            snippet = str(
+                item.get(
+                    "text",
+                    "",
+                )
+            ).strip()
+
+            if snippet:
+                content = (
+                    f"Внешний источник по запросу "
+                    f"'{query}': {title} — {url}. "
+                    f"Содержание: "
+                    f"{snippet[:600]}"
+                )
+            else:
+                content = (
+                    f"Внешний источник по запросу "
+                    f"'{query}': {title} — {url}"
+                )
 
             knowledge = Knowledge(
                 content=content,

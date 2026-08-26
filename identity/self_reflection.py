@@ -1,7 +1,7 @@
 from json import JSONDecodeError
 import json
 
-from ollama import chat
+from identity.llm_access import CloudFirstLlm
 
 from identity.proposal import Proposal
 
@@ -11,6 +11,13 @@ class SelfReflection:
 
     def __init__(self, agent):
         self.agent = agent
+        self.llm = CloudFirstLlm(
+            getattr(
+                agent,
+                "model_orchestrator",
+                None,
+            )
+        )
 
     def reflect(
         self,
@@ -103,28 +110,19 @@ class SelfReflection:
 Не добавляй текст вне JSON.
 """
 
-        response = chat(
-            model=self.MODEL_NAME,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Ты выполняешь внутреннюю "
-                        "структурированную рефлексию. "
-                        "Строго различай SELF и USER. "
-                        "Возвращай только JSON."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": prompt,
-                },
-            ],
-        )
-
-        raw = (
-            response["message"]["content"]
-            .strip()
+        raw = self.llm.chat(
+            system=(
+                "Ты выполняешь внутреннюю "
+                "структурированную рефлексию. "
+                "Строго различай SELF и USER. "
+                "Возвращай только JSON."
+            ),
+            user=prompt,
+            options={
+                "temperature": 0.3,
+                "num_predict": 512,
+            },
+            task="reflection",
         )
 
         data = self._parse_json(raw)
