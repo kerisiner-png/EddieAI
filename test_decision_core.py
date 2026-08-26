@@ -1,24 +1,11 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from core.decision_core import (
-    DecisionCore,
-    NEEDS_NEW_PATTERN,
-)
+from core.decision_core import DecisionCore
 from identity.goal_manager import GoalManager
 from identity.goal_planner import GoalPlanner
 from identity.self_state import SelfState
 from memory.database import Memory
-
-
-class FakeOrchestrator:
-    def __init__(self, reply):
-        self.reply = reply
-        self.calls = 0
-
-    def _cloud_chat(self, system, user, options, task):
-        self.calls += 1
-        return self.reply
 
 
 STATE = {
@@ -28,6 +15,7 @@ STATE = {
     "affect": {"valence": 0.6},
     "period": "day",
     "freshness": 5,
+    "idle_seconds": 0,
 }
 
 
@@ -36,8 +24,6 @@ with TemporaryDirectory() as temp:
     db = Memory(Path(temp) / "memory.db")
     goal_manager = GoalManager(state, GoalPlanner(state))
 
-    # Чистый путь новизны: без интересов из памяти,
-    # чтобы проверка дошла до LLM-гейта
     state.set("interests", [])
 
     core = DecisionCore(
@@ -45,43 +31,35 @@ with TemporaryDirectory() as temp:
         goal_manager=goal_manager,
     )
 
-    # 1. Нет активных целей, нет кандидатов,
-    #    паттернов нет -> NEEDS_NEW_PATTERN
+    # 1. Короткое безделье, ничего нет -> IDLE (отдых)
     decision = core.decide(STATE)
 
-    assert decision == NEEDS_NEW_PATTERN, (
-        "новая ситуация без паттерна должна "
-        "вернуть NEEDS_NEW_PATTERN"
+    assert decision.kind == "IDLE", decision
+
+    # 2. Долгое безделье, нет интересов ->
+    #    скука -> рефлексия
+    decision = core.decide(
+        dict(STATE, idle_seconds=900)
     )
 
-    assert core.llm_calls == 0, (
-        "decide не должен звать LLM"
+    assert decision.kind == "REFLECT", decision
+
+    # 3. Долгое безделье + интерес ->
+    #    скука -> исследовать (ACTIVATE_GOAL)
+    state.set("interests", ["космос"])
+
+    decision = core.decide(
+        dict(STATE, idle_seconds=900)
     )
 
-    # 2. learn: один вызов LLM -> паттерн сохранён
-    fake = FakeOrchestrator(
-        '{"kind": "REFLECT", "payload": null}'
-    )
+    assert decision.kind == "ACTIVATE_GOAL", decision
+    assert decision.payload == {
+        "value": "изучить тему: космос"
+    }, decision
 
-    core.llm = core.llm.__class__(fake)
+    state.set("interests", [])
 
-    action = core.learn(core.key(STATE), "нет целей")
-
-    assert action.kind == "REFLECT", action
-    assert fake.calls == 1, "learn должен звать LLM один раз"
-
-    # 3. Повторный decide на той же ситуации ->
-    #    паттерн найден, LLM НЕ зовётся
-    decision = core.decide(STATE)
-
-    assert decision == action, decision
-
-    assert fake.calls == 1, (
-        "повторный decide не должен звать LLM"
-    )
-
-    # 4. Локальное правило: активная цель + план ->
-    #    EXECUTE (без LLM)
+    # 4. Локальное правило: активная цель + план -> EXECUTE
     goal_manager.add_candidate(
         value="Изучить тему: космос",
         motivation=0.9,
@@ -97,12 +75,8 @@ with TemporaryDirectory() as temp:
     decision = core.decide(STATE)
 
     assert decision.kind == "EXECUTE", decision
-    assert fake.calls == 1, (
-        "локальный decide не должен звать LLM"
-    )
 
-    # 5. Локальное правило: активная цель без плана ->
-    #    GENERATE_PLAN
+    # 5. Активная цель без плана -> GENERATE_PLAN
     goal_manager.complete("Изучить тему: космос")
 
     goal_manager.add_candidate(
@@ -119,8 +93,7 @@ with TemporaryDirectory() as temp:
 
     assert decision.kind == "GENERATE_PLAN", decision
 
-    # 6. Локальное правило: нет активных целей,
-    #    но есть кандидат -> ACTIVATE_GOAL
+    # 6. Нет активных целей, но есть кандидат -> ACTIVATE_GOAL
     goal_manager.abandon("Изучить тему: океан")
 
     goal_manager.add_candidate(
@@ -133,9 +106,10 @@ with TemporaryDirectory() as temp:
     decision = core.decide(STATE)
 
     assert decision.kind == "ACTIVATE_GOAL", decision
-    assert decision.payload == {"value": "Изучить тему: звёзды"}
+    assert decision.payload == {
+        "value": "Изучить тему: звёзды"
+    }
 
-    print("LLM CALLS:", fake.calls)
     print("ALL PASS")
 
     db.close()

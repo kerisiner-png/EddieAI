@@ -71,6 +71,8 @@ class Action:
 
 
 class DecisionCore:
+    IDLE_MOTIVATION_SEC = 900
+
     def __init__(
         self,
         memory,
@@ -110,8 +112,6 @@ class DecisionCore:
         pattern = self.memory.pattern_lookup(key)
 
         if pattern is not None:
-            self.memory.pattern_bump(key)
-
             try:
                 data = json.loads(pattern["action"])
             except (
@@ -121,7 +121,12 @@ class DecisionCore:
             ):
                 data = {"kind": "IDLE"}
 
-            return Action.from_dict(data)
+            # IDLE-паттерн не блокирует создание
+            # деятельности: безделье — мотивация.
+            if data.get("kind") != "IDLE":
+                self.memory.pattern_bump(key)
+
+                return Action.from_dict(data)
 
         learned = self._learn_from_memory_for(
             state,
@@ -139,7 +144,27 @@ class DecisionCore:
         if rebuilt is not None:
             return rebuilt
 
-        return NEEDS_NEW_PATTERN
+        idle_seconds = 0
+
+        try:
+            idle_seconds = int(
+                state.get("idle_seconds", 0)
+            )
+        except (TypeError, ValueError):
+            idle_seconds = 0
+
+        if idle_seconds < self.IDLE_MOTIVATION_SEC:
+            return Action("IDLE")
+
+        target = self._next_interest_target()
+
+        if target is not None:
+            return Action(
+                "ACTIVATE_GOAL",
+                payload={"value": target},
+            )
+
+        return Action("REFLECT")
 
     def learn_from_memory(self):
         key = self._idle_key()
@@ -542,5 +567,37 @@ IDLE — сейчас ничего не делать.
                 "ACTIVATE_GOAL",
                 payload={"value": candidate.value},
             )
+
+        if frustration >= 0.70:
+            return Action("IDLE")
+
+        return None
+
+    def _next_interest_target(self):
+        self_state = getattr(
+            self.goal_manager,
+            "self_state",
+            None,
+        )
+
+        if self_state is None:
+            return None
+
+        interests = self_state.get(
+            "interests",
+            [],
+        )
+
+        for interest in interests:
+            value = f"изучить тему: {interest}"
+
+            goal = self.goal_manager.get(value)
+
+            if (
+                goal is None
+                or goal.status
+                not in {"ACTIVE", "COMPLETED"}
+            ):
+                return value
 
         return None

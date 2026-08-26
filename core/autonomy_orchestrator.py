@@ -145,10 +145,20 @@ class AutonomyOrchestrator:
                 self._situation_context(state),
             )
 
-        return self._apply_action(
+        result = self._apply_action(
             decision,
             state,
         )
+
+        if result.status not in {
+            "NO_MOTIVATION",
+            "INBOX_READ",
+        }:
+            self._last_action_at = (
+                datetime.now(timezone.utc)
+            )
+
+        return result
 
     def _build_state(self):
         active = self.goal_manager.active()
@@ -180,6 +190,22 @@ class AutonomyOrchestrator:
             except Exception:
                 inbox = 0
 
+        idle_seconds = 0
+
+        if self._last_action_at is not None:
+            try:
+                idle_seconds = max(
+                    0,
+                    int(
+                        (
+                            datetime.now(timezone.utc)
+                            - self._last_action_at
+                        ).total_seconds()
+                    ),
+                )
+            except Exception:
+                idle_seconds = 0
+
         return {
             "goal": goal_value,
             "task_type": None,
@@ -187,6 +213,7 @@ class AutonomyOrchestrator:
             "affect": self._affect_valence(),
             "emotions": self._affect_emotions(),
             "freshness": 0,
+            "idle_seconds": idle_seconds,
         }
 
     def _affect_emotions(self):

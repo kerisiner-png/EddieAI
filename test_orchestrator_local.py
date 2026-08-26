@@ -84,12 +84,13 @@ with TemporaryDirectory() as temp:
         decision_core=decision_core,
     )
 
-    # 1. Пусто -> новизна -> learn (1 LLM) -> IDLE
+    # 1. Пусто + короткое безделье -> IDLE (NO_MOTIVATION),
+    #    LLM не вызывается
     result = orchestrator.tick()
 
     assert result.status == "NO_MOTIVATION", result.status
-    assert decision_core.llm_calls == 1, (
-        "первая новизна должна вызвать LLM один раз"
+    assert decision_core.llm_calls == 0, (
+        "рутина не должна звать LLM"
     )
 
     # 2. Появляется кандидат -> ACTIVATE_GOAL (локально)
@@ -103,7 +104,7 @@ with TemporaryDirectory() as temp:
     result = orchestrator.tick()
 
     assert result.status == "GOAL_ACTIVATED", result.status
-    assert decision_core.llm_calls == 1, (
+    assert decision_core.llm_calls == 0, (
         "активация цели локальна"
     )
 
@@ -112,14 +113,14 @@ with TemporaryDirectory() as temp:
 
     assert result.status == "PLAN_CREATED", result.status
     assert fake_plan.calls == 1
-    assert decision_core.llm_calls == 1
+    assert decision_core.llm_calls == 0
 
     # 4. Есть план -> EXECUTE (локально)
     result = orchestrator.tick()
 
     assert result.status == "EXECUTED", result.status
     assert fake_loop.calls == 1
-    assert decision_core.llm_calls == 1
+    assert decision_core.llm_calls == 0
 
     # 5. Снова EXECUTE, план-генератор НЕ перевызывается
     result = orchestrator.tick()
@@ -128,7 +129,7 @@ with TemporaryDirectory() as temp:
     assert fake_plan.calls == 1, (
         "план не должен генерироваться повторно"
     )
-    assert decision_core.llm_calls == 1
+    assert decision_core.llm_calls == 0
 
     print("LLM calls (decision core):", decision_core.llm_calls)
     print("plan calls:", fake_plan.calls)
