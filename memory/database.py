@@ -717,6 +717,36 @@ class Memory:
         self.connection.commit()
 
     @_synchronized
+    def chat_unread_context(self, limit: int = 5):
+        rows = self.connection.execute("""
+            SELECT sender, text
+            FROM chat_history
+            WHERE sender = 'Eddie'
+              AND read_by_recipient = 0
+            ORDER BY id ASC
+            LIMIT ?
+        """, (limit,)).fetchall()
+
+        lines = []
+
+        for row in rows:
+            text = str(
+                row["text"] or ""
+            ).strip()
+
+            if not text:
+                continue
+
+            lines.append(
+                "Эдди (непрочитано): " + text
+            )
+
+        if not lines:
+            return ""
+
+        return "\n".join(lines)
+
+    @_synchronized
     def chat_context(self, limit: int = 8):
         rows = self.connection.execute("""
             SELECT sender, text

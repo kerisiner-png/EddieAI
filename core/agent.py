@@ -5299,6 +5299,13 @@ Respond briefly and naturally.
         except Exception:
             chat_context = ""
 
+        try:
+            unread_context = (
+                self.memory.chat_unread_context()
+            )
+        except Exception:
+            unread_context = ""
+
         time_context = self._time_context()
 
         autonomy_context = ""
@@ -5392,8 +5399,7 @@ The user request may be handled normally.
 
 {dialogue_context}
 
-ПЕРЕПИСКА (мессенджер)
-
+ИСТОРИЯ ПЕРЕПИСКИ (для контекста):
 {chat_context}
 
 ВРЕМЯ
