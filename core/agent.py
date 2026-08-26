@@ -4306,6 +4306,29 @@ Respond briefly and naturally.
         except Exception:
             return None
 
+    def _time_context(self):
+        try:
+            from core.time_perception import (
+                current_time_context,
+                recent_action_times,
+            )
+
+            parts = [
+                current_time_context()
+            ]
+
+            recent = recent_action_times(
+                self.memory,
+                limit=5,
+            )
+
+            if recent:
+                parts.append(recent)
+
+            return "\n".join(parts)
+        except Exception:
+            return ""
+
     def _respond_core(
         self,
         user_message: str,
@@ -5276,6 +5299,8 @@ Respond briefly and naturally.
         except Exception:
             chat_context = ""
 
+        time_context = self._time_context()
+
         autonomy_context = ""
 
         persistent_conclusion_context = ""
@@ -5370,6 +5395,10 @@ The user request may be handled normally.
 ПЕРЕПИСКА (мессенджер)
 
 {chat_context}
+
+ВРЕМЯ
+
+{time_context}
 
 {reasoning_context}
 

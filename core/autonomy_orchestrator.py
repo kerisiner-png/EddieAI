@@ -451,8 +451,16 @@ class AutonomyOrchestrator:
                 "task": None,
             }
 
+        import time as _time
+
         try:
+            _start = _time.time()
+
             execution = self.agent_loop.run_once()
+
+            _duration = (
+                _time.time() - _start
+            )
         finally:
             if self.agent is not None:
                 self.agent.autonomy_execution_state = {
@@ -460,6 +468,19 @@ class AutonomyOrchestrator:
                     "goal": None,
                     "task": None,
                 }
+
+        try:
+            from core.time_perception import (
+                record_action_time,
+            )
+
+            record_action_time(
+                self.agent.memory,
+                f"Выполнение шага цели '{goal}'",
+                _duration,
+            )
+        except Exception:
+            pass
 
         return OrchestrationResult(
             status="EXECUTED",

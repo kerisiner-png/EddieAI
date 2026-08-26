@@ -1,5 +1,21 @@
 import tkinter as tk
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _local_hhmm(ts):
+    try:
+        dt = datetime.fromisoformat(ts)
+
+        if dt.tzinfo is None:
+            dt = dt.replace(
+                tzinfo=timezone.utc
+            )
+
+        return dt.astimezone().strftime(
+            "%H:%M"
+        )
+    except Exception:
+        return (ts or "")[11:16]
 
 
 class ChatWindow:
@@ -127,7 +143,9 @@ class ChatWindow:
         for item in messages:
             sender = item.get("sender", "EddieAI")
             text = item.get("text", "")
-            ts = (item.get("ts") or "")[11:16]
+            ts = _local_hhmm(
+                item.get("ts") or ""
+            )
             read = item.get("read", False)
 
             if sender == "EddieAI":
