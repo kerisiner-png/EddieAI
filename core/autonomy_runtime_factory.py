@@ -228,8 +228,8 @@ class AutonomyRuntimeFactory:
             enabled=True,
         )
 
-        # ?????????????? self-model ? ???????
-        # ??????????????????? capabilities.
+        # Встраивание self-model и описания
+        # зарегистрированных capabilities.
         self.agent.capabilities = registry.describe()
         self.agent.self_consistency.capabilities = (
             self.agent.capabilities

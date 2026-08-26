@@ -29,6 +29,7 @@ from core.self_concept_resolver import SelfConceptResolver
 from core.perspective_guard import PerspectiveGuard
 from core.prompts import build_system_prompt, build_quick_conversation_prompt
 from core.quick_reflex import QuickReflex
+from core.semantic_judge import SemanticJudge
 from core.self_claim_validator import SelfClaimValidator
 from identity.behavioral_validator import BehavioralValidator
 from core.identity_consistency import IdentityConsistencyLayer
@@ -187,6 +188,12 @@ class Agent:
             )
         )
 
+        self.semantic_judge = SemanticJudge(
+            model_orchestrator=(
+                self.model_orchestrator
+            )
+        )
+
         self.belief_challenge_detector = (
             BeliefChallengeDetector(
                 self.self_state
@@ -198,8 +205,8 @@ class Agent:
         self.previous_route = "GENERAL_QUERY"
         self.previous_user_message = ""
 
-        # ??????? ????????? capabilities.
-        # ??????????? runtime factory ?? ToolRegistry.
+        # Описание capabilities заполняет runtime factory.
+        # Регистрация инструментов происходит в ToolRegistry.
         self.capabilities = []
 
         # Фактическое состояние выполнения
@@ -4164,6 +4171,31 @@ Respond briefly and naturally.
             self._capture_goal_claim(
                 user_message  # Анализируем входное сообщение, а не ответ
             )
+        except Exception:
+            pass
+
+        try:
+            verdict = self.semantic_judge.judge(
+                user_message,
+                answer,
+            )
+
+            if not verdict["ok"]:
+                self.memory.remember(
+                    Event.create(
+                        content=(
+                            "Semantic violation: "
+                            f"{verdict['issue']} — "
+                            f"{verdict['reason']}"
+                        ),
+                        event_type="SEMANTIC_VIOLATION",
+                        source_type="SELF_OBSERVATION",
+                        source="semantic_judge",
+                        personal_experience=True,
+                        confidence=1.0,
+                        verified=True,
+                    )
+                )
         except Exception:
             pass
 

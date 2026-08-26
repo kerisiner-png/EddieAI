@@ -49,7 +49,7 @@ with TemporaryDirectory() as temp:
 
     record = evidence.get(
         "habit",
-        f"situation_action:{KEY}",
+        f"situation_action:{KEY}:::EXECUTE",
     )
 
     assert record.count == 1
@@ -62,7 +62,7 @@ with TemporaryDirectory() as temp:
 
     record = evidence.get(
         "habit",
-        f"situation_action:{KEY}",
+        f"situation_action:{KEY}:::EXECUTE",
     )
 
     assert record.count == 1, (

@@ -3,7 +3,8 @@ import re
 
 class BehaviorPatternDetector:
     """
-    ???? ?????????? ???????? ???????????? ?????????.
+    Обнаруживает устойчивые повторяющиеся
+    темы в самостоятельных действиях.
     """
 
     MIN_OBSERVATIONS = 3
@@ -268,6 +269,6 @@ class BehaviorPatternDetector:
         text: str,
     ):
         return re.findall(
-            r"[?-??a-z0-9]+",
+            r"[\u0430-\u044f\u0451a-z0-9]+",
             text.lower(),
         )

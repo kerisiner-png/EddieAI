@@ -130,6 +130,14 @@ class DecisionCore:
         if learned is not None:
             return learned
 
+        rebuilt = self._rebuild_pattern_from_habit(
+            state,
+            key,
+        )
+
+        if rebuilt is not None:
+            return rebuilt
+
         return NEEDS_NEW_PATTERN
 
     def learn_from_memory(self):
@@ -177,9 +185,29 @@ class DecisionCore:
         created = 0
 
         for row in rows:
+            action_kind = "IDLE"
+
+            try:
+                action_data = json.loads(
+                    row["action"]
+                )
+                action_kind = str(
+                    action_data.get(
+                        "kind",
+                        "IDLE",
+                    )
+                ).upper()
+            except (
+                TypeError,
+                ValueError,
+                json.JSONDecodeError,
+            ):
+                pass
+
             value = (
                 f"situation_action:"
                 f"{row['situation_key']}"
+                f":::{action_kind}"
             )
 
             try:
@@ -236,6 +264,61 @@ class DecisionCore:
         )
 
         return action
+
+    def _rebuild_pattern_from_habit(
+        self,
+        state,
+        key,
+    ):
+        self_state = getattr(
+            self.goal_manager,
+            "self_state",
+            None,
+        )
+
+        if self_state is None:
+            return None
+
+        traits = self_state.get(
+            "personality_traits",
+            {},
+        )
+
+        prefix = f"situation_action:{key}:::"
+
+        for data in traits.values():
+            if not isinstance(data, dict):
+                continue
+
+            if data.get("status") != "ACTIVE":
+                continue
+
+            value = str(
+                data.get("value", "")
+            )
+
+            if not value.startswith(prefix):
+                continue
+
+            kind = value[len(prefix):]
+
+            if kind not in VALID_KINDS:
+                continue
+
+            action = Action(kind)
+
+            self.memory.pattern_record(
+                key,
+                json.dumps(
+                    action.to_dict(),
+                    ensure_ascii=False,
+                ),
+                confidence=0.5,
+            )
+
+            return action
+
+        return None
 
     def _first_interest(self):
         self_state = getattr(

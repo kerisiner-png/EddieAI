@@ -6,6 +6,31 @@
 
 ## 26.08.2026 (продолжение сессии)
 
+### [АКТУАЛЬНО] Реестр проблем, P2, обратная связь, прогон (26.08)
+- **Реестр №2 (незакреплённая работа) ЗАКРЫТ**: коммит f0ed144
+  (229 файлов, 26К вставок). .gitignore расширен: data/, models/,
+  data_backup*/, agent_py_recovery*/, logs/, .eddieai_secrets/, *.key.
+  data/memory.db убран из индекса (прод-данные вне индекса — правило).
+- **Реестр №1 (кодировки) ЗАКРЫТ (в проекте)**: байтовый скан всех .py.
+  Починены: identity/behavior_pattern_detector.py (docstring + regex
+  `[?-??a-z0-9]+`→`[а-яёa-z0-9]+` — был ФУНКЦИОНАЛЬНЫЙ баг, не матчил
+  кириллицу), identity/action_planner.py, core/agent.py:201-202,
+  core/autonomy_runtime_factory.py:231-232. voice_checker:66 — намеренный
+  диагностический паттерн (не трогал). bridge.py — в другом репозитории.
+- **P2 семантический судья РЕАЛИЗОВАН**: core/semantic_judge.py
+  (SemanticJudge, оценка уклонение/фабрикация/ок через CloudFirstLlm,
+  JSON-парсинг, устойчив к сбоям). Подключён к агенту (agent.semantic_judge),
+  вызов в respond(): при issue записывает SEMANTIC_VIOLATION в память
+  (диагностика, ответ не ломается). Авто-ремонт по вердикту — следующий
+  шаг. Тест test_semantic_judge PASS.
+- **Обратная связь «привычка→паттерн» РЕАЛИЗОВАНА**: consolidate_habits
+  хранит kind действия в value привычки (situation_action:<key>:::<kind>);
+  DecisionCore._rebuild_pattern_from_habit() при новизне восстанавливает
+  паттерн из устойчивой habit-черты (self_state.personality_traits) БЕЗ LLM.
+  Тесты test_pattern_habit (обновлён), test_habit_pattern_rebuild PASS.
+- **Живой/ночной прогон УБРАН из плана** решением Эдди. Ядро принято по
+  юнит-тестам и коротким живым прогонам (0 облачных вызовов в рутине).
+
 ### [АКТУАЛЬНО] Пакет 1 + P1-P6: закрытие TODO (26.08)
 По решению Эдди «закончим это и запустим прогон до утра».
 - **learned_markers — фильтры вербализатора**: BehavioralValidator

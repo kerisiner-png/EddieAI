@@ -17,18 +17,17 @@
   таблица situation_patterns, core/decision_core.py (decide/learn),
   интеграция в orchestrator+factory, обучение из памяти. Тесты PASS.
   Детали — CHANGELOG 26.08.
-- [ ] Задача 7 ЖИВАЯ ПРОВЕРКА: короткий night_run (5-10 мин), замер
-  _call_count — рутина должна идти локально, LLM только на новизну.
-  ОТЛОЖЕНА: на момент сдачи свободно 1.1 ГБ. Порог «>=3.6 ГБ» был для
-  ЛОКАЛЬНОГО мозга (qwen); с облачным Zen-мозгом локальная модель не
-  грузится, жёсткого порога нет (нужен лишь запас под процесс+фолбэк,
-  там RAM-guard). Запуск — по отмашке Эдди (ночной прогон пишет в
-  прод-память).
+- [x] Задача 7 ЖИВАЯ/НОЧНАЯ ПРОВЕРКА — УБРАНА ИЗ ПЛАНА решением Эдди
+  (26.08). Ядро принято по юнит-тестам и коротким живым прогонам
+  (2 мин: 0 облачных вызовов в рутине, паттерн из памяти). Дальнейшие
+  длинные прогоны не планируются.
 - [x] Связь «паттерн ↔ привычка»: DecisionCore.consolidate_habits()
   (устойчивый паттерн → habit-evidence DECISION_PATTERN → lifecycle).
   План PLANS\2026-08-26-pattern-habit-link.md. Тест test_pattern_habit PASS.
-- [ ] Обратная связь «привычка → паттерн» (черта подсказывает действие) —
-  бэклог.
+- [x] Обратная связь «привычка → паттерн»: consolidate_habits хранит
+  kind в value привычки (situation_action:<key>:::<kind>);
+  DecisionCore._rebuild_pattern_from_habit() восстанавливает паттерн
+  из habit-черты при новизне (без LLM). Тесты PASS.
 - [x] Интеграция профиля речи в вербализатор (МЯГКО, дополнение промпта):
   prompt_builder.build_verbalizer_system_prompt(speech_profile=...) +
   agent._speech_profile() + _respond_core. Тест test_verbalizer_speech PASS.
@@ -95,7 +94,6 @@
   Интегрирован в orchestrator + agent_loop + factory.
 - [x] EddieAI Chat: приложение общения (communication/).
   TCP + tray + balloon + voice + симметричная инициатива.
-- [ ] Тест: полноценная ночная сессия 30 мин с реальными решениями.
 - [ ] Д. Голос: спонтанное голосовое сообщение.
 - [x] Ollama из автозагрузки убрана (Startup\Ollama.lnk), процессы 0.
 - [x] self_conclusions: НЕ SQLite-таблица, а JSON в self_state
@@ -359,8 +357,10 @@ C:\EddieAI\agent_py_recovery_2026-08-24\. Детали — CHANGELOG.
       честные seed-убеждения (beliefs) + наполнение при пустом.
 - [x] P4 разговорные цели -> GoalManager: закрыто как часть P0-b
       (_capture_goal_claim: markers -> proposal_type=goal -> evaluate).
-- [ ] P2 семантический судья ответа (Mistral vs qwen - решить) до repair —
-      ОСТАЛСЯ, требует отдельного дизайна (LLM-оценка ответа).
+- [x] P2 семантический судья ответа: core/semantic_judge.py
+      (уклонение/фабрикация/ок через LLM), подключён к агенту, при issue
+      пишет SEMANTIC_VIOLATION. Авто-ремонт по вердикту — следующий шаг.
+      Тест test_semantic_judge PASS.
 - [x] P6 снимки души до/после сессии: identity/soul_snapshot.py
       интегрирован в night_run (before/after + diff в лог).
 
