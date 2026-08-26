@@ -5310,6 +5310,34 @@ Respond briefly and naturally.
 
         time_context = self._time_context()
 
+        conclusions_context = ""
+
+        try:
+            conclusions = (
+                self.self_conclusion_store
+                .list_conclusions()
+            )
+
+            lines = []
+
+            for item in conclusions[-4:]:
+                topic = item.get("topic")
+                concl = item.get("conclusion")
+
+                if topic and concl:
+                    lines.append(
+                        f"- {topic}: "
+                        f"{str(concl)[:120]}"
+                    )
+
+            if lines:
+                conclusions_context = (
+                    "МОИ ПРОШЛЫЕ ВЫВОДЫ:\n"
+                    + "\n".join(lines)
+                )
+        except Exception:
+            conclusions_context = ""
+
         autonomy_context = ""
 
         persistent_conclusion_context = ""
@@ -5409,6 +5437,8 @@ The user request may be handled normally.
 
 Вся переписка (с временами):
 {chat_context}
+
+{conclusions_context}
 
 ВРЕМЯ
 
