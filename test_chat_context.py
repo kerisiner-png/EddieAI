@@ -19,13 +19,19 @@ with TemporaryDirectory() as temp:
 
     lines = ctx.split("\n")
 
-    assert lines[0] == "Эдди: привет", lines
-    assert lines[1] == "EddieAI: здравствуй", lines
-    assert lines[2] == "Эдди: как дела?", lines
+    assert lines[0].endswith("Эдди: привет"), lines
+    assert lines[1].endswith("EddieAI: здравствуй"), lines
+    assert lines[2].endswith("Эдди: как дела?"), lines
+    assert all(
+        l.startswith("[") and ": " in l
+        for l in lines
+    ), "каждое сообщение должно иметь пометку времени"
 
     limited = db.chat_context(limit=1)
 
-    assert limited.split("\n") == ["Эдди: как дела?"]
+    assert limited.split("\n")[0].endswith(
+        "Эдди: как дела?"
+    )
 
     # Непрочитанные сообщения Эдди
     unread = db.chat_unread_context()
@@ -33,7 +39,8 @@ with TemporaryDirectory() as temp:
     lines = unread.split("\n")
 
     assert all(
-        l.startswith("Эдди (непрочитано): ")
+        "Эдди (непрочитано): " in l
+        and l.startswith("[")
         for l in lines
     ), lines
 

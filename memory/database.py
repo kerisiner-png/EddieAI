@@ -719,7 +719,7 @@ class Memory:
     @_synchronized
     def chat_unread_context(self, limit: int = 5):
         rows = self.connection.execute("""
-            SELECT sender, text
+            SELECT sender, text, ts
             FROM chat_history
             WHERE sender = 'Eddie'
               AND read_by_recipient = 0
@@ -737,8 +737,13 @@ class Memory:
             if not text:
                 continue
 
+            ts = self._local_hhmm(
+                row["ts"]
+            )
+
             lines.append(
-                "Эдди (непрочитано): " + text
+                f"[{ts}] Эдди "
+                f"(непрочитано): {text}"
             )
 
         if not lines:
@@ -746,10 +751,25 @@ class Memory:
 
         return "\n".join(lines)
 
+    def _local_hhmm(self, ts):
+        try:
+            dt = datetime.fromisoformat(ts)
+
+            if dt.tzinfo is None:
+                dt = dt.replace(
+                    tzinfo=timezone.utc
+                )
+
+            return dt.astimezone().strftime(
+                "%H:%M"
+            )
+        except Exception:
+            return (ts or "")[11:16]
+
     @_synchronized
     def chat_context(self, limit: int = 8):
         rows = self.connection.execute("""
-            SELECT sender, text
+            SELECT sender, text, ts
             FROM chat_history
             ORDER BY id DESC
             LIMIT ?
@@ -770,8 +790,12 @@ class Memory:
             if not text:
                 continue
 
+            ts = self._local_hhmm(
+                row["ts"]
+            )
+
             lines.append(
-                prefix + text
+                f"[{ts}] {prefix}{text}"
             )
 
         if not lines:
