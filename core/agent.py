@@ -5269,6 +5269,13 @@ Respond briefly and naturally.
             self.dialogue_state.render(limit=6)
         )
 
+        try:
+            chat_context = self.memory.chat_context(
+                limit=8
+            )
+        except Exception:
+            chat_context = ""
+
         autonomy_context = ""
 
         persistent_conclusion_context = ""
@@ -5359,6 +5366,10 @@ The user request may be handled normally.
 {context}
 
 {dialogue_context}
+
+ПЕРЕПИСКА (мессенджер)
+
+{chat_context}
 
 {reasoning_context}
 

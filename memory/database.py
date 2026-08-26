@@ -717,5 +717,38 @@ class Memory:
         self.connection.commit()
 
     @_synchronized
+    def chat_context(self, limit: int = 8):
+        rows = self.connection.execute("""
+            SELECT sender, text
+            FROM chat_history
+            ORDER BY id DESC
+            LIMIT ?
+        """, (limit,)).fetchall()
+
+        lines = []
+
+        for row in reversed(rows):
+            if row["sender"] == "Eddie":
+                prefix = "Эдди: "
+            else:
+                prefix = "EddieAI: "
+
+            text = str(
+                row["text"] or ""
+            ).strip()
+
+            if not text:
+                continue
+
+            lines.append(
+                prefix + text
+            )
+
+        if not lines:
+            return ""
+
+        return "\n".join(lines)
+
+    @_synchronized
     def close(self):
         self.connection.close()
