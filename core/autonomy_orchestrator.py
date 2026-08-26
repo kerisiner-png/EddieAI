@@ -146,108 +146,24 @@ class AutonomyOrchestrator:
         if history is None:
             return None
 
-        now = datetime.now(timezone.utc)
-
         try:
             meta = history.chat_unread_meta()
         except Exception:
             meta = None
 
         if meta and meta["count"] > 0:
-            age_sec = 0.0
-
             try:
-                first_ts = meta.get(
-                    "earliest", ""
-                )
-                if first_ts:
-                    first_dt = datetime.fromisoformat(
-                        first_ts
-                    )
-                    age_sec = max(
-                        0.0,
-                        (
-                            now - first_dt
-                        ).total_seconds(),
-                    )
+                server.respond_and_deliver()
             except Exception:
                 pass
 
-            p = 0.35 + min(
-                0.5,
-                age_sec / 1200.0,
+            return OrchestrationResult(
+                status="INBOX_READ",
+                reason=(
+                    "EddieAI прочитал сообщения "
+                    "Эдди и ответил."
+                ),
             )
-
-            if random.random() < p:
-                try:
-                    server.respond_and_deliver()
-                except Exception:
-                    pass
-
-                return OrchestrationResult(
-                    status="INBOX_READ",
-                    reason=(
-                        "EddieAI прочитал сообщения "
-                        "Эдди и ответил."
-                    ),
-                )
-
-        try:
-            my_unread = history.chat_unread()
-        except Exception:
-            my_unread = 0
-
-        if my_unread > 0:
-            recent = history.chat_recent(5)
-
-            my_unread_items = [
-                r
-                for r in recent
-                if r["sender"] == "EddieAI"
-                and not r["read"]
-            ]
-
-            if my_unread_items:
-                oldest = my_unread_items[0]
-                age_sec = 0.0
-
-                try:
-                    ts = oldest.get("ts", "")
-                    if ts:
-                        old_dt = datetime.fromisoformat(
-                            ts
-                        )
-                        age_sec = max(
-                            0.0,
-                            (
-                                now - old_dt
-                            ).total_seconds(),
-                        )
-                except Exception:
-                    pass
-
-                p_rewrite = 0.08 + min(
-                    0.35,
-                    age_sec / 3600.0,
-                )
-
-                if random.random() < p_rewrite:
-                    try:
-                        server.send_initiative(
-                            "Ты не прочитал моё "
-                            "сообщение? Я жду ответа."
-                        )
-                    except Exception:
-                        pass
-
-                    return OrchestrationResult(
-                        status="INBOX_REMIND",
-                        reason=(
-                            "EddieAI решил напомнить "
-                            "о своём непрочитанном "
-                            "сообщении."
-                        ),
-                    )
 
         return None
 
@@ -494,13 +410,6 @@ class AutonomyOrchestrator:
             )
 
         if kind == "ASK":
-            if self.outbox is not None:
-                self.outbox.send(
-                    "Накопился опыт. Хочу спросить: "
-                    "какие темы исследовать дальше?",
-                    server=self.server,
-                )
-
             return OrchestrationResult(
                 status="ASKED",
                 reason=(
@@ -575,12 +484,6 @@ class AutonomyOrchestrator:
 
         self.goal_manager.activate(goal.value)
 
-        if self.outbox is not None:
-            self.outbox.send(
-                "Давно ничего не делал. "
-                "Решил подвести итог."
-            )
-
         return OrchestrationResult(
             status="REFLECTION",
             reason=(
@@ -646,13 +549,6 @@ class AutonomyOrchestrator:
                         goal.value
                     )
 
-                    if self.outbox is not None:
-                        self.outbox.send(
-                            f"Обнаружена новая тема "
-                            f"в памяти: {best.goal}",
-                            server=self.server,
-                        )
-
                     active = (
                         self.goal_manager.active()
                     )
@@ -689,12 +585,6 @@ class AutonomyOrchestrator:
                 self.goal_manager.activate(
                     goal.value
                 )
-
-                if self.outbox is not None:
-                    self.outbox.send(
-                        "Давно ничего не делал. "
-                        "Решил подвести итог."
-                    )
 
                 active = (
                     self.goal_manager.active()
@@ -733,14 +623,6 @@ class AutonomyOrchestrator:
                 self.goal_manager.activate(
                     goal.value
                 )
-
-                if self.outbox is not None:
-                    self.outbox.send(
-                        "Накопился опыт. "
-                        "Хочу спросить: "
-                        "какие темы исследовать дальше?",
-                        server=self.server,
-                    )
 
                 active = (
                     self.goal_manager.active()
