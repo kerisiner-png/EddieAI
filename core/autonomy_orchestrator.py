@@ -132,47 +132,9 @@ class AutonomyOrchestrator:
         return goal
 
     def _handle_inbox(self):
-        server = getattr(
-            self, "server", None
-        )
-
-        if server is None:
-            return None
-
-        history = getattr(
-            server, "history", None
-        )
-
-        if history is None:
-            return None
-
-        try:
-            meta = history.chat_unread_meta()
-        except Exception:
-            meta = None
-
-        if meta and meta["count"] > 0:
-            try:
-                server.respond_and_deliver()
-            except Exception:
-                pass
-
-            return OrchestrationResult(
-                status="INBOX_READ",
-                reason=(
-                    "EddieAI прочитал сообщения "
-                    "Эдди и ответил."
-                ),
-            )
-
         return None
 
     def _tick_local(self):
-        inbox_action = self._handle_inbox()
-
-        if inbox_action is not None:
-            return inbox_action
-
         state = self._build_state()
 
         decision = self.decision_core.decide(state)

@@ -233,25 +233,11 @@ class EddieServer:
             return None
 
         try:
-            msg_id = self.history.chat_add(
+            return self.history.chat_add(
                 "Eddie", text
             )
         except Exception:
             return None
-
-        try:
-            runtime = getattr(
-                self.agent,
-                "autonomous_runtime",
-                None,
-            )
-
-            if runtime is not None:
-                runtime.notify_inbox()
-        except Exception:
-            pass
-
-        return msg_id
 
     def respond_and_deliver(
         self,

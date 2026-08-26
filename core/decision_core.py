@@ -15,6 +15,7 @@ VALID_KINDS = {
     "ASK",
     "REFLECT",
     "CHECK_INBOX",
+    "READ_INBOX",
     "IDLE",
 }
 
