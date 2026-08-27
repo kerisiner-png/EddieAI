@@ -176,6 +176,7 @@ class VoiceIO:
         self._int_det_thread = None
         self._int_det_stop = False
         self._int_det_cb = None
+        self._int_det_end_cb = None
 
     def _ensure_piper(self):
         with VoiceIO._pip_lock:
@@ -416,6 +417,18 @@ class VoiceIO:
         )
         self._int_det_thread.start()
 
+    def on_interrupt_detector_end(self, callback):
+        """
+        Устанавливает callback на ОКОНЧАНИЕ речи собеседника
+        (пауза >= INTERRUPT_SILENCE_SEC после установленной речи).
+
+        Вызывается до/после start_interrupt_detector; callback
+        выполняется в том же потоке детектора один раз после
+        паузы. Если не задан — детектор умирает сразу после
+        перехвата (поведение этапа 2).
+        """
+        self._int_det_end_cb = callback
+
     def stop_interrupt_detector(self):
         self._int_det_stop = True
 
@@ -433,6 +446,7 @@ class VoiceIO:
                 blocksize=int(SAMPLE_RATE * CHUNK_SEC),
             ) as stream:
                 silent = 0.0
+                speech_seen = False
                 while not self._int_det_stop:
                     data, _ = stream.read(
                         int(SAMPLE_RATE * CHUNK_SEC)
@@ -443,32 +457,66 @@ class VoiceIO:
                     if rec.AcceptWaveform(pcm):
                         result = json.loads(rec.Result())
                         text = (result.get("text") or "").strip()
+                        if text:
+                            speech_seen = True
                         if len(text.split()) >= INTERRUPT_MIN_WORDS:
                             self._fire_interrupt()
-                            break
-                        silent = 0.0
-                        continue
-                    partial = json.loads(rec.PartialResult())
-                    ptext = (partial.get("partial") or "").strip()
-                    if ptext:
-                        silent = 0.0
-                        if len(ptext.split()) >= INTERRUPT_MIN_WORDS:
-                            self._fire_interrupt()
-                            break
-                    else:
+                            if self._int_det_end_cb is None:
+                                break
+                            silent = 0.0
+                            continue
+                        if not speech_seen:
+                            silent = 0.0
+                            continue
                         silent += CHUNK_SEC
-                        if silent >= INTERRUPT_SILENCE_SEC:
-                            rec.Reset()
+                    else:
+                        partial = json.loads(rec.PartialResult())
+                        ptext = (
+                            partial.get("partial") or ""
+                        ).strip()
+                        if ptext:
+                            speech_seen = True
+                            silent = 0.0
+                            if (
+                                len(ptext.split())
+                                >= INTERRUPT_MIN_WORDS
+                            ):
+                                self._fire_interrupt()
+                                if self._int_det_end_cb is None:
+                                    break
+                            continue
+                        if not speech_seen:
+                            silent += CHUNK_SEC
+                            continue
+                        silent += CHUNK_SEC
+
+                    if (
+                        speech_seen
+                        and self._int_det_end_cb is not None
+                        and silent >= INTERRUPT_SILENCE_SEC
+                    ):
+                        self._fire_speech_end()
+                        break
         except Exception:
             pass
         finally:
             self._int_det_thread = None
             self._int_det_cb = None
+            self._int_det_end_cb = None
             self._int_det_stop = False
 
     def _fire_interrupt(self):
         cb = self._int_det_cb
         self._int_det_cb = None
+        if cb is not None:
+            try:
+                cb()
+            except Exception:
+                pass
+
+    def _fire_speech_end(self):
+        cb = self._int_det_end_cb
+        self._int_det_end_cb = None
         if cb is not None:
             try:
                 cb()

@@ -31,12 +31,16 @@ class FakeVoice:
     def stop_speaking(self):
         self.stopped = True
 
+    def on_interrupt_detector_end(self, cb):
+        self.detector_end_cb = cb
+
 
 def make_app():
     app = object.__new__(EddieChatApp)
     app._voice = FakeVoice()
     app._call = CallDirector()
     app._chat = None
+    app._awaiting_speech_end = False
     app._call.set_interrupt_callback(
         app._on_eddie_interrupt
     )
@@ -99,5 +103,43 @@ assert app3._call.state() == EDDIEAI_SPEAKING
 time.sleep(1.5)
 assert app3._call.state() == IN_CALL, app3._call.state()
 assert app3._voice.detector_stopped >= 1
+
+# 6. Окончание речи собеседника (этап 4): после перехвата Эдди
+#    детектор доживает до паузы и сбрасывает EDDIE_SPEAKING -> IN_CALL,
+#    чтобы EddieAI снова мог говорить. Озвучка EddieAI остановлена,
+#    детектор НЕ гасится при перехвате.
+app4 = make_app()
+app4._call.start_call()
+app4._speak_with_detector(
+    "Это важное сообщение", None
+)
+assert app4._call.state() == EDDIEAI_SPEAKING
+assert app4._voice.detector_end_cb is not None, \
+    "end-callback не зарегистрирован"
+
+app4._voice.detector_cb()  # Эдди начал говорить (перехват)
+assert app4._awaiting_speech_end is True
+assert app4._voice.stopped is True, "озвучка EddieAI не остановлена"
+assert app4._call.state() == EDDIE_SPEAKING
+
+app4._voice.detector_end_cb()  # пауза после речи Эдди
+assert app4._awaiting_speech_end is False
+assert app4._call.state() == IN_CALL, \
+    f"ожидался IN_CALL, получен {app4._call.state()}"
+
+# после IN_CALL EddieAI снова может говорить
+app4._call.eddieai_starts_speaking()
+assert app4._call.state() == EDDIEAI_SPEAKING
+
+# 7. Без перехвата (Эдди молчит) end-callback НЕ срабатывает при
+#    естественной паузе детектора — reap сам гасит детектор
+#    (speech_seen=False, пауза не даёт on_speech_end).
+app5 = make_app()
+app5._call.start_call()
+app5._speak_with_detector("Тишина", None)
+assert app5._awaiting_speech_end is False
+time.sleep(1.5)
+assert app5._call.state() == IN_CALL
+assert app5._voice.detector_stopped >= 1
 
 print("ALL PASS")

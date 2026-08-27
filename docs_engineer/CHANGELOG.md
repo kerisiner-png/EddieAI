@@ -49,6 +49,30 @@
   py_compile всех правленых файлов PASS; байт-проверка (BOM=нет,
   мойджибейка=0) PASS.
 
+### [АКТУАЛЬНО] Звонок, этап 4: детекция окончания речи собеседника (27.08)
+Замыкание duplex: после того как Эдди перебил EddieAI и закончил
+говорить, дирижёр должен вернуться из EDDIE_SPEAKING в IN_CALL, чтобы
+EddieAI снова мог взять слово. `CallDirector.eddie_stops_speaking()`
+(EDDIE_SPEAKING → IN_CALL) существовал, но его никто не вызывал, а
+детектор этапа 2 умирал сразу после перехвата (break + thread=None).
+- `communication/voice_io.py`: детектор стал двухфазным. Фаза 1 —
+  установление речи → on_interrupt (перехват, как раньше). Фаза 2 —
+  если задан `on_speech_end` (`on_interrupt_detector_end`), цикл НЕ
+  умирает после перехвата, а отслеживает тишину (≥ INTERRUPT_SILENCE_SEC)
+  после установленной речи → вызывает `_fire_speech_end`. Без
+  on_speech_end поведение этапа 2 сохраняется (обратная совместимость).
+- `communication/chat_app.py` `_speak_with_detector`: регистрирует
+  end-callback на детекторе; reap-таймер при перехвате НЕ гасит детектор
+  (флаг `_awaiting_speech_end`); `_on_eddie_interrupt` больше не вызывает
+  `stop_interrupt_detector()` (только `stop_speaking()`); новый
+  `_on_detected_speech_end` → `eddie_stops_speaking()` (→ IN_CALL).
+- Тест `test_call_interrupt.py`: кейс 6 — перехват → awaiting=True →
+  окочание речи → IN_CALL → EddieAI снова может говорить; кейс 7 —
+  без перехвата reap сам гасит детектор, end-callback не срабатывает.
+  ALL PASS.
+- Проверки: py_compile (voice_io/chat_app/test) PASS; test_auto_call
+  PASS; байт-проверка (BOM=нет, мойджибейка=0) PASS. Duplex закрыт.
+
 ## 27.08.2026 (закрытие TODO-листа 1)
 
 ### [АКТУАЛЬНО] Звонок, этап 2: автопрерывание озвучки при речи собеседника (27.08)

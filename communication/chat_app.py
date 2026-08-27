@@ -52,6 +52,7 @@ class EddieChatApp:
         self._call.set_interrupt_callback(
             self._on_eddie_interrupt
         )
+        self._awaiting_speech_end = False
 
         if self._server is not None:
             try:
@@ -377,12 +378,16 @@ class EddieChatApp:
         if not self._call.in_call():
             return
         self._call.eddieai_starts_speaking()
+        self._voice.on_interrupt_detector_end(
+            self._on_detected_speech_end
+        )
         self._voice.start_interrupt_detector(
             self._on_detected_speech
         )
 
         def reap():
-            self._voice.stop_interrupt_detector()
+            if not self._awaiting_speech_end:
+                self._voice.stop_interrupt_detector()
             self._call.eddieai_stops_speaking()
 
         threading.Timer(
@@ -394,12 +399,16 @@ class EddieChatApp:
         return min(60.0, 0.28 + len(text) * 0.09)
 
     def _on_detected_speech(self):
+        self._awaiting_speech_end = True
         self._call.eddie_starts_speaking()
+
+    def _on_detected_speech_end(self):
+        self._awaiting_speech_end = False
+        self._call.eddie_stops_speaking()
 
     def _on_eddie_interrupt(self):
         if self._voice:
             try:
-                self._voice.stop_interrupt_detector()
                 self._voice.stop_speaking()
             except Exception:
                 pass
