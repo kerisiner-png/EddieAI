@@ -5293,8 +5293,9 @@ Respond briefly and naturally.
         )
 
         try:
-            chat_context = self.memory.chat_context(
-                limit=200
+            chat_context = self.memory.search_relevant(
+                query=user_message,
+                limit=5,
             )
         except Exception:
             chat_context = ""
@@ -5315,27 +5316,17 @@ Respond briefly and naturally.
         conclusions_context = ""
 
         try:
-            conclusions = (
+            found = (
                 self.self_conclusion_store
-                .list_conclusions()
+                .search_conclusions(
+                    query=user_message,
+                    limit=3,
+                )
             )
 
-            lines = []
-
-            for item in conclusions[-4:]:
-                topic = item.get("topic")
-                concl = item.get("conclusion")
-
-                if topic and concl:
-                    lines.append(
-                        f"- {topic}: "
-                        f"{str(concl)[:120]}"
-                    )
-
-            if lines:
+            if found:
                 conclusions_context = (
-                    "МОИ ПРОШЛЫЕ ВЫВОДЫ:\n"
-                    + "\n".join(lines)
+                    "РЕЛЕВАНТНЫЕ ВЫВОДЫ:\n" + found
                 )
         except Exception:
             conclusions_context = ""
@@ -5437,7 +5428,8 @@ The user request may be handled normally.
 (реши: прочитать и ответить, или подождать):
 {unread_context}
 
-Вся переписка (с временами):
+Релевантные воспоминания
+(из памяти, по теме запроса):
 {chat_context}
 
 {conclusions_context}

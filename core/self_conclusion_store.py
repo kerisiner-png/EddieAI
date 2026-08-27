@@ -845,3 +845,51 @@ class SelfConclusionStore:
         return "\n".join(
             lines
         ).strip()
+
+    def search_conclusions(
+        self,
+        query: str,
+        limit: int = 3,
+    ) -> str:
+        keywords = [
+            w.strip().casefold().replace("ё", "е")
+            for w in query.split()
+            if len(w.strip()) >= 3
+        ]
+
+        if not keywords:
+            return ""
+
+        items = self.list_conclusions()
+        scored = []
+
+        for item in items:
+            text = " ".join(
+                str(item.get(k) or "")
+                for k in (
+                    "topic",
+                    "conclusion",
+                    "predicates",
+                )
+            ).casefold().replace("ё", "е")
+
+            score = sum(
+                1 for kw in keywords if kw in text
+            )
+
+            if score > 0:
+                scored.append((score, item))
+
+        scored.sort(key=lambda x: -x[0])
+
+        lines = []
+
+        for _, item in scored[:limit]:
+            topic = item.get("topic", "")
+            concl = item.get("conclusion", "")
+            if topic and concl:
+                lines.append(
+                    f"- {topic}: {str(concl)[:120]}"
+                )
+
+        return "\n".join(lines)

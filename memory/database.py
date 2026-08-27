@@ -804,5 +804,78 @@ class Memory:
         return "\n".join(lines)
 
     @_synchronized
+    def search_relevant(
+        self,
+        query: str,
+        limit: int = 5,
+    ) -> str:
+        keywords = [
+            w.strip()
+            for w in query.split()
+            if len(w.strip()) >= 3
+        ]
+
+        if not keywords:
+            return ""
+
+        chat_results = []
+
+        for kw in keywords[:5]:
+            rows = self.connection.execute(
+                "SELECT sender, text, ts "
+                "FROM chat_history "
+                "WHERE text LIKE ? "
+                "ORDER BY id DESC LIMIT ?",
+                (f"%{kw}%", limit),
+            ).fetchall()
+
+            for row in rows:
+                text = str(row["text"] or "").strip()
+                if not text:
+                    continue
+                ts = self._local_hhmm(row["ts"])
+                prefix = (
+                    "Эдди"
+                    if row["sender"] == "Eddie"
+                    else "EddieAI"
+                )
+                chat_results.append(
+                    f"[{ts}] {prefix}: {text}"
+                )
+
+        event_results = []
+
+        for kw in keywords[:5]:
+            rows = self.connection.execute(
+                "SELECT content, source_type, timestamp "
+                "FROM events "
+                "WHERE content LIKE ? "
+                "AND source_type != 'SELF_OUTPUT' "
+                "ORDER BY id DESC LIMIT ?",
+                (f"%{kw}%", limit),
+            ).fetchall()
+
+            for row in rows:
+                content = str(
+                    row["content"] or ""
+                ).strip()
+                if not content:
+                    continue
+                event_results.append(
+                    content[:150]
+                )
+
+        seen = set()
+        merged = []
+
+        for item in chat_results + event_results:
+            short = item[:60]
+            if short not in seen:
+                seen.add(short)
+                merged.append(item)
+
+        return "\n".join(merged[:limit])
+
+    @_synchronized
     def close(self):
         self.connection.close()
