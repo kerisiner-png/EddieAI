@@ -5299,6 +5299,8 @@ Respond briefly and naturally.
         except Exception:
             chat_context = ""
 
+        self._last_chat_len = len(chat_context)
+
         try:
             unread_context = (
                 self.memory.chat_unread_context(
