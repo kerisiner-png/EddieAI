@@ -20,6 +20,13 @@ from scipy.signal import (
 
 VOSK_MODEL_DIR = Path(r"C:\EddieAI\models\vosk\vosk-model-small-ru-0.22")
 VOICE = "ru-RU-DmitryNeural"
+PIPER_MODEL_DIR = Path(
+    r"C:\EddieAI\models\piper\ru_RU-dmitri-medium.onnx"
+)
+PIPER_VOICE_PATH = Path(
+    r"C:\EddieAI\models\piper\ru_RU-irina-medium.onnx"
+)
+TEEN_PITCH_HZ = 250.0
 SAMPLE_RATE = 16000
 CHUNK_SEC = 0.1
 SILENCE_LIMIT_SEC = 1.5
@@ -153,6 +160,9 @@ def mood_from_agent(agent):
 
 
 class VoiceIO:
+    _piper_voice = None
+    _pip_lock = threading.Lock()
+
     def __init__(self):
         from vosk import KaldiRecognizer, Model
 
@@ -161,6 +171,25 @@ class VoiceIO:
         self._temp_dir = Path(tempfile.mkdtemp(prefix="eddie_voice_"))
         self._stop_flag = False
         self._playback_thread = None
+
+    def _ensure_piper(self):
+        with VoiceIO._pip_lock:
+            if VoiceIO._piper_voice is None:
+                from piper import PiperVoice
+
+                VoiceIO._piper_voice = PiperVoice.load(
+                    str(PIPER_MODEL_DIR)
+                )
+        return VoiceIO._piper_voice
+
+    def _synth_piper(self, text):
+        piper = self._ensure_piper()
+        rate = piper.config.sample_rate
+        chunks = []
+        for chunk in piper.synthesize(text):
+            chunks.append(chunk.audio_float_array)
+        pcm = np.concatenate(chunks)
+        return pcm.astype(np.float32), rate
 
     def _calibrate_noise(self, stream, seconds=0.6):
         levels = []
@@ -297,6 +326,28 @@ class VoiceIO:
         return out_pcm
 
     def _speak_worker(self, text: str, mood=None):
+        try:
+            pcm, rate = self._synth_piper(text)
+            if self._stop_flag:
+                return
+
+            if mood is None:
+                mood = {}
+
+            base_pitch = float(
+                mood.get("target_pitch_hz", TEEN_PITCH_HZ)
+            )
+            voiced = self._boyify(
+                pcm,
+                rate,
+                dict(mood, target_pitch_hz=base_pitch),
+            )
+            sd.play(voiced.astype(np.float32), samplerate=rate)
+            sd.wait()
+        except Exception:
+            self._speak_worker_fallback(text, mood)
+
+    def _speak_worker_fallback(self, text: str, mood=None):
         try:
             mp3_path = self._temp_dir / "reply.mp3"
 
