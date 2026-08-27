@@ -6,6 +6,24 @@
 
 ## 27.08.2026
 
+### [АКТУАЛЬНО] Бэклог learned_markers закрыт — проверкой установлено, что уже реализован (27.08)
+TODO-бэклог «подключить остальные фильтры к learned_markers» оказался
+УЖЕ выполненным ранними работами; задача свелась к проверке и фиксации:
+- `identity/behavioral_validator.py`: фильтры вербализатора
+  identity_denial/role_inversion/fabricated_activity/absolute уже
+  обучаются (категории identity_denial/role_inversion/
+  fabricated_activity/absolute), вызовы _learn_markers (строки 60/68),
+  применение через _hits при валидации.
+- `core/dialogue_memory.py`: маркеры деградации RAM_REFUSAL обучаются
+  (категория degradation) через record_agent_answer → _learn_degradation
+  (строка 124), вызывается из agent.py:5884.
+- `identity/appraisal_engine.py`: социальные маркеры
+  (praise/insult/contradiction) обучаются (строки 560/603/653).
+- Единичный «help»-фильтр из формулировки в коде отсутствует как
+  отдельный (покрыт identity_denial) — новых точек подключения нет.
+- Изменений кода не потребовалось (функциональность была на месте);
+  обновлён только TODO.md (бэклог → [x]) и эта запись CHANGELOG.
+
 ### [АКТУАЛЬНО] Звонок, этап 3: автономная инициатива + разметка выводов (27.08)
 Две правки по итогам разбора «различает ли EddieAI свои выводы от
 внешней информации» + доделки звонков.

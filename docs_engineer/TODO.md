@@ -90,10 +90,22 @@ EddieAI теперь помечает собственные выводы в о�
 - [x] ОБУЧАЕМЫЕ маркеры — единый механизм learned_markers
   (таблица + learned_bump/get). Подключены социальные маркеры (praise/
   insult/contradiction) в AppraisalEngine. Тест test_appraisal_learning PASS.
-- [ ] БЭКЛОГ: подключить остальные фильтры к learned_markers —
-  фильтры вербализатора (help/identity_denial/role_inversion/
-  fabricated_activity/absolute), маркеры деградации (RAM_REFUSAL),
-  категории речи.
+- [x] БЭКЛОГ (проверено и закрыто 27.08): подключить остальные фильтры
+  к learned_markers — уже реализовано ранними работами:
+  - behavioral_validator.py: фильтры identity_denial/role_inversion/
+    fabricated_activity/absolute уже на learned_markers (категории
+    identity_denial/role_inversion/fabricated_activity/absolute),
+    обучение в _hits → _learn_markers;
+  - dialogue_memory.py: маркеры деградации RAM_REFUSAL на learned_markers
+    (категория degradation), обучение в record_agent_answer →
+    _learn_degradation;
+  - appraisal_engine.py: социальные маркеры (praise/insult/contradiction)
+    на learned_markers.
+  Осталось из формулировки только «help»-фильтр — отдельного такого
+  фильтра в коде нет (не существует), фактически покрыт identity_denial.
+  Проверка вызовов обучения: agent.py:5884, dialogue_memory.py:124,
+  behavioral_validator.py:60/68, appraisal_engine.py:560/603/653.
+  Реальный объём бэклога исчерпан; новых точек подключения нет.
 
 ### [НОВОЕ 26.08 сессия] Аудит 170 файлов + расходы flash
 
