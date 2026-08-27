@@ -32,6 +32,8 @@ CHUNK_SEC = 0.1
 SILENCE_LIMIT_SEC = 1.5
 MAX_RECORD_SEC = 15.0
 MIN_SPEECH_SEC = 0.7
+INTERRUPT_MIN_WORDS = 2
+INTERRUPT_SILENCE_SEC = 0.9
 
 
 def flatten_pitch(sound, keep):
@@ -171,6 +173,9 @@ class VoiceIO:
         self._temp_dir = Path(tempfile.mkdtemp(prefix="eddie_voice_"))
         self._stop_flag = False
         self._playback_thread = None
+        self._int_det_thread = None
+        self._int_det_stop = False
+        self._int_det_cb = None
 
     def _ensure_piper(self):
         with VoiceIO._pip_lock:
@@ -390,3 +395,82 @@ class VoiceIO:
             sd.stop()
         except Exception:
             pass
+
+    def start_interrupt_detector(self, callback):
+        """
+        Фоновая детекция речи собеседника во время озвучки
+        (режим наушников: микрофон ловит только Эдди).
+
+        Стримит микрофон через Vosk PartialResult; при первой
+        осмысленной фразе (>= INTERRUPT_MIN_WORDS слов) вызывает
+        callback() один раз и самостоятельно останавливается.
+        Вне звонка активной речи нет, поэтому не мешает.
+        """
+        if self._int_det_thread is not None:
+            return
+        self._int_det_stop = False
+        self._int_det_cb = callback
+        self._int_det_thread = threading.Thread(
+            target=self._interrupt_detector_loop,
+            daemon=True,
+        )
+        self._int_det_thread.start()
+
+    def stop_interrupt_detector(self):
+        self._int_det_stop = True
+
+    def _interrupt_detector_loop(self):
+        try:
+            from vosk import KaldiRecognizer
+
+            rec = KaldiRecognizer(self._model, SAMPLE_RATE)
+            rec.SetWords(True)
+            rec.SetPartialWords(True)
+            with sd.InputStream(
+                samplerate=SAMPLE_RATE,
+                channels=1,
+                dtype="float32",
+                blocksize=int(SAMPLE_RATE * CHUNK_SEC),
+            ) as stream:
+                silent = 0.0
+                while not self._int_det_stop:
+                    data, _ = stream.read(
+                        int(SAMPLE_RATE * CHUNK_SEC)
+                    )
+                    pcm = (
+                        np.clip(data, -1, 1) * 32767
+                    ).astype(np.int16).tobytes()
+                    if rec.AcceptWaveform(pcm):
+                        result = json.loads(rec.Result())
+                        text = (result.get("text") or "").strip()
+                        if len(text.split()) >= INTERRUPT_MIN_WORDS:
+                            self._fire_interrupt()
+                            break
+                        silent = 0.0
+                        continue
+                    partial = json.loads(rec.PartialResult())
+                    ptext = (partial.get("partial") or "").strip()
+                    if ptext:
+                        silent = 0.0
+                        if len(ptext.split()) >= INTERRUPT_MIN_WORDS:
+                            self._fire_interrupt()
+                            break
+                    else:
+                        silent += CHUNK_SEC
+                        if silent >= INTERRUPT_SILENCE_SEC:
+                            rec.Reset()
+        except Exception:
+            pass
+        finally:
+            self._int_det_thread = None
+            self._int_det_cb = None
+            self._int_det_stop = False
+
+    def _fire_interrupt(self):
+        cb = self._int_det_cb
+        self._int_det_cb = None
+        if cb is not None:
+            try:
+                cb()
+            except Exception:
+                pass

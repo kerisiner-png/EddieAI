@@ -5326,7 +5326,9 @@ Respond briefly and naturally.
 
             if found:
                 conclusions_context = (
-                    "РЕЛЕВАНТНЫЕ ВЫВОДЫ:\n" + found
+                    "МОИ ВЫВОДЫ (мои собственные рассуждения "
+                    "и предположения, НЕ объективные факты):\n"
+                    + found
                 )
         except Exception:
             conclusions_context = ""

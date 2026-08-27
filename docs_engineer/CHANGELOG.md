@@ -4,7 +4,78 @@
 [АРХИВ], когда её описание перестаёт соответствовать живому коду.
 Формат — см. docs_engineer\README.md. Времена артефактные.
 
+## 27.08.2026
+
+### [АКТУАЛЬНО] Звонок, этап 3: автономная инициатива + разметка выводов (27.08)
+Две правки по итогам разбора «различает ли EddieAI свои выводы от
+внешней информации» + доделки звонков.
+
+**Разметка собственных выводов (контур честности, P2-семейство):**
+- `core/self_conclusion_store.py` `search_conclusions()`: вместо голой
+  строки `- topic: concl` теперь формат
+  `- topic: 'заключение' [ВЫВОД EddieAI, уверенность X; основание: ...]`.
+  Модель видит уверенность и обоснование каждого своего вывода и не
+  путает его с объективным фактом.
+- `core/agent.py`: заголовок блока в промпте уточнён на «МОИ ВЫВОДЫ
+  (мои собственные рассуждения и предположения, НЕ объективные факты)».
+- Обычные воспоминания (`database.py search_relevant`) и раньше
+  исключали SELF_OUTPUT и метили говорящего («Эдди»/«EddieAI») — это
+  разметка «своё vs чужое» на хранении (provenance.py вес 1.0 vs 0.0).
+- Проверка формата (фейковый self_state) PASS; UTF-8 no BOM, 0 мойджибейки.
+
+**Автономная инициатива звонка (этап 3):**
+- `core/decision_core.py`: добавлен вид `CALL` в `VALID_KINDS` + строка
+  в описание типов решения (самому позвонить, не спамить: раз в ~15 мин).
+- `core/autonomy_orchestrator.py` `_apply_action`: ветка `CALL` →
+  `server.initiate_call(text)` (payload.text или дефолт). Статус CALLED.
+- `core/eddie_server.py`: новое поле `call_director` (None по умолчанию)
+  + метод `initiate_call(text, cooldown_seconds=900)`: если привязан
+  дирижёр и звонок уже не идёт, и минул cooldown → `start_call()` +
+  инициатива текстом; иначе только инициатива (защита от спама).
+- `communication/chat_app.py` `__init__`: `self._server.call_director =
+  self._call` (регистрация дирижёра на общем сервере). Chat создаётся
+  до цикла автономии в night_run, поэтому связка готова к моменту CALL.
+- Связка в проде: autonomy_runtime_factory.py:424 передаёт server в
+  orchestrator → CALL дойдёт до server.initiate_call → в голосовом
+  режиме инициатива озвучивается (этап 2 автопрерывания действует).
+- Новый тест `test_auto_call.py` (стиль проекта): CALL в VALID_KINDS +
+  parse_action; server.initiate_call стартует звонок + шлёт инициативу;
+  guard от спама (повтор → только инициатива); orchestrator CALL →
+  server. ALL PASS.
+- Проверки: все затронутые тесты PASS (test_call_interrupt,
+  test_decision_core, test_orchestrator_local, test_pattern_habit,
+  test_habit_pattern_rebuild, test_situation_patterns,
+  test_verbalization_mode, test_semantic_judge, test_self_state_seed);
+  py_compile всех правленых файлов PASS; байт-проверка (BOM=нет,
+  мойджибейка=0) PASS.
+
 ## 27.08.2026 (закрытие TODO-листа 1)
+
+### [АКТУАЛЬНО] Звонок, этап 2: автопрерывание озвучки при речи собеседника (27.08)
+Диагноз: детектор речи (Vosk-стриминг) в `VoiceIO.start_interrupt_detector`
+уже существовал и подключался из `chat_app._speak_with_detector`, но
+дирижёр `CallDirector` НИКОГДА не переводился в `EDDIEAI_SPEAKING`, а
+перехват `_notify_interrupt` срабатывает только при переходе
+`EDDIEAI_SPEAKING → EDDIE_SPEAKING` (call_engine.py:53). Итог: при
+перебивании собеседником детектор срабатывал, но `_on_eddie_interrupt`
+(→ `stop_speaking`) не вызывался — озвучка не прерывалась.
+- `communication/chat_app.py` `_speak_with_detector`: при старте
+  озвучки в звонке → `eddieai_starts_speaking()`; reap-таймер при
+  естественном окончании → `stop_interrupt_detector()` +
+  `eddieai_stops_speaking()` (состояние → IN_CALL).
+- Контур автопрерывания: Эдди говорит → Vosk PartialResult ≥2 слов →
+  `_on_detected_speech` → `eddie_starts_speaking()` → переход из
+  EDDIEAI_SPEAKING → `_on_eddie_interrupt` → `stop_speaking()`.
+- Новый тест `test_call_interrupt.py` (стиль проекта, без pytest):
+  (1) переход EDDIEAI→EDDIE_SPEAKING даёт перехват; (2) регрессия —
+  без отметки EddieAI говорящим перехвата НЕТ; (3) полный контур
+  chat_app с FakeVoice: детектор стартует, при речи собеседника
+  `stopped=True`, состояние EDDIE_SPEAKING; (4) вне звонка детектор
+  не стартует; (5) естественное окончание → IN_CALL. ALL PASS.
+- Проверки: py_compile chat_app.py/test_call_interrupt.py PASS;
+  байт-проверка (BOM=нет, мойджибейка=0) PASS.
+- Осталось (следующий этап duplex): детекция окончания речи
+  собеседника (сброс EDDIE_SPEAKING → IN_CALL после паузы).
 
 ### [АКТУАЛЬНО] Базовый звонок в мессенджер: дирижёр turn-taking (27.08)
 Этап 1 полноценного звонка (duplex + turn-taking выбрал Эдди):

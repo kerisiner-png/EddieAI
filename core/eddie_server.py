@@ -53,6 +53,10 @@ class EddieServer:
 
         self._inbox_callback = None
 
+        self.call_director = None
+
+        self._last_auto_call_at = None
+
     def set_inbox_callback(self, callback):
         self._inbox_callback = callback
 
@@ -349,6 +353,53 @@ class EddieServer:
             self.outbox.append(text)
 
         return self.pending_initiative
+
+    def initiate_call(
+        self,
+        text: str,
+        cooldown_seconds: int = 900,
+    ):
+        """
+        EddieAI сам инициирует звонок.
+
+        Если подключён дирижёр звонка (call_director) —
+        включает состояние звонка; затем шлёт инициативу
+        текстом (в голосовом режиме она озвучивается).
+
+        Защита от спама:
+        - если звонок уже идёт — только инициатива текстом;
+        - не чаще одного авто-звонка за cooldown_seconds.
+        """
+        text = text.strip()
+
+        if not text:
+            text = "Эй, Эдди, ты тут?"
+
+        if self.call_director is not None:
+            try:
+                if self.call_director.in_call():
+                    return self.send_initiative(text)
+
+                already = self._last_auto_call_at
+
+                if already is not None:
+                    elapsed = int(
+                        (
+                            self._now()
+                            - already
+                        ).total_seconds()
+                    )
+
+                    if elapsed < cooldown_seconds:
+                        return self.send_initiative(text)
+
+                self.call_director.start_call()
+
+                self._last_auto_call_at = self._now()
+            except Exception:
+                return self.send_initiative(text)
+
+        return self.send_initiative(text)
 
     def note_user_reply(self):
         self.pending_initiative = None

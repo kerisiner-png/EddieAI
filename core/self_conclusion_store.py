@@ -886,10 +886,38 @@ class SelfConclusionStore:
 
         for _, item in scored[:limit]:
             topic = item.get("topic", "")
-            concl = item.get("conclusion", "")
-            if topic and concl:
-                lines.append(
-                    f"- {topic}: {str(concl)[:120]}"
+            concl = str(
+                item.get("conclusion", "")
+            ).strip()
+            if not topic or not concl:
+                continue
+
+            confidence = "n/a"
+
+            try:
+                raw = float(
+                    item.get("confidence", 0.0)
                 )
+                confidence = f"{raw:.2f}"
+            except (TypeError, ValueError):
+                confidence = "n/a"
+
+            basis = item.get("basis", [])
+            basis_text = ""
+
+            if basis:
+                basis_text = (
+                    "; основание: "
+                    + ", ".join(
+                        str(b)[:60]
+                        for b in basis[:2]
+                    )
+                )
+
+            lines.append(
+                f"- {topic}: '{str(concl)[:120]}'"
+                f" [ВЫВОД EddieAI, уверенность "
+                f"{confidence}{basis_text}]"
+            )
 
         return "\n".join(lines)

@@ -52,6 +52,14 @@ class EddieChatApp:
         self._call.set_interrupt_callback(
             self._on_eddie_interrupt
         )
+
+        if self._server is not None:
+            try:
+                self._server.call_director = (
+                    self._call
+                )
+            except Exception:
+                pass
         self._chat = None
         self._root = None
         self._tcp_server = None
@@ -263,9 +271,9 @@ class EddieChatApp:
                 mood_from_agent,
             )
 
-            self._voice.speak(
+            self._speak_with_detector(
                 text,
-                mood=mood_from_agent(self._agent),
+                mood_from_agent(self._agent),
             )
 
     def _on_history(self, messages):
@@ -354,15 +362,47 @@ class EddieChatApp:
                 mood_from_agent,
             )
 
-            self._voice.speak(
+            self._speak_with_detector(
                 answer,
-                mood=mood_from_agent(self._agent),
+                mood_from_agent(self._agent),
             )
 
     def _set_status_safe(self, text):
         if self._chat is None:
             return
         self._chat.set_status(text)
+
+    def _speak_with_detector(self, text, mood):
+        self._voice.speak(text, mood=mood)
+        if not self._call.in_call():
+            return
+        self._call.eddieai_starts_speaking()
+        self._voice.start_interrupt_detector(
+            self._on_detected_speech
+        )
+
+        def reap():
+            self._voice.stop_interrupt_detector()
+            self._call.eddieai_stops_speaking()
+
+        threading.Timer(
+            max(0.1, self._est_speech_sec(text)),
+            reap,
+        ).start()
+
+    def _est_speech_sec(self, text):
+        return min(60.0, 0.28 + len(text) * 0.09)
+
+    def _on_detected_speech(self):
+        self._call.eddie_starts_speaking()
+
+    def _on_eddie_interrupt(self):
+        if self._voice:
+            try:
+                self._voice.stop_interrupt_detector()
+                self._voice.stop_speaking()
+            except Exception:
+                pass
 
     def _on_mic(self):
         if not self._voice:
@@ -413,6 +453,7 @@ class EddieChatApp:
             pass
         try:
             if self._voice:
+                self._voice.stop_interrupt_detector()
                 self._voice.stop_speaking()
         except Exception:
             pass

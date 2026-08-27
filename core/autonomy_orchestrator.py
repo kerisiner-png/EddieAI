@@ -413,6 +413,29 @@ class AutonomyOrchestrator:
                 ),
             )
 
+        if kind == "CALL":
+            server = getattr(
+                self, "server", None
+            )
+
+            text = payload.get(
+                "text"
+            ) or "Эй, Эдди, ты тут?"
+
+            if server is not None:
+                try:
+                    server.initiate_call(text)
+                except Exception:
+                    pass
+
+            return OrchestrationResult(
+                status="CALLED",
+                reason=(
+                    "EddieAI сам решил "
+                    "позвонить Эдди."
+                ),
+            )
+
         if kind == "REFLECT":
             return self._reflection_action()
 
