@@ -328,6 +328,14 @@ class OwnershipResolver:
             for marker in self.USER_MARKERS
         )
 
+        is_question = "?" in normalized
+
+        if (
+            is_question
+            and self_hits > 0
+        ):
+            return "SELF"
+
         if self_hits > user_hits and self_hits > 0:
             return "SELF"
 
