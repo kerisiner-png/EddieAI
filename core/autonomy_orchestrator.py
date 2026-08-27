@@ -137,7 +137,13 @@ class AutonomyOrchestrator:
     def _tick_local(self):
         state = self._build_state()
 
+        self._last_state = state
+
         decision = self.decision_core.decide(state)
+
+        self._last_decision = getattr(
+            decision, "kind", decision
+        )
 
         if decision is NEEDS_NEW_PATTERN:
             decision = self.decision_core.learn(

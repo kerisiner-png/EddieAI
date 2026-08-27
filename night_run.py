@@ -308,9 +308,37 @@ try:
             "?",
         )
 
+        ls = getattr(
+            runtime,
+            "orchestrator",
+            None,
+        )
+        ls = (
+            getattr(ls, "_last_state", None)
+            or {}
+        )
+
+        dec = getattr(
+            runtime,
+            "orchestrator",
+            None,
+        )
+        dec = getattr(
+            dec, "_last_decision", None
+        )
+
+        ag = getattr(runtime, "agent", None)
+        chat_len = getattr(
+            ag, "_last_chat_len", None
+        )
+
         log(
             f"tick-статус: state={state}, "
-            f"cloud_calls={_call_count['n']}"
+            f"cloud_calls={_call_count['n']}, "
+            f"inbox={ls.get('inbox_unread')}, "
+            f"idle={ls.get('idle_seconds')}, "
+            f"decision={dec}, "
+            f"chat_len={chat_len}"
         )
 
         remaining = END_AT - time.time()
