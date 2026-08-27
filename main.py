@@ -54,9 +54,16 @@ def main():
     )
 
     agent = None
+    baseline = 0
 
     try:
         agent = Agent()
+        baseline = (
+            agent.memory.connection.execute(
+                "SELECT MAX(id) FROM events"
+            ).fetchone()[0]
+            or 0
+        )
     except Exception as exc:
         print(f"Ошибка инициализации агента: {exc}")
         traceback.print_exc()
@@ -132,7 +139,29 @@ def main():
 
     finally:
         if agent is not None:
-            agent.close()
+            from communication.session import (
+                close_session,
+            )
+
+            try:
+                from pathlib import Path
+                root = Path(
+                    os.path.dirname(
+                        os.path.abspath(__file__)
+                    )
+                )
+
+                close_session(
+                    agent,
+                    root,
+                    baseline_event_id=baseline,
+                    prefix="session",
+                )
+            except Exception as exc:
+                print(
+                    f"Ошибка закрытия сессии: {exc}"
+                )
+                traceback.print_exc()
 
 
 if __name__ == "__main__":

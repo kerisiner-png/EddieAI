@@ -4,6 +4,31 @@
 [АРХИВ], когда её описание перестаёт соответствовать живому коду.
 Формат — см. docs_engineer\README.md. Времена артефактные.
 
+## 27.08.2026 (закрытие TODO-листа 1)
+
+### [АКТУАЛЬНО] Т1-Т2 единый интерфейс + ревизия TODO (27.08)
+- **Т1 Единая точка входа `eddie.py`**: режимы `--text`, `--voice`,
+  `--mixed`, `--chat`; флаг `--log`. В mixed Enter=текст, v+Enter=голос;
+  транскрипт идёт в тот же `Agent.respond()`. Облачный мозг (Zen) не
+  требует Ollama — ensure_ollama стал опциональным предупреждением.
+- **Т2 Общий ритуал `communication/session.py::close_session(agent,
+  root, baseline_event_id, prefix)`**: дневник + снимки души до/после +
+  diff. Подключён в `main.py` (ранее текстовый вход терял дневник и
+  снимки — закрыта асимметрия voice_repl) и в `eddie.py`. Смоук
+  (mock-агент, tmp-каталог) PASS: start-снимок, diary.write, end-снимок,
+  diff, agent.close.
+- **voice_io.VOICE → `ru-RU-DmitryNeural`** (мужской рот): был
+  рассинхрон — voice_io держал женский SvetlanaNeural, а voice_repl и
+  TODO уже перешли на мужской (26.08). Единый голос везде.
+- **Ревизия TODO**: закрыты завершённым проверкой кода: #1 learned_markers
+  (все 9 фильтров вербализатора + degradation уже на learned_markers —
+  подтверждено CHANGELOG 26.08 и behavioral_validator/appraisal_engine/
+  dialogue_memory), #3 R1 канал действия ядра (bridge→ActionSelector→
+  ActionObserver→source=core_selector уже в коде). Отложены как
+  многочасовые проекты с ночными прогонами: R2 «Проба воли», сны С1-С4,
+  аватар, нейминг eddie→EddieAI (100+ файлов симуляции), Д2 (требует 70B/
+  16 ГБ RAM), аффект-в-голосе (#8 — теперь разблокирован после Т1).
+
 ## 26.08.2026 (продолжение сессии)
 
 ### [АКТУАЛЬНО] Реестр проблем, P2, обратная связь, прогон (26.08)

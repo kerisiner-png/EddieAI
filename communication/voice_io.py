@@ -19,7 +19,7 @@ from scipy.signal import (
 
 
 VOSK_MODEL_DIR = Path(r"C:\EddieAI\models\vosk\vosk-model-small-ru-0.22")
-VOICE = "ru-RU-SvetlanaNeural"
+VOICE = "ru-RU-DmitryNeural"
 SAMPLE_RATE = 16000
 CHUNK_SEC = 0.1
 SILENCE_LIMIT_SEC = 1.5
