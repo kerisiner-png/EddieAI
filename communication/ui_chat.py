@@ -101,6 +101,15 @@ class ChatWindow:
         )
         self._mic_btn.pack(side=tk.LEFT, padx=(4, 0))
 
+        self._call_callback = None
+        self._in_call = False
+        self._call_btn = tk.Button(
+            input_frame,
+            text="\U0001f4de",
+            command=self._on_call_click,
+        )
+        self._call_btn.pack(side=tk.LEFT, padx=(4, 0))
+
         self._voice_mode = False
         self._voice_var = tk.BooleanVar(value=False)
         self._voice_toggle = tk.Checkbutton(
@@ -262,6 +271,28 @@ class ChatWindow:
 
     def is_voice_mode(self):
         return self._voice_mode
+
+    def on_call(self, callback):
+        self._call_callback = callback
+
+    def _on_call_click(self):
+        if self._call_callback:
+            self._call_callback()
+
+    def set_call_state(self, in_call):
+        self._in_call = bool(in_call)
+        if self._in_call:
+            self._call_btn.configure(
+                text="\U0001f6d1"
+            )
+        else:
+            self._call_btn.configure(
+                text="\U0001f4de"
+            )
+
+    def show_speaker(self, speaker):
+        if self._in_call:
+            self.set_status(f"Звонок · {speaker}")
 
     def _on_close(self):
         self.hide()

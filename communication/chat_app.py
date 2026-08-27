@@ -8,6 +8,11 @@ from core.eddie_server import EddieServer
 from communication.tcp_client import EddieTCPClient
 from communication.ui_chat import ChatWindow
 from communication.tray import TrayIcon
+from communication.call_engine import (
+    CallDirector,
+    EDDIE_SPEAKING,
+    EDDIEAI_SPEAKING,
+)
 
 
 class EddieChatApp:
@@ -43,6 +48,10 @@ class EddieChatApp:
             self._voice = VoiceIO()
         except Exception:
             self._voice = None
+        self._call = CallDirector()
+        self._call.set_interrupt_callback(
+            self._on_eddie_interrupt
+        )
         self._chat = None
         self._root = None
         self._tcp_server = None
@@ -90,6 +99,7 @@ class EddieChatApp:
             self._chat, "on_mic"
         ):
             self._chat.on_mic(self._on_mic)
+        self._chat.on_call(self._on_call_toggle)
         self._tcp.on_initiative(self._on_initiative)
         self._tcp.on_history(self._on_history)
         self._tcp.on_thinking(self._on_thinking)
@@ -140,6 +150,7 @@ class EddieChatApp:
         self._tray.on_exit(self._on_exit)
         self._chat.on_send(self._on_user_send)
         self._chat.on_mic(self._on_mic)
+        self._chat.on_call(self._on_call_toggle)
         self._tcp.on_initiative(self._on_initiative)
         self._tcp.on_history(self._on_history)
         self._tcp.on_thinking(self._on_thinking)

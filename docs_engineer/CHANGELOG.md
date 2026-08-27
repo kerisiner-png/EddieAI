@@ -6,6 +6,26 @@
 
 ## 27.08.2026 (закрытие TODO-листа 1)
 
+### [АКТУАЛЬНО] Базовый звонок в мессенджер: дирижёр turn-taking (27.08)
+Этап 1 полноценного звонка (duplex + turn-taking выбрал Эдди):
+- `communication/call_engine.py` — `CallDirector`: конечный автомат
+  состояний (IDLE / IN_CALL / EDDIE_SPEAKING / EDDIEAI_SPEAKING),
+  правила turn-taking, callback перехвата при перебивании Эдди.
+  Легкий, без зависимостей от аудио/UI — тестируется юнит-тестом.
+- `communication/ui_chat.py` — кнопка звонка 📞/📱, `set_call_state`,
+  `show_speaker(speaker)` (индикатор «кто говорит» в статусе).
+- `communication/chat_app.py` — `_call = CallDirector()` +
+  `set_interrupt_callback(_on_eddie_interrupt)` (при перехвате →
+  `stop_speaking()`); кнопка связана с `_on_call_toggle`
+  (старт/стоп звонка, состояние UI).
+- Проверки: юнит-тест дирижёра (IDLE→IN_CALL→EDDIE_SPEAKING→
+  перехват→EDDIEAI_SPEAKING→IDLE) PASS; смоук логики звонка
+  (старт/стоп, turn-taking, прерывание) PASS; py_compile всех
+  затронутых файлов PASS.
+- Дальше этап 2: автопрерывание озвучки при речи собеседника
+  (Vosk-стриминг/детекция во время речи EddieAI).
+- Фундамент голоса сужен: Piper (0.28с) — см. запись ниже.
+
 ### [АКТУАЛЬНО] Быстрый рот: Piper поверх edge-tts + подростковый голос (27.08)
 Проблема (заметил Эдди): озвучка edge-tts ~6с на фразу неприемлема для
 живого duplex-звонка. Диагноз: задержка в облачном edge-tts (первый
