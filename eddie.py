@@ -166,7 +166,14 @@ def _run_voice(agent, voice):
                 answer = agent.respond(text)
                 print(f"EddieAI: {answer}")
                 try:
-                    voice.speak(answer)
+                    from communication.voice_io import (
+                        mood_from_agent,
+                    )
+
+                    voice.speak(
+                        answer,
+                        mood=mood_from_agent(agent),
+                    )
                 except Exception as exc:
                     print(f"   [рот молчит: {exc}]")
             except KeyboardInterrupt:
@@ -297,7 +304,14 @@ def _run_mixed(agent, voice):
                 print(f"\nEddieAI > {answer}\n")
                 if voice is not None:
                     try:
-                        voice.speak(answer)
+                        from communication.voice_io import (
+                            mood_from_agent,
+                        )
+
+                        voice.speak(
+                            answer,
+                            mood=mood_from_agent(agent),
+                        )
                     except Exception as exc:
                         print(f"   [рот молчит: {exc}]")
             except KeyboardInterrupt:

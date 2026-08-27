@@ -248,7 +248,14 @@ class EddieChatApp:
             self._voice
             and self._chat.is_voice_mode()
         ):
-            self._voice.speak(text)
+            from communication.voice_io import (
+                mood_from_agent,
+            )
+
+            self._voice.speak(
+                text,
+                mood=mood_from_agent(self._agent),
+            )
 
     def _on_history(self, messages):
         self._post_ui(
@@ -332,7 +339,14 @@ class EddieChatApp:
             self._voice
             and self._chat.is_voice_mode()
         ):
-            self._voice.speak(answer)
+            from communication.voice_io import (
+                mood_from_agent,
+            )
+
+            self._voice.speak(
+                answer,
+                mood=mood_from_agent(self._agent),
+            )
 
     def _set_status_safe(self, text):
         if self._chat is None:

@@ -374,9 +374,16 @@ C:\EddieAI\agent_py_recovery_2026-08-24\. Детали — CHANGELOG.
 
 ## Аффект в голосе (урок втуберов №2; в очередь решением Эдди 24.08.2026)
 
-- [ ] Связать affect из self_state с параметрами рта z3-конвейера
+- [x] Связать affect из self_state с параметрами рта z3-конвейера
       (PSOLA высота/темп, DSP): настроение должно звучать, а не только
-      писаться. Очередь — после P2/P6.
+      писаться. ВЫПОЛНЕНО 27.08: communication/voice_io.py —
+      emotions_to_mood() (эмоции → target_pitch_hz/tempo_ratio/
+      brighten_db/drive) + mood_from_agent(); VoiceIO.speak(text, mood)
+      прокидывает настроение в PSOLA-обработку (выше при радости,
+      ниже при грусти, темп по arousal). Подключено в eddie.py
+      (_run_voice/_run_mixed) и chat_app.py (_show_initiative/
+      _show_reply). Обратная совместимость: speak(text) работает без
+      mood (дефолт ≈ прежнее поведение).
       Детали: docs_engineer\LESSONS_VTUBERS.md.
 
 

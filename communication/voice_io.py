@@ -65,6 +65,93 @@ def equalize(pcm, rate):
     return lfilter(b, a, pcm)
 
 
+def emotions_to_mood(emotions):
+    """
+    Связать эмоциональное состояние EddieAI с параметрами голоса
+    (урок втуберов №2: эмоция должна звучать).
+
+    Принимает dict эмоций (affective_state.snapshot()["emotions"]),
+    возвращает параметры: target_pitch_hz, tempo_ratio,
+    brighten_db, drive. Все значения в безопасных пределах.
+    """
+    if not emotions:
+        return {
+            "target_pitch_hz": 160.0,
+            "tempo_ratio": 1.0,
+            "brighten_db": 18.0,
+            "drive": 2.6,
+        }
+
+    def _get(name):
+        return float(emotions.get(name, 0.0) or 0.0)
+
+    joy = _get("joy")
+    sadness = _get("sadness")
+    fear = _get("fear")
+    anger = _get("anger")
+    surprise = _get("surprise")
+    frustration = _get("frustration")
+    total = sum(
+        abs(emotions.get(k, 0.0) or 0.0)
+        for k in emotions
+    ) or 1.0
+
+    positive = joy + surprise
+    negative = sadness + fear + anger + frustration
+
+    valence = (positive - negative) / total
+
+    arousal = (
+        _get("surprise")
+        + _get("fear")
+        + _get("anger")
+        + joy
+    ) / total
+
+    joy_soft = max(0.0, min(1.0, joy / 1.0))
+
+    base_pitch = 160.0
+    pitch = base_pitch + valence * 26.0
+
+    pitch = max(120.0, min(205.0, pitch))
+
+    tempo = 1.0 + arousal * 0.30
+    tempo = max(0.82, min(1.28, tempo))
+
+    brighten_db = 18.0 + valence * 6.0
+    brighten_db = max(12.0, min(26.0, brighten_db))
+
+    drive = 2.6 - joy_soft * 0.6
+    drive = max(1.4, min(3.2, drive))
+
+    return {
+        "target_pitch_hz": float(pitch),
+        "tempo_ratio": float(tempo),
+        "brighten_db": float(brighten_db),
+        "drive": float(drive),
+    }
+
+
+def mood_from_agent(agent):
+    """
+    Извлечь текущее эмоциональное состояние агента и
+    преобразовать в аудиопараметры голоса.
+    """
+    try:
+        affective = getattr(
+            agent, "affective_state", None
+        )
+        if affective is None:
+            return None
+        snapshot = affective.snapshot()
+        emotions = snapshot.get("emotions")
+        if not emotions:
+            return None
+        return emotions_to_mood(emotions)
+    except Exception:
+        return None
+
+
 class VoiceIO:
     def __init__(self):
         from vosk import KaldiRecognizer, Model
@@ -127,28 +214,52 @@ class VoiceIO:
         except Exception:
             return ""
 
-    def speak(self, text: str):
+    def speak(self, text: str, mood=None):
         self._stop_flag = False
         self._playback_thread = threading.Thread(
             target=self._speak_worker,
-            args=(text,),
+            args=(text, mood),
             daemon=True,
         )
         self._playback_thread.start()
 
-    def _boyify(self, pcm: np.ndarray, rate: int):
+    def _boyify(self, pcm: np.ndarray, rate: int, mood=None):
+        if not mood:
+            mood = {
+                "target_pitch_hz": 160.0,
+                "tempo_ratio": 1.0,
+                "brighten_db": 18.0,
+                "drive": 2.6,
+            }
+
+        target_pitch = float(
+            mood.get("target_pitch_hz", 160.0)
+        )
+        tempo = float(
+            mood.get("tempo_ratio", 1.0)
+        )
+        brighten_db = float(
+            mood.get("brighten_db", 18.0)
+        )
+        drive = float(
+            mood.get("drive", 2.6)
+        )
+
         snd = parselmouth.Sound(pcm.astype(np.float64), rate)
         snd = flatten_pitch(snd, 0.60)
         proc_pcm = snd.values[0]
 
+        speed_out = int(round(100.0 / tempo))
+        speed_out = max(78, min(130, speed_out))
+
         sped = resample_poly(
             proc_pcm,
             100,
-            125,
+            speed_out,
             window=("kaiser", 14),
         )
-        out_pcm = brighten(sped, rate, 6500, 18.0)
-        out_pcm = saturate(out_pcm, 2.6)
+        out_pcm = brighten(sped, rate, 6500, brighten_db)
+        out_pcm = saturate(out_pcm, drive)
         out_pcm = equalize(out_pcm, rate)
         peak = np.abs(out_pcm).max()
         if peak > 0.99:
@@ -174,7 +285,7 @@ class VoiceIO:
                 "Multiply frequencies",
                 0,
                 snd2.duration,
-                160.0 / base_f0,
+                target_pitch / base_f0,
             )
             parselmouth.praat.call(
                 [man, tier], "Replace pitch tier"
@@ -185,7 +296,7 @@ class VoiceIO:
             return syn.values[0]
         return out_pcm
 
-    def _speak_worker(self, text: str):
+    def _speak_worker(self, text: str, mood=None):
         try:
             mp3_path = self._temp_dir / "reply.mp3"
 
@@ -216,7 +327,7 @@ class VoiceIO:
             container.close()
 
             pcm = np.concatenate(frames)
-            voiced = self._boyify(pcm, rate)
+            voiced = self._boyify(pcm, rate, mood)
             sd.play(voiced.astype(np.float32), samplerate=rate)
             sd.wait()
         except Exception:
