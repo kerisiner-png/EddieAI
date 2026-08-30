@@ -145,6 +145,37 @@ ActionObserver строковыми шаблонами вытаскивает д
     вела на zen-deepseek-pro (reasoning без JSON); переназначена на
     flash (5 модулей), тест test_model_router_reflection, регресс PASS.
     Перезапуск ночного для живой верификации рефлексии — TODO.
+13. **HIGH | Аудит 30.08: мёртвые хуки автономного обучения (этаж 4)** —
+    `EvidenceConsolidator.consolidate()` в автономном тике пакует кандидатов
+    в результат, но НЕ применяет (`autonomous_runtime.py:632-661`);
+    `ReflectionEngine.reflect()` возвращает signals, которые нигде не
+    потребляются (`agent_loop.py:1084-1098`). Автономное накопление
+    личностных evidence/рефлексии де-факто не работает. Плюс три
+    разрозненных промо-механизма (PromotionEngine 0.80/EvidenceConsolidator
+    0.70/PersonalityEngine 0.75) без единого узла. Полный аудит —
+    `docs_engineer\AUDIT\2026-08-30-audit-all-floors.md`.
+14. **HIGH | Аудит: сны не пишут событий в проде (этаж 7)** —
+    `snapshots_enabled=False` по умолчанию → провенанс DREAM и артефакты
+    рубежа A живут только при явной ночи/включении. Требует решения:
+    включить снимки по умолчанию или задокументировать условие.
+15. **MEDIUM | Аудит: любопытство (этаж 9) зависит от enable_decision_core** —
+    в конфигурации БЕЗ DecisionCore цель-кандидат CuriosityDirector не
+    активируется (`goal_generator` только с motivation-кандидатами). Night_run
+    использует True → в проде работает; зафиксировать требование в спеке/доке.
+16. **MEDIUM | Аудит: этаж 8 декларирует CPU/топ-процессы, но их нет** —
+    `world_probe.py` только RAM/диск; `_meminfo()["load"]` = загрузка RAM, не
+    CPU. Либо доделать, либо честно убрать из ROADMAP/спеки.
+17. **MEDIUM | Аудит: этаж 10 — двойная STT-архитектура** — voice_io.py
+    (whisper основн. + Vosk детектор) vs voice_repl.py (наоборот); ROADMAP
+    неверно описывает voice_repl (не поднимает автономию). Выбрать одну.
+18. **MEDIUM | Аудит: этаж 13 — нет обзора структуры проекта** —
+    FilesystemExecutor без листинга/glob/поиска → личность не может обозреть
+    свой код изнутри (фундамент «чтения собственного кода»). self-modification
+    заблокирована (write_enabled=False, allow_powershell=False).
+19. **LOW | Аудит: мусор/мёртвый код** — `*.backup`×19 + `agent_py_recovery_
+    2026-08-24\` (импортят identity.user) + `identity/user.py` (мёртв в живом
+    коде) + мёртвая таблица `evidence` (БД) поверх `evidence_events`;
+    `data/`: diary.db И personal_diary.db (два дневника).
 
 ## 4. Очередь задач
 
