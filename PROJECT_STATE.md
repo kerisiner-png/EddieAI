@@ -154,10 +154,15 @@ ActionObserver строковыми шаблонами вытаскивает д
     разрозненных промо-механизма (PromotionEngine 0.80/EvidenceConsolidator
     0.70/PersonalityEngine 0.75) без единого узла. Полный аудит —
     `docs_engineer\AUDIT\2026-08-30-audit-all-floors.md`.
-14. **HIGH | Аудит: сны не пишут событий в проде (этаж 7)** —
-    `snapshots_enabled=False` по умолчанию → провенанс DREAM и артефакты
-    рубежа A живут только при явной ночи/включении. Требует решения:
-    включить снимки по умолчанию или задокументировать условие.
+14. **[СНЯТО 30.08 при доделке] Аудит: «сны не пишут событий (этаж 7)»** —
+    ОКАЗАЛОСЬ ЛОЖНОЙ ПРОБЛЕМОЙ. Проверка кода: `dream_processor.record()`
+    пишет события DREAM/DREAM_INTERPRETATION в память БЕЗУСЛОВНО при наличии
+    сюжета сна (`process` → `record` вне зависимости от снапшотов;
+    `test_dream_processor` даёт events=2 при snapshots_enabled=False).
+    `snapshots_enabled` влияет ТОЛЬКО на снапшоты души (`soul_snapshot.
+    take_snapshot` + diff) — это осознанный флаг (не писать снапшот души на
+    каждый сон по умолчанию). Провенанс DREAM живой. Флаг-дефолт изменён НЕ
+    был — это предохранитель записи снапшотов души.
 15. **MEDIUM | Аудит: любопытство (этаж 9) зависит от enable_decision_core** —
     в конфигурации БЕЗ DecisionCore цель-кандидат CuriosityDirector не
     активируется (`goal_generator` только с motivation-кандидатами). Night_run
