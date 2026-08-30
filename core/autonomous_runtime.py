@@ -5,6 +5,7 @@ import threading
 
 from memory.events import Event
 from core.dream_processor import DreamProcessor
+from core.world_probe import WorldProbe
 
 
 @dataclass
@@ -26,6 +27,8 @@ class AutonomousRuntime:
         resource_watchdog=None,
         dream_processor=None,
         dream_snapshots=True,
+        curiosity=None,
+        world_probe=None,
     ):
         self.scheduler = scheduler
         self.memory = memory
@@ -34,6 +37,12 @@ class AutonomousRuntime:
         self.resource_watchdog = resource_watchdog
         self.dream_processor = dream_processor
         self.dream_snapshots = dream_snapshots
+        self.curiosity = curiosity
+        self.world_probe = (
+            world_probe
+            if world_probe is not None
+            else WorldProbe()
+        )
 
         self.state = "IDLE"
 

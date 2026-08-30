@@ -1,14 +1,16 @@
 from core.agent_loop import AgentLoop
 from core.autonomy_arbitrator import AutonomyArbitrator
+from core.autonomy_orchestrator import AutonomyOrchestrator
+from core.autonomy_scheduler import AutonomyScheduler
+from core.autonomous_runtime import AutonomousRuntime
+from core.curiosity import CuriosityDirector
 from core.decision_core import DecisionCore
 from core.eddie_server import EddieServer
 from core.life_cycle import LifeCycle
 from core.model_orchestrator import ModelOrchestrator
-from core.autonomy_orchestrator import AutonomyOrchestrator
-from core.autonomous_runtime import AutonomousRuntime
-from core.autonomy_scheduler import AutonomyScheduler
 from core.outbox import Outbox
 from core.speech_habits import SpeechHabits
+from core.world_probe import WorldProbe
 
 from identity.action_planner import ActionPlanner
 from identity.action_preference_detector import ActionPreferenceDetector
@@ -37,6 +39,7 @@ from identity.goal_plan_generator import (
 from identity.goal_planner import GoalPlanner
 from identity.goal_review import GoalReview
 from identity.llm_executor import LLMExecutor
+from identity.llm_access import CloudFirstLlm
 from identity.motivation import MotivationEngine
 from identity.reflection_engine import (
     ReflectionEngine,
@@ -504,6 +507,21 @@ class AutonomyRuntimeFactory:
         )
         runtime.tool_registry = registry
         runtime.tool_runner = tool_runner
+
+        director = CuriosityDirector(
+            self.agent.self_state,
+            goal_manager,
+            llm=CloudFirstLlm(
+                model_orchestrator=(
+                    self.agent.model_orchestrator
+                )
+            ),
+        )
+        tool_runner.curiosity = director
+        orchestrator.curiosity = director
+        runtime.curiosity = director
+        runtime.world_probe = WorldProbe()
+
         runtime.external_recorder = (
             external_recorder
         )

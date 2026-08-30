@@ -771,6 +771,36 @@ class AutonomyOrchestrator:
         return None
 
     def tick(self):
+        curiosity = getattr(
+            self, "curiosity", None
+        )
+        if curiosity is not None:
+            try:
+                asleep = False
+                life_cycle = getattr(
+                    self.agent,
+                    "life_cycle",
+                    None,
+                )
+                if life_cycle is not None:
+                    asleep = bool(
+                        life_cycle.is_asleep()
+                    )
+                decision = curiosity.evaluate(
+                    asleep=asleep,
+                )
+                if decision.get(
+                    "should_act"
+                ):
+                    curiosity.topic_goal(
+                        curiosity.select_topic()
+                    )
+            except Exception as exc:
+                print(
+                    "CURIOSITY_ERROR:",
+                    exc,
+                )
+
         if self.decision_core is not None:
             return self._tick_local()
 
