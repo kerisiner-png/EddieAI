@@ -4,6 +4,26 @@
 [АРХИВ], когда её описание перестаёт соответствовать живому коду.
 Формат — см. docs_engineer\README.md. Времена артефактные.
 
+## 30.08.2026
+
+### [АКТУАЛЬНО] Смена living-tools-world (этажи 9/8): любопытство + мир-модель РЕАЛИЗОВАНЫ (7 задач + ревью + коррекции)
+Спека `SPECS\2026-08-30-living-tools-world-design.md`, план `PLANS\2026-08-30-living-tools-world-plan.md`.
+- **Этаж 9** `core/curiosity.py::CuriosityDirector`: evaluate (пороги: сон, кулдаун 1800с, RAM<1024МБ, web≥25/llm≥10 за сутки), select_topic из interests («Исследовать тему: <тема>»), topic_goal через goal_manager (source=curiosity), track_action (usage_today), daily_llm_topic (1 облачный вызов/сутки, кэш 24ч, graceful без LLM), mark_acted (кулдаун).
+- **Проводка в прод**: фабрика (`autonomy_runtime_factory.py`) ставит director на tool_runner/orchestrator/runtime, llm.curiosity=director, world_probe=WorldProbe, ensure_world_description. `orchestrator.tick()` — шаг любопытства в начале: evaluate с реальными счётчиками usage_today + available_ram_mb (resource_watchdog), при should_act → daily_llm_topic(recent_life) fallback select_topic → topic_goal → mark_acted.
+- **Хуки осведомлённости**: `tool_runner._execute_web_search` и `_execute_web` (прямой WEB_SEARCH) → track_action("web"); `llm_access.CloudFirstLlm.chat` → track_action("llm") (getattr+try/except).
+- **Этаж 8** `core/world_probe.py::WorldProbe` (ctypes: GlobalMemoryStatusEx/GetDiskFreeSpaceExW/NtQuerySystemInformation/tоп-процессы, throttle, сводка ≤300 симв); `core/world_description.py` (build_world_description/ensure_world_description/world_block; блок «ГДЕ ТЫ ЖИВЁШЬ» в `prompts.build_quick_conversation_prompt`, world_description в `self_state_interface.snapshot()`).
+- **Триггеры мира**: `autonomous_runtime._probe_world_on_pressure` — при critical RAM (watchdog if throttle) и при пробуждении (`_record_sleep_event` was_asleep); событие WORLD_SNAPSHOT через events-конвейер + print-сводка.
+- **Исправлено по финальному ревью** (коррекции коммит b950809): кулдаун ожил (mark_acted), evaluate получает счётчики/RAM, web-хук покрыл прямой WEB_SEARCH, llm-хук ожил (llm.curiosity), daily_llm_topic задействован. Также d3cc35f — init world_description (дыра: никто не заполнял).
+- **Тесты**: test_curiosity (7+3), test_usage_hooks (2+2), test_curiosity_daily_llm (2), test_world_probe (3), test_world_description (2+2), test_runtime_curiosity (2), test_world_trigger (2) — все PASS; регресс test_production_runtime (TICK_EXECUTED) + test_decision_revive ALL PASS.
+- **Коммиты**: b4eb4ee (T1), b2d86be (T2), 2eb12cf (T3), 2684519 (T4), 86f0d5d (T5), d4e484c (T6), 13907f1 (T7), d3cc35f (fix world init), b950809 (коррекции ревью). Финальное ре-ревью (final-review.md) — APPROVE.
+- UTF-8 без BOM у всех правленых файлов; литеральных «?» в новых текстах нет.
+
+### [АКТУАЛЬНО] Task 2 плана living-tools-world: хуки осведомлённости (счётчики трат)
+- `identity/tool_runner.py::_execute_web_search` — инкремент `curiosity.track_action("web")` при наличии `self.curiosity` (getattr, try/except Exception: pass).
+- `identity/llm_access.py::CloudFirstLlm.chat` — инкремент `track_action("llm")` в облачной ветке перед `return raw.strip()` (тот же guard).
+- Новый тест `test_usage_hooks.py` (2 кейса, стабы реестра/orchestrator, прямой вызов `_execute_web_search`). Прогон: 2/2 FAIL до правок → 2/2 OK после. Коммит b2d86be.
+- UTF-8 без BOM у трёх файлов подтверждён; mojibake-маркеров нет.
+
 ## 29.08.2026
 
 ### [АКТУАЛЬНО] Ночная смена 30.08 (решение Эдди): закрыты нижние контуры этажей 5–14

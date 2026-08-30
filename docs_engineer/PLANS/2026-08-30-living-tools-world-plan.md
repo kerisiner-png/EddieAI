@@ -1051,6 +1051,38 @@ git commit -m "docs(features): этажи 9/8 — инструменты как 
 
 ---
 
+## Ход исполнения (30.08, факт)
+
+Все 7 задач исполнены субагентами (TDD, big-pickle), коммиты в порядке:
+b4eb4ee (T1), b2d86be (T2), 2eb12cf (T3), 2684519 (T4), 86f0d5d (T5),
+d4e484c (T6), 13907f1 (T7). Поправки по результатам ревью/предфайта:
+
+- **T4 — точка интеграции**: `prompts.build_system_prompt` в проде не
+  используется (только тест `test_life_prompt_blocks`); живой диалог —
+  `build_quick_conversation_prompt` (agent.py). Блок «ГДЕ ТЫ ЖИВЁШЬ»
+  встроен туда (f-string после «Твои активные цели»), а `world_description`
+  добавлен в `SelfStateInterface.snapshot()`.
+- **T5 — точка встраивания**: реальный автономный цикл —
+  `AutonomyOrchestrator.tick()` (autonomy_orchestrator.py:773), класс
+  `AutonomousCycle` в проде не используется. Шаг любопытства — в начале
+  tick(). Директор собран в фабрике с `CloudFirstLlm`.
+- **T7 — триггеры**: `resource_watchdog` в runtime вызывается как
+  `check()` (dict с `level`), блок `if throttle:` — критическая RAM;
+  второй триггер — конец `_record_sleep_event` при `was_asleep` (пробуждение).
+- **Дыра (закрыта, d3cc35f)**: `build_world_description()` в проде никто не
+  вызывал — `world_description` оставался `None`. Добавлен
+  `ensure_world_description(self_state)` (заполняет только пустое, сохраняет
+  существующее) + вызов в `build()` фабрики.
+- **Ревью-коррекции (b950809)**: кулдаун ожил (`mark_acted()`), evaluate
+  получил реальные счётчики usage_today + available_ram_mb из
+  `resource_watchdog.check()`, web-хук покрыл прямой `_execute_web`,
+  `llm.curiosity = director` в фабрике, `daily_llm_topic` включён в tick
+  (fallback на `select_topic()`).
+- **Ревью**: 2 прохода свежим ревьюером; вердикт APPROVE;
+  отчёт `final-review.md` в workspace SDD.
+
+---
+
 ## Self-Review
 
 **Spec coverage:**

@@ -9,3 +9,4 @@ logs/
 .eddieai_secrets/
 *.key
 models/
+.superpowers/

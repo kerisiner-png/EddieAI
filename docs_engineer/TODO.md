@@ -5,6 +5,17 @@
 
 ## АКТУАЛЬНОЕ
 
+### [30.08 дневная смена] Смена living-tools-world (этажи 9/8) — РЕАЛИЗОВАНА, ревью APPROVE
+- [x] CuriosityDirector (evaluate/select_topic/topic_goal/track_action/daily_llm_topic/mark_acted) — ядро.
+- [x] Проводка в прод: фабрика (tool_runner/orchestrator/runtime/world_probe/llm.curiosity), tick() с реальными счётчиками + суточной темой, кулдаун ожил.
+- [x] Хуки осведомлённости: прямой WEB_SEARCH + _execute_web_search → web; CloudFirstLlm.chat → llm.
+- [x] WorldProbe (ctypes) + world_description + WORLD_SNAPSHOT-триггеры (RAM critical, пробуждение) + ensure_world_description (дыра закрыта).
+- [x] Финальное ревью ветки — 2 прохода, VERDICT APPROVE (final-review.md в workspace SDD).
+- [x] Регресс: 27 юнит-тестов + test_production_runtime + test_decision_revive — PASS.
+- [ ] Живая приёмка на проде: суточный прогон PID 39972 (старый код, перезапуск не делается — фича считается вступившей после следующего перезапуска прогона). Критерий спеки: ≥1 исследовательская цель/сутки + WORLD_SNAPSHOT по триггеру.
+- [ ] Бэклог: доделать порог «инициатива «проверить мир» как тема» в CuriosityDirector (расширение, не обязательное).
+- [ ] Бэклог: тесты на пороги evaluate в связке tick (сейчас юнит, интеграция подтверждена чтением кода).
+
 ### [29.08 вечер] Аномалия «вечный IDLE» — ВЫЛЕЧЕНА (TDD, перезапуск на новом коде)
 - [x] Диагноз подтверждён: `_last_action_at=None` → `idle_seconds=0` вечно +
       `_next_interest_target()` пуст (цели-интересы COMPLETED).
