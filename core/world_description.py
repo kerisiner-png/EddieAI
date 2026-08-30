@@ -35,3 +35,12 @@ def world_block(world_description: str) -> str:
         "ГДЕ ТЫ ЖИВЁШЬ\n"
         f"{world_description}\n"
     )
+
+
+def ensure_world_description(self_state) -> str:
+    existing = self_state.get("world_description")
+    if existing:
+        return existing
+    text = build_world_description()
+    self_state.set("world_description", text)
+    return text

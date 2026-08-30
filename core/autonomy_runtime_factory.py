@@ -522,6 +522,17 @@ class AutonomyRuntimeFactory:
         runtime.curiosity = director
         runtime.world_probe = WorldProbe()
 
+        try:
+            from core.world_description import (
+                ensure_world_description,
+            )
+
+            ensure_world_description(
+                self.agent.self_state
+            )
+        except Exception:
+            pass
+
         runtime.external_recorder = (
             external_recorder
         )
