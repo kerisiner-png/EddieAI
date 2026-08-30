@@ -51,6 +51,12 @@ class ToolExecutionPolicy:
         if action_type == "WRITE_FILE":
             return self._write_file(action)
 
+        if action_type == "LIST_DIR":
+            return self._list_dir(action)
+
+        if action_type == "SEARCH_FILES":
+            return self._search_files(action)
+
         if action_type == "RUN_COMMAND":
             return self._powershell(action)
 
@@ -115,6 +121,49 @@ class ToolExecutionPolicy:
 
         return self._allow(
             "Чтение файла разрешено."
+        )
+
+    def _list_dir(self, action):
+        if not self.allow_read_files:
+            return self._deny(
+                "Листинг каталога отключён."
+            )
+
+        path = action.parameters.get(
+            "path"
+        )
+
+        if not path:
+            return self._deny(
+                "Не указан путь к каталогу."
+            )
+
+        if not self._inside_filesystem(path):
+            return self._deny(
+                "Каталог находится вне sandbox."
+            )
+
+        return self._allow(
+            "Листинг каталога разрешён."
+        )
+
+    def _search_files(self, action):
+        if not self.allow_read_files:
+            return self._deny(
+                "Поиск файлов отключён."
+            )
+
+        pattern = action.parameters.get(
+            "pattern"
+        )
+
+        if not pattern:
+            return self._deny(
+                "Не указан паттерн поиска."
+            )
+
+        return self._allow(
+            "Поиск файлов разрешён."
         )
 
     def _write_file(

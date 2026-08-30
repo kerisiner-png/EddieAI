@@ -425,6 +425,20 @@ class ToolRunner:
                 ],
             )
 
+        if action.action_type == "LIST_DIR":
+            return tool.executor.list(
+                path=action.parameters["path"],
+            )
+
+        if action.action_type == "SEARCH_FILES":
+            return tool.executor.search(
+                pattern=action.parameters["pattern"],
+                limit=action.parameters.get(
+                    "limit",
+                    100,
+                ),
+            )
+
         return {
             "status": "UNSUPPORTED",
             "error": (

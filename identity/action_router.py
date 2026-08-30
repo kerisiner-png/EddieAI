@@ -21,6 +21,8 @@ class ActionRouter:
         "WRITE": "llm",
         "READ_FILE": "filesystem",
         "WRITE_FILE": "filesystem",
+        "LIST_DIR": "filesystem",
+        "SEARCH_FILES": "filesystem",
         "RUN_COMMAND": "powershell",
         "WEB_SEARCH": "web",
         "OPEN_URL": "web",

@@ -9,6 +9,8 @@ VALID_ACTIONS = {
     "WRITE",
     "READ_FILE",
     "WRITE_FILE",
+    "LIST_DIR",
+    "SEARCH_FILES",
     "RUN_COMMAND",
     "WEB_SEARCH",
     "OPEN_URL",
