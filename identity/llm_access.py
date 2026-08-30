@@ -50,6 +50,11 @@ class CloudFirstLlm:
             )
 
         if raw is not None:
+            if getattr(self, "curiosity", None) is not None:
+                try:
+                    self.curiosity.track_action("llm")
+                except Exception:
+                    pass
             return raw.strip()
 
         try:

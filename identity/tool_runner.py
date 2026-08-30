@@ -347,10 +347,16 @@ class ToolRunner:
         self,
         query: str,
         limit: int = 5,
-    ):
+):
         tool = self.registry.require(
             "web"
         )
+
+        if getattr(self, "curiosity", None) is not None:
+            try:
+                self.curiosity.track_action("web")
+            except Exception:
+                pass
 
         return tool.executor.search(
             query=query,
