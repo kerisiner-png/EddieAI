@@ -69,6 +69,7 @@ class ModelOrchestrator:
                 "conversation",
                 "fallback",
                 "plan",
+                "reflection",
             ],
         },
         {
@@ -83,7 +84,6 @@ class ModelOrchestrator:
             "model": "deepseek-v4-pro",
             "max_tokens": 1024,
             "roles": [
-                "reflection",
                 "deep",
             ],
         },
@@ -356,6 +356,237 @@ class ModelOrchestrator:
             self._cloud_last_error[name] = error
             print(f"[cloud] {name} недоступен: {error}")
             return None
+
+    def cloud_chat_stream(
+        self,
+        *,
+        system,
+        user,
+        options=None,
+        on_delta=None,
+        task=None,
+    ):
+        """
+        Стриминговый облачный вызов (SSE). on_delta(piece)
+        вызывается по мере поступления текста.
+        Возвращает полный текст или None.
+        """
+        options = options or {}
+        now = time.time()
+
+        matching = [
+            provider
+            for provider in self.CLOUD_PROVIDERS
+            if not provider.get("roles")
+            or (
+                task is not None
+                and task in provider["roles"]
+            )
+        ]
+
+        if not matching:
+            matching = self.CLOUD_PROVIDERS
+
+        for provider in matching:
+            key_path = provider["key_path"]
+
+            if not key_path.exists():
+                continue
+
+            name = provider["name"]
+
+            if now < self._cloud_blocked.get(
+                name, 0.0
+            ):
+                continue
+
+            try:
+                api_key = (
+                    key_path.read_text(
+                        encoding="utf-8"
+                    ).strip()
+                )
+                payload = {
+                    "model": provider["model"],
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": (
+                                system
+                                + "\nНикогда не используй эмодзи."
+                            ),
+                        },
+                        {
+                            "role": "user",
+                            "content": user,
+                        },
+                    ],
+                    "temperature": options.get(
+                        "temperature", 0.7
+                    ),
+                    "max_tokens": min(
+                        options.get(
+                            "num_predict", 300
+                        ),
+                        provider.get(
+                            "max_tokens", 512
+                        ),
+                    ),
+                    "stream": True,
+                }
+                response_format = options.get(
+                    "response_format"
+                )
+                if response_format is not None:
+                    payload["response_format"] = (
+                        response_format
+                    )
+                payload.update(
+                    provider.get(
+                        "extra_payload", {}
+                    )
+                )
+                req = urllib.request.Request(
+                    provider["url"],
+                    data=json.dumps(
+                        payload
+                    ).encode("utf-8"),
+                    headers={
+                        "Content-Type": (
+                            "application/json"
+                        ),
+                        "User-Agent": (
+                            "Mozilla/5.0 "
+                            "(Windows NT 10.0; "
+                            "Win64; x64) "
+                            "AppleWebKit/537.36 "
+                            "(KHTML, like Gecko) "
+                            "Chrome/131.0 "
+                            "Safari/537.36"
+                        ),
+                    },
+                )
+                if (
+                    api_key
+                    and api_key != "no-auth"
+                ):
+                    req.add_header(
+                        "Authorization",
+                        f"Bearer {api_key}",
+                    )
+                pieces = []
+                with urllib.request.urlopen(
+                    req,
+                    timeout=(
+                        self.CLOUD_TIMEOUT_SEC
+                    ),
+                ) as resp:
+                    for raw in resp:
+                        line = raw.decode(
+                            "utf-8",
+                            errors="replace",
+                        ).strip()
+                        if not line.startswith(
+                            "data:"
+                        ):
+                            continue
+                        data = line[5:].strip()
+                        if data == "[DONE]":
+                            break
+                        try:
+                            obj = json.loads(
+                                data
+                            )
+                        except json.JSONDecodeError:
+                            continue
+                        choices = (
+                            obj.get("choices")
+                            or []
+                        )
+                        if not choices:
+                            continue
+                        delta = (
+                            choices[0].get(
+                                "delta", {}
+                            )
+                            or {}
+                        )
+                        piece = delta.get(
+                            "content", ""
+                        ) or ""
+                        if not piece:
+                            continue
+                        pieces.append(piece)
+                        if on_delta is not None:
+                            try:
+                                on_delta(piece)
+                            except Exception:
+                                pass
+                content = "".join(
+                    pieces
+                ).strip()
+                if content:
+                    self._cloud_used = name
+                    self._cloud_last_error[
+                        name
+                    ] = ""
+                    self._cloud_blocked.pop(
+                        name, None
+                    )
+                    return content
+                self._cloud_last_error[
+                    name
+                ] = "empty"
+                return None
+            except urllib.error.HTTPError as exc:
+                detail = ""
+                try:
+                    detail = exc.read().decode(
+                        "utf-8",
+                        errors="replace",
+                    )[:200]
+                except Exception:
+                    pass
+                error = (
+                    f"HTTP {exc.code}: "
+                    f"{detail}"
+                )
+                cooldown = (
+                    self.CLOUD_BILLING_COOLDOWN_SEC
+                    if exc.code
+                    in (401, 402, 403)
+                    else self.CLOUD_NET_COOLDOWN_SEC
+                )
+                self._cloud_blocked[
+                    name
+                ] = now + cooldown
+                self._cloud_last_error[
+                    name
+                ] = error
+                print(
+                    f"[cloud] {name} "
+                    f"недоступен: {error}"
+                )
+                return None
+            except Exception as exc:
+                error = (
+                    f"{type(exc).__name__}: "
+                    f"{exc}"
+                )
+                self._cloud_blocked[name] = (
+                    now
+                    + self.CLOUD_NET_COOLDOWN_SEC
+                )
+                self._cloud_last_error[
+                    name
+                ] = error
+                print(
+                    f"[cloud] {name} "
+                    f"недоступен: {error}"
+                )
+                return None
+
+        return None
 
     def __init__(
         self,

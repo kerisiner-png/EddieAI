@@ -10,7 +10,8 @@ from core.autonomy_orchestrator import (
 from communication.call_engine import (
     CallDirector,
     EDDIEAI_SPEAKING,
-    IN_CALL,
+    RINGING_OUT,
+    ACTIVE,
     IDLE,
 )
 
@@ -62,9 +63,9 @@ director = CallDirector()
 server.call_director = director
 
 server.initiate_call("Привет, это я!")
-assert director.state() != IDLE, "звонок не стартовал"
-assert server.pending_initiative is not None
-assert "Привет" in server.pending_initiative["text"]
+assert director.state() == RINGING_OUT, "звонок не стартовал"
+assert server.pending_initiative is None, \
+    "настоящий звонок стартует без инициативы"
 
 # 3. Cooldown: повторный авто-звонок не перезапускает звонок,
 #    а только шлёт инициативу (уже в звонке / таймаут)
@@ -73,9 +74,11 @@ director2 = CallDirector()
 server2.call_director = director2
 server2.initiate_call("Раз")
 server2.initiate_call("Два")
-assert director2.state() == EDDIEAI_SPEAKING or \
-    director2.state() == IN_CALL
-assert server2.pending_initiative is not None
+assert director2.state() in (RINGING_OUT, ACTIVE), \
+    director2.state()
+assert server2.pending_initiative is not None, \
+    "повторный вызов в cooldown шлёт инициативу"
+assert "Два" in server2.pending_initiative["text"]
 
 # 4. orchestrator маршрутизирует CALL -> server.initiate_call
 stub = _Stub()

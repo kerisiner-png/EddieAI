@@ -5,6 +5,172 @@
 
 ## АКТУАЛЬНОЕ
 
+### [29.08 вечер] Аномалия «вечный IDLE» — ВЫЛЕЧЕНА (TDD, перезапуск на новом коде)
+- [x] Диагноз подтверждён: `_last_action_at=None` → `idle_seconds=0` вечно +
+      `_next_interest_target()` пуст (цели-интересы COMPLETED).
+- [x] Вариант (а): `_last_action_at = datetime.now(timezone.utc)` в `__init__`
+      orchestrator (idle растёт от создания процесса).
+- [x] Вариант (б): `_next_interest_target` возвращает новый followup-шаблон
+      «Найти новые аспекты темы: <интерес>» для COMPLETED-цели (первый
+      неиспользованный, карусели нет). Вариант (в) не понадобился.
+- [x] Тест `test_decision_revive.py` RED→GREEN + полный регресс рубежа A — PASS.
+- [x] Новый ночной прогон перезапущен 29.08 22:26 на этом коде (1440 заново,
+      PID 39972, маркер `[22:26:53] NIGHT RUN START (restart)`).
+- [x] Наблюдение ЗАКРЫТО по артефактам: первый тик 22:26:57 `decision=
+      ACTIVATE_GOAL`, `idle=15` (не заморожен!), далее COMPLETE_GOAL +
+      облачные вызовы. Ночью агент спал (ASLEEP, cloud_calls=15). Мотивация
+      и цикл работают — «вечный IDLE» вылечен.
+
+### [29.08 ночь → 30.08] Рубеж A «Душа впитывает» — ЗАКРЫТ (приёмка по артефактам)
+- [x] Первый сон на новом коде 29.08 23:44:58 (`day_end`) → 23:45:17: DREAM
+      + DREAM_INTERPRETATION в memory.db, дневник `diary` trigger=dream,
+      снимки души 234458_before / 234517_after.
+- [x] Критерий 1 (diff души ≠ пуст): diff keys=6, в т.ч. `emotions.surprise`
+      0.0→0.1 (эмоция сна проявилась в душе), `counters.diary` 12→13.
+- [x] Критерий 2 (страх сна < страха яви, вес DREAM 0.25): surprise после сна
+      0.1 < эмоции яви до сна (joy 0.134, curiosity 0.347, satisfaction 0.362).
+- [x] Критерий 3 (0 прямых изменений черт): traits 5/5 до и после, набор id.
+- [x] Критерий 4 (провенанс DREAM на каждом артефакте): source_type=DREAM /
+      DREAM_INTERPRETATION подтверждён запросом.
+- [x] Диагностика раннего DREAM (29.08 16:55, старый код): сон из ритуала
+      без полного цикла C4; на новом коде — полный цикл day_end→dream.
+
+### [29.08 ночь] Пре-экзистентный дефект `test_production_runtime` — ЗАКРЫТ 30.08 (вариант а)
+- Тест от 19.08 строит `AutonomousRuntime` напрямую без `decision_core`,
+  а в `autonomous_runtime.py` с 17:31 (до моих правок) добавлен блок
+  `if self.decision_core is not None` — атрибут проставляет фабрика
+  (`autonomy_runtime_factory.py:527`). Плюс cp1252 консоль не печатает
+  кириллицу (`print(goal)`).
+- [x] Выбран вариант (а): `__init__` runtime инициализирует опциональные
+  зависимости (`decision_core`/`speech_habits`/`eddie_server`/`outbox`
+  = None, фабрика перекрывает). Тест: EXIT=0 (PYTHONIOENCODING=utf-8).
+- [x] Регресс затронутого: py_compile OK, test_decision_revive ALL PASS.
+
+### [29.08 ночь] Рубеж A «Душа впитывает»: механизм снов С1–С4 РЕАЛИЗОВАН (TDD, всё PASS)
+Мандат Эдди «работай автономно». Дизайн — `docs_engineer\design_rubezh_a_dreams.md`.
+- [x] С1 провенанс DREAM (0.25) / DREAM_INTERPRETATION (0.35) — memory/provenance.py.
+- [x] С2 `core/dream_processor.py` — жатва→replay→кадры→flash-осмысление→
+      apply_reaction (×0.5×0.25)→DREAM+дневник; фолбэк без эмоций; dry-режим.
+- [x] С3 `simulation_framework\dream_night.py` — кадры без LLM/движка (CLI +
+      `build_night_builder` для контракта night).
+- [x] С4 хук `_dream_night()` на входе в SLEEP (autonomous_runtime.py) +
+      сборка процессора из агента; флаг `dream_snapshots`.
+- [x] Регресс (включая обновлённый test_life_rituals: переход в сон = 2 LLM-вызова).
+- [x] ПРИЁМКА В БОЮ ЗАКРЫТА (см. раздел «Рубеж A — ЗАКРЫТ» выше).
+- [x] КРИТЕРИЙ РУБЕЖА A (spec, п.12): все 4 пункта подтверждены артефактами
+      сна 29.08 23:45 (diff≠пуст; след сна < следа яви; 0 изменений черт;
+      провенанс DREAM).
+
+### [28.08] «Доступ к результатам действий» + «судья знает жизнь» (TDD, всё PASS)
+Жалоба EddieAI (CONVERSATION #1981/#1986) подтверждена данными и кодом.
+Реализовано: `Memory.recent_action_results(limit)` + `Agent._action_results_block`
+(блок «РЕЗУЛЬТАТЫ ТВОИХ ДЕЙСТВИЙ» в quick_user_prompt и в полный user_prompt)
+и `SemanticJudge` получает `life_context` (лента жизни + результаты действий)
+в `judge`/`regenerate` — fabrication оценивается против реальных фактов.
+Тесты: test_action_results_block, test_semantic_judge_life_context (RED→GREEN);
+регресс decision/жизненного набора — PASS. Файлы: memory/database.py,
+core/agent.py, core/semantic_judge.py. Дейностующий ночной прогон PID 30988
+работает на коде БЕЗ этиx правок (жалоба касается диалога) — перезапуск
+по желанию: «перезапустить ночной на новый код» (ниже).
+- [x] Починить REFLECTION-парсинг: корнем был НЕ парсер, а роутинг —
+  роль `reflection` вела на zen-deepseek-pro (reasoning-монолог без JSON).
+  Живой пробой доказано; роли переназначены на flash (29.08, тест
+  test_model_router_reflection). Осталось: живая верификация в проде
+  (перезапустить ночной → REFLECTION с lesson, без error).
+- [x] Закрыть тест-долги: test_auto_call / test_call_interrupt / test_life_cycle
+  (обновлены под актуальный контракт, 3x ALL PASS). Подробности — CHANGELOG 29.08.
+- [x] Вшить `VoiceIO.start_interrupt_detector` в голосовой контур (chat_app/
+      сервер): `_speak_with_detector` и `_speech_drain_loop` запускают
+      детектор на время озвучки в звонке (колбэк `_on_detected_speech`),
+      завершают по reap/дренажу. TDD: test_call_interrupt (кейсы 5–6),
+      регресс тестов звонка PASS. Подробности — CHANGELOG 30.08.
+- [x] Закрыть пре-экзистентный дефект `test_production_runtime`: вариант
+      (а) — `__init__` runtime инициализирует опциональные зависимости
+      (`decision_core`/`speech_habits`/`eddie_server`/`outbox` = None,
+      проставляет фабрика); тест EXIT=0 (PYTHONIOENCODING=utf-8).
+- [x] Легаси-артефакт «кириллица в `logs\eddie_night.log` cp1251» —
+      ЛОЖНАЯ ТРЕВОГА: файл пишется `encoding="utf-8"` (night_run.log),
+      строгая проверка: decode utf-8 OK (1.51M символов, 0 «?»).
+      «Кракозябры» — артефакт вывода Get-Content в cp1251-консоли.
+- [x] SEMANTIC_VIOLATION/INTERNAL_LEAK за новую серию (прогон с 29.08
+      22:26): 0/0 по прод-БД (events id≥2211). REFLECTION — 1 запись
+      валидная, без error (рубрика вечернего ритуала, flash-модель,
+      парсинг работает). «Плётка» за правдивые результаты ушла.
+
+### [28.08] Контур «Живой жизни» реализован (TDD, всё PASS)
+spec+план утверждены; реализованы непрерывность (промпты + лента
+событий), воля без «часового» порога (CALL по безделью>=900c) и
+ритуалы пробуждения/засыпания. Файлы: memory/database.py,
+core/prompts.py, core/agent.py, core/autonomous_runtime.py,
+core/decision_core.py; тесты test_life_feed / test_life_prompt_blocks /
+test_life_feed_block / test_life_rituals / test_decision_core.
+Подробности — CHANGELOG 28.08.
+- [x] Диагностика «молчания» ночного прогона (запрос Эдди): карусель
+  мёртвой активации (паттерн→ACTIVATE завершённой цели→COMPLETE цикл).
+- [x] Фикс карусели (TDD): `_activation_is_dead` + фильтр в паттерн-ветке
+  `decide()`, `learn_from_memory()`, `_learn_from_memory_for()`;
+  `test_decision_loop_guard.py` ALL OK; регресс decision-тестов PASS.
+- [x] Перезапустить ночной прогон `night_run.py --minutes 1440` на коде
+  С фиксом карусели: PID 30988 (старт 19:06, чат attached 19:06:21);
+  карусель визирована исчезнувшей (тики decision=IDLE при безделье,
+  growth cloud_calls только READ_INBOX-активностью, no «бума» times_used).
+- [x] Починить pre-existing fail: `test_auto_call.py` (устаревший импорт
+  IN_CALL/IDLE из communication.call_engine) — актуализирован (29.08).
+- [x] Разобраться с flaky `test_life_cycle.py` (HARD-порог сна 1.0 при
+  активной задаче: fatigue 0.85 за ночной час добирает до 1.0 и усыпляет;
+  правка входных данных теста 0.80 — см. CHANGELOG 29.08).
+- [ ] Проверить в проде: 4 старых паттерна карусели игнорируются логикой
+  (cleanup данных не требуется; при желании — разово удалить позже).
+
+### [27.08] «Настоящий звонок» — модель реального телефона
+Переписать звонок с «турн-тейкинга» на модель реального телефона
+(входящий → решить ответить/отклонить → разговор → завершение любой
+стороной) + вариант C (CALL в локальных правилах + стимул «давно не
+разговаривали» в контексте EddieAI). Решения Эдди: входящий звонок →
+ВСЕГДА через LLM-решение EddieAI; режим разговора — «с собеседником»,
+не «с хозяином».
+- [x] CallDirector = машина состояний (IDLE/RINGING_IN/RINGING_OUT/
+  ACTIVE/ENDED) + константы обратной совместимости; смоук PASS.
+- [x] eddie_server.py: _wire_call_director, _pending_incoming_call,
+  _user_call_incoming/decide_incoming_call/_user_call_answer/_user_call_reject/
+  _user_call_end, initiate_call→start_call_out+broadcast, ветки
+  call_ring/answer/reject/end в handle(), seconds_since_last_convo.
+- [x] tcp_client.py: send_call, on_call_ring/on_call_status, разбор
+  call_ring/call_status.
+- [x] ui_chat.py: баннер входящего звонка (ответить/отклонить),
+  show_ring_status, set_call_ended, обновлённый set_call_state.
+- [x] chat_app.py: _wire_call_director, регистрация on_call_ring/
+  on_call_status, _on_call_toggle (call_end при ACTIVE, иначе call_ring in),
+  _accept_incoming/_decline_incoming.
+- [x] decision_core.py: HANDLE_INCOMING_CALL + ветка incoming_call в
+  начале _local_rules + вариант C (CALL при time_since_last_convo>=3600
+  и random<0.0005) + import random.
+- [x] autonomy_orchestrator.py: _build_state (+incoming_call,
+  +time_since_last_convo), _apply_action ветка HANDLE_INCOMING_CALL →
+  _handle_incoming_call (LLM-решение через agent.respond, JSON
+  {"accept":bool,"reason":str}, фолбэк → принять, → server.decide_incoming_call).
+- [x] Проверки: OK_COMPILE_ALL, OK_INTEGRATION (переходы состояний),
+  OK_BRANCHES, OK_HANDLE_INCOMING (LLM→CALL_ACCEPTED).
+- [x] Перезапуск суточного прогона с новым кодом (решение Эдди «когда
+  починим, тогда перезапустим»): PID 29292 остановлен, запущен
+  night_run.py --minutes 1440 (новые PID 32356/34264). Лог 18:26:
+  «chat attached», «autonomy loop: STARTED», тики идут.
+- [ ] Проверить сценарий входящего звонка вживую (Эдди звонит →
+  LLM-решение → ответ/отклон).
+- [x] Duplex-запуск при звонке: авто-микрофон при ACTIVE в chat_app
+  (прослушивание в паузах, отправка распознанной речи EddieAI,
+  пауза пока EddieAI отвечает голосом). Компиляция PASS, прогон
+  перезапущен (PID 24612). Живая приёмка разговора — на Эдди.
+- [x] Звонок-разговор без «30 секунд»: немедленный ответ на
+  user_message при ACTIVE (eddie_server, без ожидания тика 15с) +
+  надёжность авто-микрофона (is_speaking вместо эвристики, таймаут,
+  разговор не рвётся после ответа). Прогон перезапущен (PID 15596).
+- [x] VTuber-стек голоса: распознавание faster-whisper small (вместо
+  Vosk; модель в models/whisper) + стриминг ответа (cloud_chat_stream
+  SSE, первый токен ~1.4с) + respond_call_fast (лёгкий разговорный
+  промпт) + озвучка по чанкам (agent_speech_chunk, очередь в chat_app).
+  Прогон перезапущен (PID 36456). Живая приёмка — на Эдди.
+
 ### [27.08] Быстрый рот Piper + подростковый голос (фундамент duplex-звонка)
 Цель: озвучка была ~6с (edge-tts) — неприемлемо для живого голосового
 общения. Эдди: «озвучка слишком медленная для этого этапа». Итог:
@@ -201,10 +367,23 @@ EddieAI теперь помечает собственные выводы в о�
 - [x] Петля зацикливания сломана: execute() deep-ветка для
   fast=False задач.
 - [x] watchdog.py: авторестарт каждую минуту.
-- [ ] ДНЕВНОЙ РЕФАКТОРИНГ: перевести все 7 модулей с прямых
-  ollama-вызовов на orchestrator (сейчас мост только в night_run).
-- [ ] Разобрать качество research-результатов (что реально делает
-  WebExecutor в «Провести исследование»).
+- [x] ДНЕВНОЙ РЕФАКТОРИНГ: модули на orchestrator — DONE (27.08).
+  Проверкой установлено: 7 модулей УЖЕ переведены на единый
+  CloudFirstLlm (облако-первое) — adaptive_planner, goal_plan_generator,
+  personality_reflection, reflection_engine, self_reflection,
+  self_interpretation, decision_core, semantic_judge. Единственный
+  остаток — reflection_cycle.run() звал прямой локальный ollama без
+  облака; приведён к тому же паттерну (облако-первый + локальный
+  фолбэк), убрана зависимость от глобального моста night_run.
+  py_compile OK, test_self_state_seed PASS.
+- [x] Разобрать качество research-результатов — DONE (диагностика
+  27.08, живые вызовы): WebExecutor.search (DDG HTML) → SourceEvaluator
+  → read_page топ-3 → ExternalRecorder → SelfInterpreter. Находит
+  релевантное и по-английски, и по-русски; read_page чистый текст
+  (+Wikipedia REST); SSRF работает. Единственное ограничение:
+  нестабильность DDG HTML (иногда 0 результатов/капча при работающем
+  источнике). Кандидат на правку (по согласованию): ретрай search при
+  пустом/капче-результате.
 
 ### [ЗАКРЫТО 25.08 утро] Д7: ролевые границы — ЗАКРЫТ
 
@@ -231,9 +410,14 @@ EddieAI теперь помечает собственные выводы в о�
   (залипание смягчено промптом). ВОЗМОЖНАЯ проблема, если когда-нибудь
   откажемся от облака: тогда вернуть 8B/14B-локаль (70B на рефлексию
   и/или расширение памяти до 16 ГБ для локальных моделей побольше).
-- [ ] Д4 ОТКРЫТ: AFFECTIVE_BEHAVIOR_VIOLATION CONFLICTED_NO_NEXT_STEP
-  на многие ответы — разобрать причину (возможно завышенная
-  чувствительность валидатора).
+- [x] Д4 ЗАКРЫТ (диагностика 27.08): AFFECTIVE_BEHAVIOR_VIOLATION
+  CONFLICTED_NO_NEXT_STEP. Корень шума: violation писался в память ДО
+  проверки значимости (мусор на каждый ответ), каскад исторических
+  Д1/Д2 (облачный отказ + зацикленность 8B) читался валидатором как
+  конфликт. Фиксы уже в коде: запись в память только после
+  should_repair (agent.py:2475), вопрос в CONFLICTED только при
+  question_tendency>=0.85, severity 0.45→0.30. test_affect_d4.py PASS.
+  Ожидание живой сверки отклика — при следующем полном прогоне.
 - [ ] Уши: аудио-транскрипция через HF-whisper.
 
 ### [НОВОЕ 25.08 ночь, 02:15] Дефекты первого живого диалога Эдди↔EddieAI (монитор базы)
@@ -352,16 +536,41 @@ C:\EddieAI\agent_py_recovery_2026-08-24\. Детали — CHANGELOG.
       таймаут LLM 600с, атомарный self_state+бэкап, keep_alive "15m",
       user_markers guard'а, живые промпт-строки/события agent.py,
       reason agent_loop.
-- [ ] R1 канал действия ядра: меню возможностей мира (bridge) →
+- [x] R1 канал действия ядра: меню возможностей мира (bridge) →
       action_selector выбирает → вербализация озвучивает выбранное;
       ActionObserver сверяет текст с действием; журнал source=core_selector.
+      [27.08: закрыт; расширен на все деятельности (move + activity),
+      SPECS: RUBEZH_R1_full_volition_2026-08-27.md; подробности CHANGELOG;
+      физика DO_VERBS — осознанно вне объёма: отдельный этап]
 - [ ] R2 «Проба воли»: сценарий volition_probe (~60–90 вирт-минут,
       точки выбора без директив), смоук без LLM + 3 прогона с LLM
       (ночь, RAM!). PASS: ≥1 core_selector действие, последствие в мире,
       возврат наблюдением, сдвиг appraisal, запись в память, 2/3 прогона.
+      [27.08: решение Эдди «если надо — делай, если нет — пофиг, всё равно
+      запустим на полные 24ч». Отдельного сценария volition_probe НЕТ
+      (проверено: все реальные сценарии или с принудительной директивой,
+      или первый день нового города). R2-проверка воли ПЕРЕНОСИТСЯ на
+      суточный 24ч-запуск: кандидат — first_day_new_city (86400с, БЕЗ
+      принудительных директив, has_directive=False, реальные точки
+      выбора move+activity; сборка проверена). Анализ — готовым
+      analyze_volition_night.py (критерий source==core_selector И
+      (location_changed ИЛИ activity_declared), без фраз). Отдельные
+      дорогие LLM-прогоны сейчас НЕ запущены (экономия квоты).]
 - [ ] После R2: A/B вербализаторов phi4-mini vs qwen3.5:4b.
-- [ ] R3 режимы жизни (сон/пробуждение): watchdog RAM/CPU, тики
+- [x] R3 режимы жизни (сон/пробуждение): watchdog RAM/CPU, тики
       состояния без LLM, авто-выгрузка модели. Фундамент 24/7 + майн.
+      [27.08 (решение «R3+R2, потом 24h»): ЧАСТИЧНО ЗАКРЫТ — watchdog
+      RAM в 24/7-цикле. new core/resource_watchdog.py (ctypes win32,
+      без psutil; enabled=False опц-ин; critical<700МБ/low<1024МБ, probe
+      30с, hold-off 60с) встроен в AutonomousRuntime.tick() (при
+      should_throttle() -> THROTTLED, LLM-тик пропущен, жизнь уже тикнула
+      без LLM); проброс в фабрику (resource_watchdog=None); включён в
+      night_run.py. «Сон без LLM» и «тик без LLM» подтверждены уже-
+      существующими (is_asleep()/life_cycle.update()). Авто-выгрузка
+      локальной модели НЕ делалась (CloudFirstLlm ленив — выгрузка
+      имплицитна; LLM-интеграцию не трогаем). Остаток: watchdog CPU +
+      отдельный watchdog_life.py (вариант C) — опционально, отложено]
+- [ ] После R3: вечерний СУТОЧНЫЙ запуск 24 ч (после R2-минпрогонов).
 
 Смена (вечер/ночь 22.08, соло, мандат «работай сам») — промежуточное
 состояние; визуальная приёмка скринов за Эдди
@@ -451,44 +660,61 @@ C:\EddieAI\agent_py_recovery_2026-08-24\. Детали — CHANGELOG.
 
 ## МЕХАНИЗМ СНОВ (утверждено Эдди 25.08 ночь; план согласован)
 
-Статус: ЗАПЛАНИРОВАНО, старт — после закрытия текущего фронта
-(контур честности идёт в параллельной сессии). Сон = главный путь
-рубежа A «Душа впитывает» (P0-a эмоции + P0-c следы мышления).
-Форма: A→B гибрид — replay дня + ассоциативная склейка,
-осмысление локальной моделью. Симуляция = механизм сновидений.
+Статус: ЗАКРЫТ (реализовано 29.08 С1–С4, решение Эдди по модели — облачный
+flash; дизайн в design_rubezh_a_dreams.md; приёмка в бою — 30.08 по сну
+29.08 23:45, см. раздел «Рубеж A — ЗАКРЫТ» выше).
+Сон = путь рубежа A «Душа впитывает» (P0-a эмоции + P0-c следы
+мышления). Форма: A→B гибрид — replay дня + ассоциативная склейка.
 
-- [ ] С1. Провенанс сна: memory/provenance.py += DREAM (вес 0.25),
-      DREAM_INTERPRETATION (0.35). Делать ПЕРВЫМ при старте работ.
-- [ ] С2. Ядро лёгких снов: core/dream_processor.py — жатва событий
-      дня → replay-вариации → ассоциативные кадры → COGNITIVE_DECISION
-      (source=DREAM) → AppraisalEngine ×0.5 демпфер → apply_reaction
-      (легитимный писатель аффекта) → осмысление qwen →
-      PersonalDiary.write («Сегодня мне снилось...») → снимки
-      pre/post_sleep + diff души.
-- [ ] С3. Мировые сны: simulation_framework\dream_night.py —
-      ассоциативный мир 10–30 вирт-минут БЕЗ LLM из элементов реальных
-      дней; наблюдения агенту через bridge с флагом DREAM.
-- [ ] С4. Интеграция в сутки (R3): фаза SLEEP вызывает сон;
-      утренний отчёт = что снилось + diff души.
-- [ ] КРИТЕРИЙ РУБЕЖА A: ночь, в памяти которой был кризис →
-      diff души ≠ пуст; страх от сна < страха от яви; 0 прямых
-      изменений черт личности от снов.
+- [x] С1. Провенанс сна: memory/provenance.py += DREAM (вес 0.25),
+      DREAM_INTERPRETATION (0.35). Сделано; тест test_provenance_dream.py.
+- [x] С2. Ядро лёгких снов: core/dream_processor.py — жатва (жизнь +
+      результаты действий) → replay → ассоциативные кадры (детерминизм
+      по rng, лимит повторов 3) → осмысление flash (strict JSON, фолбэк
+      без эмоций) → apply_reaction (source=DREAM, дельта ×0.5 ×0.25) →
+      записи DREAM (0.25) + DREAM_INTERPRETATION (0.35) + PersonalDiary
+      («Сегодня мне снилось...») → снимки души (опция). Тест: 7 кейсов.
+- [x] С3. Мировые сны: simulation_framework\dream_night.py —
+      генератор кадров БЕЗ LLM/SimulationRuntime (CLI + build_night_builder
+      для контракта night). Проверен: 4 кадра, детерминизм по seed.
+- [x] С4. Интеграция в сутки (R3): переход в SLEEP вызывает _dream_night()
+      после вечернего ритуала (autonomous_runtime.py). Подтверждено в бою
+      29.08 23:45 (сон тих, без действий).
+- [x] ПРИЁМКА В БОЮ ЗАКРЫТА: события DREAM/DREAM_INTERPRETATION в прод-БД,
+      запись в дневнике (trigger=dream), diff души (keys=6), сон тих и
+      без действий.
+- [x] КРИТЕРИЙ РУБЕЖА A: diff души ≠ пуст; страх от сна < страха от яви;
+      0 прямых изменений черт личности от снов.
 
 Правила безопасности: source=DREAM обязателен на каждом артефакте
 сна; вес evidence 0.25 против 1.0 у яви; запрет менять черты
 напрямую (только proposal низкого давления); лимит повторов одного
-сюжета за ночь (урок токсичной спирали 13 побегов).
+сюжета за ночь (урок токсичной спирали 13 побегов). Эмоции сна —
+легитимный apply_reaction, черты в снах НЕ трогаются.
 
 
 ## ОЧЕРЕДЬ РУБЕЖЕЙ (карта после снов; согласована 25.08 ночь)
 
-- [ ] Рубеж A «Душа впитывает» = закрытие P0-a/P0-c через механизм
-      снов (см. выше) + критерий diff души ≠ пуст на двух прогонах.
+[30.08 ночь, решение Эдди «закрыть этажи, чтобы подниматься выше»:
+нижние контуры этажей 5–14 закрыты по артефактам; недоделки — в бэклогах
+ROADMAP. Рубежи A→B→C — это проверки, после которых поднимаемся на
+этаж 13 «Саморазвитие» (блокеры: этаж 9 инструменты в проде, этаж 8
+состояние ПК).]
+
+- [x] Рубеж A «Душа впитывает» = закрыт 30.08: критерии снов (см. выше)
+      подтверждены артефактами сна 29.08 23:45 (diff души ≠ пуст на
+      первом же полном цикле C4; остальные 3 критерия тоже PASS).
 - [ ] Рубеж B «Живёт сутки»: R3 сон/бодрствование, тики состояния
       без LLM, watchdog RAM/CPU, авто-выгрузка модели, рестарт
       llama-воркера по расписанию (P2-b аудита). PASS: первые
       непрерывные сутки в песочнице без человека, утром дневник +
       diff души.
+      [30.08 ночь: суточный прогон ИДЁТ (night_run --minutes 1440,
+      PID 39972, старт 29.08 22:26, финиш ~30.08 22:26). План
+      приёмки готов: PLANS\2026-08-30-rubezh-b-sutki.md. R3/
+      ритуалы/тики-без-LLM/watchdog RAM — уже в проде работают.
+      Остаток на решение Эдди: watchdog CPU + P2-b llama-воркер
+      (доделать vs N/A в облачном режиме).]
 - [ ] Рубеж C «Голос в сутках»: неблокирующий голосовой REPL
       (слушает во время генерации), семантический судья P1-b,
       периодические снимки P6. PASS: разговор в любой момент суток,

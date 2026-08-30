@@ -2,6 +2,12 @@ import json
 import socketserver
 import threading
 
+from communication.call_engine import (
+    IDLE,
+    ACTIVE,
+    ENDED,
+)
+
 
 class EddieServer:
     """
@@ -53,9 +59,45 @@ class EddieServer:
 
         self._inbox_callback = None
 
+        self._call_state_callbacks = []
+
         self.call_director = None
 
         self._last_auto_call_at = None
+
+        self._pending_incoming_call = None
+
+        self._last_convo_at = None
+
+    def set_inbox_callback(self, callback):
+        self._inbox_callback = callback
+
+    def on_call_state(self, callback):
+        """
+        Подписка на изменение состояния звонка.
+        callback(state, direction) вызывается в потоке
+        дирижёра — внешнему коду (UI) нужно перекинуть
+        вызов в свой поток.
+        """
+        self._call_state_callbacks.append(callback)
+
+    def _notify_call_state(self, state, direction=None):
+        for cb in list(self._call_state_callbacks):
+            try:
+                cb(state, direction)
+            except Exception:
+                pass
+
+    def _wire_call_director(self):
+        d = self.call_director
+        if d is None:
+            return
+        try:
+            d.set_state_change_callback(
+                self._notify_call_state
+            )
+        except Exception:
+            pass
 
     def set_inbox_callback(self, callback):
         self._inbox_callback = callback
@@ -250,6 +292,8 @@ class EddieServer:
         EddieAI решил прочитать непрочитанные
         сообщения Эдди. Отвечает на последнее,
         пишет в память (respond), шлёт ответ.
+        При активном звонке — быстрый разговорный
+        ответ со стримингом (озвучка по чанкам).
         Возвращает ответ или None.
         """
         if self.history is None:
@@ -270,10 +314,82 @@ class EddieServer:
 
         latest = unread[-1]["text"]
 
-        with self._respond_lock:
-            answer = self.agent.respond(
-                latest
-            )
+        if self._call_state() == ACTIVE:
+            conversation = self._recent_conversation(6)
+            chunk_buffer = []
+
+            def on_delta(piece):
+                chunk_buffer.append(piece)
+                text = "".join(chunk_buffer)
+                idx = max(
+                    text.rfind("."),
+                    text.rfind("!"),
+                    text.rfind("?"),
+                )
+                if idx >= 0:
+                    sentence = text[: idx + 1]
+                    rest = text[idx + 1:]
+                    if sentence.strip():
+                        self.broadcast({
+                            "type": "agent_speech_chunk",
+                            "text": sentence.strip(),
+                        })
+                        chunk_buffer[:] = [rest]
+
+            with self._respond_lock:
+                answer = self.agent.respond_call_fast(
+                    conversation,
+                    latest,
+                    on_delta,
+                )
+
+            if answer is None:
+                answer = ""
+
+            rest = "".join(chunk_buffer).strip()
+
+            if rest:
+                self.broadcast({
+                    "type": "agent_speech_chunk",
+                    "text": rest,
+                })
+
+            if answer:
+                try:
+                    self.agent.memory.remember(
+                        Event.create(
+                            content=(
+                                "Голосовой звонок с Эдди. "
+                                f"Он сказал: {latest}"
+                            ),
+                            event_type="CONVERSATION",
+                            source_type="DIRECT_INTERACTION",
+                            source="Eddie",
+                            personal_experience=False,
+                            confidence=1.0,
+                            verified=True,
+                        )
+                    )
+                    self.agent.memory.remember(
+                        Event.create(
+                            content=(
+                                "Я в голосовом звонке "
+                                f"ответил голосом: "
+                                f"{answer}"
+                            ),
+                            event_type="CONVERSATION",
+                            source_type="SELF_OUTPUT",
+                            source="EddieAI",
+                            personal_experience=False,
+                            confidence=1.0,
+                            verified=True,
+                        )
+                    )
+                except Exception:
+                    pass
+        else:
+            with self._respond_lock:
+                answer = self.agent.respond(latest)
 
         ai_id = None
 
@@ -291,6 +407,27 @@ class EddieServer:
         })
 
         return answer
+
+    def _recent_conversation(self, limit):
+        if self.history is None:
+            return ""
+        try:
+            items = self.history.chat_recent(limit)
+        except Exception:
+            return ""
+        lines = []
+        for item in items:
+            sender = item.get("sender", "?")
+            label = (
+                "Эдди"
+                if sender == "Eddie"
+                else "EddieAI"
+            )
+            lines.append(
+                f"{label}: "
+                f"{item.get('text', '')}"
+            )
+        return "\n".join(lines)
 
     # ---------------------------------------------
     # ИНИЦИАТИВА
@@ -360,15 +497,16 @@ class EddieServer:
         cooldown_seconds: int = 900,
     ):
         """
-        EddieAI сам инициирует звонок.
+        EddieAI сам инициирует исходящий звонок.
 
-        Если подключён дирижёр звонка (call_director) —
-        включает состояние звонка; затем шлёт инициативу
-        текстом (в голосовом режиме она озвучивается).
+        Ставит дирижёр в RINGING_OUT и рассылает
+        call_ring (direction=out). Собеседник решает,
+        ответить или отклонить; разговор (ACTIVE)
+        наступает только после answer().
 
-        Защита от спама:
-        - если звонок уже идёт — только инициатива текстом;
-        - не чаще одного авто-звонка за cooldown_seconds.
+        Защита от спама: не чаще одного авто-звонка
+        за cooldown_seconds; во время звонка — только
+        текстовая инициатива.
         """
         text = text.strip()
 
@@ -377,6 +515,8 @@ class EddieServer:
 
         if self.call_director is not None:
             try:
+                self._wire_call_director()
+
                 if self.call_director.in_call():
                     return self.send_initiative(text)
 
@@ -391,11 +531,21 @@ class EddieServer:
                     )
 
                     if elapsed < cooldown_seconds:
-                        return self.send_initiative(text)
+                        return self.send_initiative(
+                            text
+                        )
 
-                self.call_director.start_call()
+                self.call_director.start_call_out()
 
                 self._last_auto_call_at = self._now()
+
+                self._broadcast_call({
+                    "type": "call_ring",
+                    "direction": "out",
+                    "text": text,
+                })
+
+                return None
             except Exception:
                 return self.send_initiative(text)
 
@@ -403,6 +553,127 @@ class EddieServer:
 
     def note_user_reply(self):
         self.pending_initiative = None
+        self._last_convo_at = self._now()
+
+    def _call_state(self):
+        d = self.call_director
+        if d is None:
+            return IDLE
+        try:
+            return d.state()
+        except Exception:
+            return IDLE
+
+    def _broadcast_call(self, body):
+        payload = dict(body)
+        payload.setdefault(
+            "state",
+            self._call_state(),
+        )
+        payload.setdefault(
+            "direction",
+            getattr(
+                self.call_director,
+                "direction",
+                lambda: None,
+            )()
+            if self.call_director is not None
+            else None,
+        )
+        self.broadcast(payload)
+
+    def _user_call_incoming(self, text):
+        """
+        Эдди звонит EddieAI (входящий звонок).
+        Звонок ставится в RINGING_IN; решение
+        «ответить/отклонить» принимает EddieAI в
+        своём цикле (через LLM). Пока решение не
+        принято — звонок висит как входящий.
+        """
+        if self.call_director is None:
+            return
+
+        if not self.call_director.incoming_call():
+            return
+
+        self._pending_incoming_call = {
+            "text": text,
+            "at": self._now(),
+        }
+
+        self._broadcast_call({
+            "type": "call_ring",
+            "direction": "in",
+        })
+
+    def decide_incoming_call(self, accept):
+        """
+        EddieAI принял решение по входящему звонку.
+        accept -> True/False.
+        """
+        d = self.call_director
+        if d is None:
+            return
+
+        if accept:
+            d.answer()
+            self._broadcast_call({
+                "type": "call_status",
+                "state": ACTIVE,
+            })
+        else:
+            d.reject()
+            self._broadcast_call({
+                "type": "call_status",
+                "state": ENDED,
+            })
+
+        self._pending_incoming_call = None
+
+    def _user_call_answer(self):
+        """
+        Эдди ответил на исходящий звонок EddieAI
+        (или просто подтвердил ACTIVE).
+        """
+        d = self.call_director
+        if d is None:
+            return
+        if d.answer():
+            self._broadcast_call({
+                "type": "call_status",
+                "state": ACTIVE,
+            })
+
+    def _user_call_reject(self):
+        d = self.call_director
+        if d is None:
+            return
+        if d.reject():
+            self._broadcast_call({
+                "type": "call_status",
+                "state": ENDED,
+            })
+
+    def _user_call_end(self):
+        d = self.call_director
+        if d is None:
+            return
+        if d.end():
+            self._broadcast_call({
+                "type": "call_status",
+                "state": ENDED,
+            })
+
+    def seconds_since_last_convo(self):
+        if self._last_convo_at is None:
+            return None
+        return int(
+            (
+                self._now()
+                - self._last_convo_at
+            ).total_seconds()
+        )
+
 
     def check_pending_initiative(
         self,
@@ -597,6 +868,59 @@ class EddieServer:
                                 writer.flush()
                             except Exception:
                                 break
+
+                        if (
+                            self._call_state() == ACTIVE
+                        ):
+                            threading.Thread(
+                                target=self.respond_and_deliver,
+                                daemon=True,
+                            ).start()
+
+                        continue
+
+                    if payload.get(
+                        "type"
+                    ) == "call_ring":
+                        incoming = str(
+                            payload.get(
+                                "direction",
+                                "in",
+                            )
+                        )
+
+                        if incoming == "out":
+                            self._user_call_answer()
+                        else:
+                            text = str(
+                                payload.get(
+                                    "text",
+                                    "",
+                                )
+                            )
+                            self._user_call_incoming(
+                                text
+                            )
+
+                        continue
+
+                    if payload.get(
+                        "type"
+                    ) == "call_answer":
+                        self._user_call_answer()
+                        continue
+
+                    if payload.get(
+                        "type"
+                    ) == "call_reject":
+                        self._user_call_reject()
+                        continue
+
+                    if payload.get(
+                        "type"
+                    ) == "call_end":
+                        self._user_call_end()
+                        continue
 
             def finish(handler_self):
                 self._unregister(

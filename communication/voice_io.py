@@ -2,6 +2,7 @@ import json
 import asyncio
 import tempfile
 import threading
+from collections import deque
 from pathlib import Path
 
 import numpy as np
@@ -19,6 +20,8 @@ from scipy.signal import (
 
 
 VOSK_MODEL_DIR = Path(r"C:\EddieAI\models\vosk\vosk-model-small-ru-0.22")
+WHISPER_MODEL = "small"
+WHISPER_CACHE = Path(r"C:\EddieAI\models\whisper")
 VOICE = "ru-RU-DmitryNeural"
 PIPER_MODEL_DIR = Path(
     r"C:\EddieAI\models\piper\ru_RU-dmitri-medium.onnx"
@@ -34,6 +37,27 @@ MAX_RECORD_SEC = 15.0
 MIN_SPEECH_SEC = 0.7
 INTERRUPT_MIN_WORDS = 2
 INTERRUPT_SILENCE_SEC = 0.9
+
+_VOICE_DBG_LOG = Path(
+    r"C:\Users\keris\AppData\Local\Temp\opencode\voice_dbg.log"
+)
+
+
+def _dbg(msg):
+    try:
+        import datetime
+
+        with open(
+            _VOICE_DBG_LOG,
+            "a",
+            encoding="utf-8",
+        ) as f:
+            f.write(
+                f"[{datetime.datetime.now().strftime('%H:%M:%S')}] "
+                f"{msg}\n"
+            )
+    except Exception:
+        pass
 
 
 def flatten_pitch(sound, keep):
@@ -166,8 +190,16 @@ class VoiceIO:
     _pip_lock = threading.Lock()
 
     def __init__(self):
+        from faster_whisper import WhisperModel
         from vosk import KaldiRecognizer, Model
 
+        self._whisper = WhisperModel(
+            WHISPER_MODEL,
+            device="cpu",
+            compute_type="int8",
+            cpu_threads=2,
+            download_root=str(WHISPER_CACHE),
+        )
         self._model = Model(str(VOSK_MODEL_DIR))
         self._rec = KaldiRecognizer(self._model, SAMPLE_RATE)
         self._temp_dir = Path(tempfile.mkdtemp(prefix="eddie_voice_"))
@@ -177,6 +209,11 @@ class VoiceIO:
         self._int_det_stop = False
         self._int_det_cb = None
         self._int_det_end_cb = None
+        self._stream_stop = False
+        self._stream_thread = None
+        self._stream_on_phrase = None
+        self._stream_on_speech_start = None
+        self._stream_stop_check = None
 
     def _ensure_piper(self):
         with VoiceIO._pip_lock:
@@ -235,11 +272,17 @@ class VoiceIO:
         return np.concatenate(chunks).reshape(-1)
 
     def _transcribe_pcm(self, pcm):
-        self._rec.Reset()
-        data = (np.clip(pcm, -1, 1) * 32767).astype(np.int16).tobytes()
-        self._rec.AcceptWaveform(data)
-        result = json.loads(self._rec.FinalResult())
-        return (result.get("text") or "").strip()
+        segments, _info = self._whisper.transcribe(
+            pcm,
+            language="ru",
+            beam_size=1,
+            vad_filter=True,
+            condition_on_previous_text=False,
+        )
+        text = " ".join(
+            seg.text.strip() for seg in segments
+        ).strip()
+        return text
 
     def record_and_transcribe(self) -> str:
         try:
@@ -249,6 +292,273 @@ class VoiceIO:
         except Exception:
             return ""
 
+    def start_stream_listen(
+        self,
+        on_phrase,
+        on_speech_start=None,
+        stop_check=None,
+    ):
+        """
+        Непрерывное прослушивание микрофона на весь звонок
+        (полный duplex + partial-перебивание).
+
+        Микрофонный поток никогда не блокируется на
+        транскрипции (начало речи не теряется, кольцевой
+        буфер). Отдельный partial-поток:
+        - каждые ~1.6с речи транскрибирует накопленное;
+          если слов >= 5 — фраза считается готовой и
+          уходит on_phrase немедленно (не дожидаясь тишины);
+        - транскрибирует завершённые фразы (по тишине)
+          из очереди.
+        on_speech_start вызывается в момент начала речи
+        (немедленное прерывание EddieAI).
+        """
+        if self._stream_thread is not None:
+            return
+        self._stream_stop = False
+        self._stream_on_phrase = on_phrase
+        self._stream_on_speech_start = on_speech_start
+        self._stream_stop_check = stop_check
+        self._stream_lock = threading.Lock()
+        self._stream_pending = []
+        self._stream_recording = False
+        self._stream_speech_sec = 0.0
+        self._stream_silent_sec = 0.0
+        self._stream_final_queue = deque()
+        self._stream_last_partial_at = 0.0
+        self._stream_last_emitted = ""
+        self._stream_thread = threading.Thread(
+            target=self._stream_listen_loop,
+            daemon=True,
+        )
+        self._stream_thread.start()
+        self._stream_partial_thread = (
+            threading.Thread(
+                target=self._stream_partial_loop,
+                daemon=True,
+            )
+        )
+        self._stream_partial_thread.start()
+
+    def stop_stream_listen(self):
+        self._stream_stop = True
+
+    def _stream_listen_loop(self):
+        import time
+
+        try:
+            with sd.InputStream(
+                samplerate=SAMPLE_RATE,
+                channels=1,
+                dtype="float32",
+                blocksize=int(
+                    SAMPLE_RATE * CHUNK_SEC
+                ),
+            ) as stream:
+                noise = self._calibrate_noise(stream)
+                threshold = noise * 3.0 + 0.005
+                _dbg(
+                    f"cal noise={noise:.4f} "
+                    f"thresh={threshold:.4f}"
+                )
+                ring = deque(
+                    maxlen=int(1.2 / CHUNK_SEC)
+                )
+                stop_check = (
+                    self._stream_stop_check
+                )
+                while (
+                    not self._stream_stop
+                    and (
+                        stop_check is None
+                        or not stop_check()
+                    )
+                ):
+                    data, _ = stream.read(
+                        int(SAMPLE_RATE * CHUNK_SEC)
+                    )
+                    ring.append(data.copy())
+                    rms = float(
+                        np.sqrt((data ** 2).mean())
+                    )
+                    with self._stream_lock:
+                        if rms > threshold:
+                            if (
+                                not self._stream_recording
+                            ):
+                                self._stream_recording = True
+                                self._stream_pending = (
+                                    list(ring)
+                                )
+                                self._stream_speech_sec = 0.0
+                                self._stream_silent_sec = 0.0
+                                _dbg(
+                                    f"rec_start rms={rms:.4f} "
+                                    f"thresh={threshold:.4f}"
+                                )
+                                if (
+                                    self._stream_on_speech_start
+                                    is not None
+                                ):
+                                    try:
+                                        self._stream_on_speech_start()
+                                    except Exception:
+                                        pass
+                            self._stream_pending.append(
+                                data.copy()
+                            )
+                            self._stream_speech_sec += (
+                                CHUNK_SEC
+                            )
+                            self._stream_silent_sec = 0.0
+                        else:
+                            if self._stream_recording:
+                                self._stream_pending.append(
+                                    data.copy()
+                                )
+                                self._stream_silent_sec += (
+                                    CHUNK_SEC
+                                )
+                                if (
+                                    self._stream_speech_sec
+                                    >= MIN_SPEECH_SEC
+                                    and self._stream_silent_sec
+                                    >= SILENCE_LIMIT_SEC
+                                ):
+                                    self._stream_final_queue.append(
+                                        list(
+                                            self._stream_pending
+                                        )
+                                    )
+                                    _dbg(
+                                        "final enqueued "
+                                        f"len={len(self._stream_pending)}"
+                                    )
+                                    self._stream_recording = False
+                                    self._stream_pending = []
+                                    self._stream_speech_sec = 0.0
+                                    self._stream_silent_sec = 0.0
+                        if (
+                            self._stream_recording
+                            and len(
+                                self._stream_pending
+                            )
+                            * CHUNK_SEC
+                            >= MAX_RECORD_SEC
+                        ):
+                            self._stream_final_queue.append(
+                                list(
+                                    self._stream_pending
+                                )
+                            )
+                            _dbg(
+                                "final maxlen enqueued "
+                                f"len={len(self._stream_pending)}"
+                            )
+                            self._stream_recording = False
+                            self._stream_pending = []
+                            self._stream_speech_sec = 0.0
+                            self._stream_silent_sec = 0.0
+        except Exception as exc:
+            _dbg(
+                f"listen except {type(exc).__name__}: {exc}"
+            )
+        finally:
+            self._stream_thread = None
+
+    def _stream_partial_loop(self):
+        import time
+
+        stop_check = self._stream_stop_check
+        while (
+            not self._stream_stop
+            and (
+                stop_check is None
+                or not stop_check()
+            )
+        ):
+            if self._stream_final_queue:
+                with self._stream_lock:
+                    buf = (
+                        self._stream_final_queue.popleft()
+                        if self._stream_final_queue
+                        else None
+                    )
+                if buf is not None:
+                    self._emit_phrase(buf)
+                    continue
+
+            now = time.monotonic()
+            take = False
+            with self._stream_lock:
+                if (
+                    self._stream_recording
+                    and self._stream_speech_sec >= 3.0
+                    and (
+                        now
+                        - self._stream_last_partial_at
+                        >= 2.2
+                    )
+                ):
+                    take = True
+            if take:
+                with self._stream_lock:
+                    self._stream_last_partial_at = now
+                    buf = list(self._stream_pending)
+                if buf:
+                    try:
+                        pcm = np.concatenate(
+                            buf
+                        ).reshape(-1)
+                        text = self._transcribe_pcm(
+                            pcm
+                        )
+                    except Exception:
+                        text = ""
+                    if len(text.split()) >= 5:
+                        _dbg(
+                            f"partial emit words={len(text.split())} "
+                            f"text={text[:60]!r}"
+                        )
+                        self._emit_text(text)
+                        with self._stream_lock:
+                            self._stream_recording = False
+                            self._stream_pending = []
+                            self._stream_speech_sec = 0.0
+                            self._stream_silent_sec = 0.0
+                    else:
+                        _dbg(
+                            f"partial low words={len(text.split())} "
+                            f"text={text[:60]!r}"
+                        )
+            time.sleep(0.2)
+
+    def _emit_phrase(self, chunks):
+        try:
+            pcm = np.concatenate(
+                chunks
+            ).reshape(-1)
+            text = self._transcribe_pcm(pcm)
+        except Exception:
+            text = ""
+        self._emit_text(text)
+
+    def _emit_text(self, text):
+        if not text:
+            _dbg("emit EMPTY")
+            return
+        if text == self._stream_last_emitted:
+            _dbg(f"emit skip dup: {text[:40]!r}")
+            return
+        self._stream_last_emitted = text
+        _dbg(f"emit: {text[:80]!r}")
+        cb = self._stream_on_phrase
+        if cb is not None:
+            try:
+                cb(text)
+            except Exception:
+                pass
+
     def speak(self, text: str, mood=None):
         self._stop_flag = False
         self._playback_thread = threading.Thread(
@@ -257,6 +567,42 @@ class VoiceIO:
             daemon=True,
         )
         self._playback_thread.start()
+
+    def play_ringtone(self):
+        if self._stop_flag:
+            return
+        self._playback_thread = threading.Thread(
+            target=self._ringtone_worker,
+            daemon=True,
+        )
+        self._playback_thread.start()
+
+    def _ringtone_worker(self):
+        try:
+            rate = SAMPLE_RATE
+            tone_dur = 0.35
+            gap_dur = 0.25
+            rings = 2
+            freq_a = 440.0
+            freq_b = 480.0
+            t_tone = np.linspace(
+                0, tone_dur, int(rate * tone_dur),
+                endpoint=False,
+            )
+            tone = (
+                0.15 * np.sin(2 * np.pi * freq_a * t_tone)
+                + 0.15 * np.sin(2 * np.pi * freq_b * t_tone)
+            )
+            gap = np.zeros(int(rate * gap_dur))
+            ring = np.concatenate([tone, gap])
+            signal = np.tile(ring, rings)
+            sd.play(
+                signal.astype(np.float32),
+                samplerate=rate,
+            )
+            sd.wait()
+        except Exception:
+            pass
 
     def _boyify(self, pcm: np.ndarray, rate: int, mood=None):
         if not mood:
@@ -331,6 +677,21 @@ class VoiceIO:
             return syn.values[0]
         return out_pcm
 
+    def _play_pcm(self, pcm, rate):
+        data = pcm.astype(np.float32)
+        blocksize = max(1, int(rate / 20))
+        with sd.OutputStream(
+            samplerate=rate,
+            channels=1,
+            dtype="float32",
+        ) as out:
+            i = 0
+            while i < len(data):
+                if self._stop_flag:
+                    break
+                out.write(data[i:i + blocksize])
+                i += blocksize
+
     def _speak_worker(self, text: str, mood=None):
         try:
             pcm, rate = self._synth_piper(text)
@@ -348,8 +709,7 @@ class VoiceIO:
                 rate,
                 dict(mood, target_pitch_hz=base_pitch),
             )
-            sd.play(voiced.astype(np.float32), samplerate=rate)
-            sd.wait()
+            self._play_pcm(voiced, rate)
         except Exception:
             self._speak_worker_fallback(text, mood)
 
@@ -385,17 +745,16 @@ class VoiceIO:
 
             pcm = np.concatenate(frames)
             voiced = self._boyify(pcm, rate, mood)
-            sd.play(voiced.astype(np.float32), samplerate=rate)
-            sd.wait()
+            self._play_pcm(voiced, rate)
         except Exception:
             pass
 
     def stop_speaking(self):
         self._stop_flag = True
-        try:
-            sd.stop()
-        except Exception:
-            pass
+
+    def is_speaking(self):
+        t = self._playback_thread
+        return t is not None and t.is_alive()
 
     def start_interrupt_detector(self, callback):
         """

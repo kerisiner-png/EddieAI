@@ -2,6 +2,7 @@ import queue
 import socket
 import threading
 import tkinter as tk
+from collections import deque
 
 from core.agent import Agent
 from core.eddie_server import EddieServer
@@ -10,6 +11,8 @@ from communication.ui_chat import ChatWindow
 from communication.tray import TrayIcon
 from communication.call_engine import (
     CallDirector,
+    ACTIVE,
+    ENDED,
     EDDIE_SPEAKING,
     EDDIEAI_SPEAKING,
 )
@@ -53,12 +56,19 @@ class EddieChatApp:
             self._on_eddie_interrupt
         )
         self._awaiting_speech_end = False
+        self._auto_mic_thread = None
+        self._auto_mic_stop = False
+        self._eddieai_talking = False
+        self._speech_queue = deque()
+        self._speech_drain_thread = None
+        self._chunk_voice_pending = False
 
         if self._server is not None:
             try:
                 self._server.call_director = (
                     self._call
                 )
+                self._server._wire_call_director()
             except Exception:
                 pass
         self._chat = None
@@ -113,6 +123,9 @@ class EddieChatApp:
         self._tcp.on_history(self._on_history)
         self._tcp.on_thinking(self._on_thinking)
         self._tcp.on_reply(self._on_reply)
+        self._tcp.on_speech_chunk(self._on_speech_chunk)
+        self._tcp.on_call_ring(self._on_call_ring)
+        self._tcp.on_call_status(self._on_call_status)
 
         self._tray.start()
 
@@ -164,6 +177,9 @@ class EddieChatApp:
         self._tcp.on_history(self._on_history)
         self._tcp.on_thinking(self._on_thinking)
         self._tcp.on_reply(self._on_reply)
+        self._tcp.on_speech_chunk(self._on_speech_chunk)
+        self._tcp.on_call_ring(self._on_call_ring)
+        self._tcp.on_call_status(self._on_call_status)
 
         self._tray.start()
 
@@ -266,7 +282,10 @@ class EddieChatApp:
             pass
         if (
             self._voice
-            and self._chat.is_voice_mode()
+            and (
+                self._chat.is_voice_mode()
+                or self._call.in_call()
+            )
         ):
             from communication.voice_io import (
                 mood_from_agent,
@@ -357,16 +376,69 @@ class EddieChatApp:
 
         if (
             self._voice
-            and self._chat.is_voice_mode()
+            and (
+                self._chat.is_voice_mode()
+                or self._call.in_call()
+            )
         ):
-            from communication.voice_io import (
-                mood_from_agent,
-            )
+            if self._chunk_voice_pending:
+                self._chunk_voice_pending = False
+            else:
+                from communication.voice_io import (
+                    mood_from_agent,
+                )
 
-            self._speak_with_detector(
-                answer,
-                mood_from_agent(self._agent),
+                self._speak_with_detector(
+                    answer,
+                    mood_from_agent(self._agent),
+                )
+
+    def _on_speech_chunk(self, text, msg_id=None):
+        self._post_ui(self._enqueue_speech, text)
+
+    def _enqueue_speech(self, text):
+        if self._voice is None:
+            return
+        self._chunk_voice_pending = True
+        self._speech_queue.append(text)
+        if (
+            self._speech_drain_thread is None
+            or not (
+                self._speech_drain_thread
+                .is_alive()
             )
+        ):
+            self._speech_drain_thread = (
+                threading.Thread(
+                    target=self._speech_drain_loop,
+                    daemon=True,
+                )
+            )
+            self._speech_drain_thread.start()
+
+    def _speech_drain_loop(self):
+        self._start_interrupt_detector()
+        try:
+            while (
+                self._speech_queue
+                and self._call.in_call()
+            ):
+                text = self._speech_queue.popleft()
+                if not text:
+                    continue
+                try:
+                    self._voice.speak(text)
+                except Exception:
+                    continue
+                while (
+                    self._voice.is_speaking()
+                    and self._call.in_call()
+                    and not self._auto_mic_stop
+                ):
+                    _sleep(0.1)
+        finally:
+            self._stop_interrupt_detector()
+            self._speech_drain_thread = None
 
     def _set_status_safe(self, text):
         if self._chat is None:
@@ -374,26 +446,41 @@ class EddieChatApp:
         self._chat.set_status(text)
 
     def _speak_with_detector(self, text, mood):
+        self._eddieai_talking = True
+        self._start_interrupt_detector()
         self._voice.speak(text, mood=mood)
         if not self._call.in_call():
+            self._stop_interrupt_detector()
             return
         self._call.eddieai_starts_speaking()
-        self._voice.on_interrupt_detector_end(
-            self._on_detected_speech_end
-        )
-        self._voice.start_interrupt_detector(
-            self._on_detected_speech
-        )
 
         def reap():
-            if not self._awaiting_speech_end:
-                self._voice.stop_interrupt_detector()
+            self._stop_interrupt_detector()
             self._call.eddieai_stops_speaking()
+            self._eddieai_talking = False
 
         threading.Timer(
             max(0.1, self._est_speech_sec(text)),
             reap,
         ).start()
+
+    def _start_interrupt_detector(self):
+        if self._voice is None or not self._call.in_call():
+            return
+        try:
+            self._voice.start_interrupt_detector(
+                self._on_detected_speech
+            )
+        except Exception:
+            pass
+
+    def _stop_interrupt_detector(self):
+        if self._voice is None:
+            return
+        try:
+            self._voice.stop_interrupt_detector()
+        except Exception:
+            pass
 
     def _est_speech_sec(self, text):
         return min(60.0, 0.28 + len(text) * 0.09)
@@ -423,6 +510,117 @@ class EddieChatApp:
         threading.Thread(
             target=self._mic_worker, daemon=True
         ).start()
+
+    def _on_call_toggle(self):
+        if self._call.in_call():
+            self._tcp.send_call(
+                "call_end",
+            )
+        else:
+            self._chat.set_status(
+                "Звонок Эдди... ждём решения"
+            )
+            self._tcp.send_call(
+                "call_ring",
+                {
+                    "direction": "in",
+                    "text": "",
+                },
+            )
+
+    def _on_call_ring(self, state, direction=None):
+        self._post_ui(
+            self._ui_call_ring,
+            state,
+            direction,
+        )
+
+    def _ui_call_ring(self, state, direction=None):
+        if self._chat is None:
+            return
+        if self._voice is not None:
+            try:
+                self._voice.play_ringtone()
+            except Exception:
+                pass
+        if direction == "in":
+            self._chat.show_ring_status("out")
+        else:
+            self._chat.show_incoming_ring(
+                self._accept_incoming,
+                self._decline_incoming,
+            )
+
+    def _accept_incoming(self):
+        self._tcp.send_call("call_answer")
+
+    def _decline_incoming(self):
+        self._tcp.send_call("call_reject")
+
+    def _on_call_status(self, state, direction=None):
+        self._post_ui(
+            self._ui_call_status,
+            state,
+            direction,
+        )
+
+    def _ui_call_status(self, state, direction=None):
+        if self._chat is None:
+            return
+        if state == ACTIVE:
+            self._chat.set_call_state(True)
+            self._start_auto_mic()
+        elif state == ENDED:
+            self._chat.set_call_ended()
+            self._stop_auto_mic()
+
+    def _start_auto_mic(self):
+        if self._auto_mic_thread is not None:
+            return
+        if self._voice is None:
+            return
+        self._auto_mic_stop = False
+        self._auto_mic_thread = (
+            self._voice.start_stream_listen(
+                on_phrase=self._on_phrase,
+                on_speech_start=(
+                    self._on_speech_start
+                ),
+                stop_check=(
+                    self._auto_mic_should_stop
+                ),
+            )
+        )
+
+    def _stop_auto_mic(self):
+        self._auto_mic_stop = True
+        if self._voice is not None:
+            self._voice.stop_stream_listen()
+
+    def _auto_mic_should_stop(self):
+        return (
+            self._auto_mic_stop
+            or not self._call.in_call()
+        )
+
+    def _on_speech_start(self):
+        if self._voice is None:
+            return
+        if (
+            self._voice.is_speaking()
+            or self._speech_queue
+        ):
+            try:
+                self._voice.stop_speaking()
+            except Exception:
+                pass
+            self._speech_queue.clear()
+
+    def _on_phrase(self, text):
+        if not text:
+            return
+        self._on_speech_start()
+        self._post_ui(self._on_user_send, text)
 
     def _mic_worker(self):
         text = self._voice.record_and_transcribe()
@@ -456,6 +654,11 @@ class EddieChatApp:
                 pass
 
     def _cleanup(self):
+        try:
+            self._auto_mic_stop = True
+            self._speech_queue.clear()
+        except Exception:
+            pass
         try:
             self._tcp.disconnect()
         except Exception:

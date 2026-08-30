@@ -7,6 +7,16 @@ from identity.llm_access import CloudFirstLlm
 NEEDS_NEW_PATTERN = "__NEEDS_NEW_PATTERN__"
 
 
+FOLLOWUP_TEMPLATES = [
+    "Найти новые аспекты темы: {topic}",
+    "Связать тему {topic} с другими областями знаний",
+    "Сформулировать новые вопросы по теме: {topic}",
+    "Расширить понимание темы: {topic} через практический опыт",
+    "Проверить выводы по теме: {topic} на новых данных",
+    "Найти противоречия в понимании темы: {topic}",
+]
+
+
 VALID_KINDS = {
     "EXECUTE",
     "GENERATE_PLAN",
@@ -17,6 +27,7 @@ VALID_KINDS = {
     "REFLECT",
     "CHECK_INBOX",
     "READ_INBOX",
+    "HANDLE_INCOMING_CALL",
     "IDLE",
 }
 
@@ -125,9 +136,14 @@ class DecisionCore:
             # IDLE-паттерн не блокирует создание
             # деятельности: безделье — мотивация.
             if data.get("kind") != "IDLE":
-                self.memory.pattern_bump(key)
+                action = Action.from_dict(data)
 
-                return Action.from_dict(data)
+                # Защита от петли: не оживлять
+                # завершённую цель без задач.
+                if not self._activation_is_dead(action):
+                    self.memory.pattern_bump(key)
+
+                    return action
 
         learned = self._learn_from_memory_for(
             state,
@@ -184,6 +200,11 @@ class DecisionCore:
                 "value": f"изучить тему: {interest}",
             },
         )
+
+        # Не сеем бесполезный паттерн на
+        # завершённую цель без задач.
+        if self._activation_is_dead(action):
+            return 0
 
         self.memory.pattern_record(
             key,
@@ -280,6 +301,11 @@ class DecisionCore:
                 "value": f"изучить тему: {interest}",
             },
         )
+
+        # Защита от петли: не создавать паттерн
+        # на завершённую цель без задач.
+        if self._activation_is_dead(action):
+            return None
 
         self.memory.pattern_record(
             key,
@@ -497,6 +523,9 @@ IDLE — сейчас ничего не делать.
         )
 
     def _local_rules(self, state):
+        if state.get("incoming_call"):
+            return Action("HANDLE_INCOMING_CALL")
+
         emotions = state.get(
             "emotions",
             {},
@@ -573,7 +602,74 @@ IDLE — сейчас ничего не делать.
         if frustration >= 0.70:
             return Action("IDLE")
 
+        idle_seconds = state.get(
+            "idle_seconds",
+            0,
+        )
+
+        try:
+            idle_seconds = int(idle_seconds)
+        except (TypeError, ValueError):
+            idle_seconds = 0
+
+        pending = None
+
+        server = getattr(self, "server", None)
+
+        if server is not None:
+            pending = getattr(
+                server,
+                "pending_initiative",
+                None,
+            )
+
+        if pending is not None:
+            return None
+
+        if (
+            idle_seconds >= self.IDLE_MOTIVATION_SEC
+            and self._next_interest_target() is None
+        ):
+            # Детерминированно: если EddieAI давно без дела и у
+            # него нет ни активной деятельности, ни интересов —
+            # он сам решает позвонить. Повторную частоту
+            # ограничивают серверный cooldown и pending_initiative,
+            # а не произвольный «часовой» порог.
+            return Action(
+                "CALL",
+                payload={
+                    "text": (
+                        "Давно не разговаривали. "
+                        "Позвоню и узнаю, как дела."
+                    ),
+                },
+            )
+
         return None
+
+    def _activation_is_dead(self, action):
+        if action.kind != "ACTIVATE_GOAL":
+            return False
+
+        value = (action.payload or {}).get("value")
+
+        if not value:
+            return False
+
+        goal = self.goal_manager.get(value)
+
+        if goal is None:
+            return False
+
+        if goal.status != "COMPLETED":
+            return False
+
+        return (
+            self.goal_manager.planner.next_task(
+                value
+            )
+            is None
+        )
 
     def _next_interest_target(self):
         self_state = getattr(
@@ -590,16 +686,32 @@ IDLE — сейчас ничего не делать.
             [],
         )
 
+        existing = {
+            str(g.value).strip().lower()
+            for g in self.goal_manager.all()
+        }
+
         for interest in interests:
             value = f"изучить тему: {interest}"
 
             goal = self.goal_manager.get(value)
 
-            if (
-                goal is None
-                or goal.status
-                not in {"ACTIVE", "COMPLETED"}
-            ):
+            if goal is None or goal.status not in {
+                "ACTIVE",
+                "COMPLETED",
+            }:
                 return value
+
+            if goal.status == "COMPLETED":
+                for template in FOLLOWUP_TEMPLATES:
+                    candidate = template.format(
+                        topic=interest
+                    )
+
+                    if (
+                        str(candidate).strip().lower()
+                        not in existing
+                    ):
+                        return candidate
 
         return None

@@ -2,7 +2,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import random
 
-from core.decision_core import NEEDS_NEW_PATTERN
+from core.decision_core import (
+    FOLLOWUP_TEMPLATES,
+    NEEDS_NEW_PATTERN,
+)
 
 
 @dataclass
@@ -11,16 +14,6 @@ class OrchestrationResult:
     reason: str
     goal_generation: object | None = None
     execution: object | None = None
-
-
-FOLLOWUP_TEMPLATES = [
-    "Найти новые аспекты темы: {topic}",
-    "Связать тему {topic} с другими областями знаний",
-    "Сформулировать новые вопросы по теме: {topic}",
-    "Расширить понимание темы: {topic} через практический опыт",
-    "Проверить выводы по теме: {topic} на новых данных",
-    "Найти противоречия в понимании темы: {topic}",
-]
 
 
 class AutonomyOrchestrator:
@@ -60,7 +53,9 @@ class AutonomyOrchestrator:
         self.outbox = outbox
         self.server = server
         self.decision_core = decision_core
-        self._last_action_at = None
+        self._last_action_at = datetime.now(
+            timezone.utc
+        )
 
     def _extract_topic(self, goal_value: str) -> str:
         for prefix in (
@@ -212,10 +207,37 @@ class AutonomyOrchestrator:
             except Exception:
                 idle_seconds = 0
 
+        incoming_call = None
+
+        if server is not None:
+            try:
+                incoming_call = bool(
+                    getattr(
+                        server,
+                        "_pending_incoming_call",
+                        None,
+                    )
+                )
+            except Exception:
+                incoming_call = False
+
+        time_since_last_convo = None
+
+        if server is not None:
+            try:
+                tslc = server.seconds_since_last_convo()
+                time_since_last_convo = tslc
+            except Exception:
+                time_since_last_convo = None
+
         return {
             "goal": goal_value,
             "task_type": None,
             "inbox_unread": inbox,
+            "incoming_call": incoming_call,
+            "time_since_last_convo": (
+                time_since_last_convo
+            ),
             "affect": self._affect_valence(),
             "emotions": self._affect_emotions(),
             "freshness": 0,
@@ -436,6 +458,9 @@ class AutonomyOrchestrator:
                 ),
             )
 
+        if kind == "HANDLE_INCOMING_CALL":
+            return self._handle_incoming_call()
+
         if kind == "REFLECT":
             return self._reflection_action()
 
@@ -534,6 +559,74 @@ class AutonomyOrchestrator:
                 "EddieAI решил подвести "
                 "итог накопленного опыта."
             ),
+        )
+
+    def _handle_incoming_call(self):
+        """
+        Входящий звонок. Решение «ответить / отклонить»
+        принимает EddieAI ЧЕРЕЗ LLM (прямое указание Эдди).
+        """
+        server = getattr(
+            self, "server", None
+        )
+
+        if server is None:
+            return OrchestrationResult(
+                status="NO_MOTIVATION",
+                reason=(
+                    "Входящий звонок, но сервер "
+                    "недоступен."
+                ),
+            )
+
+        accept = False
+        reason = ""
+
+        try:
+            prompt = (
+                "Позвонил Эдди (человек). Идёт входящий "
+                "звонок. Реши, ответить ли на звонок и "
+                "поговорить, или отклонить. Это живой "
+                "разговор с собеседником на равных.\n\n"
+                "Ответь строго JSON: "
+                '{"accept": true|false, "reason": "короткая причина"}'
+            )
+
+            raw = self.agent.respond(prompt)
+
+            import json as _json
+
+            start = raw.find("{")
+            end = raw.rfind("}")
+
+            if start >= 0 and end > start:
+                data = _json.loads(
+                    raw[start:end + 1]
+                )
+                accept = bool(
+                    data.get("accept", True)
+                )
+                reason = str(
+                    data.get("reason", "")
+                )
+        except Exception:
+            accept = True
+            reason = "Ошибка разбора решения; отвечаю по умолчанию."
+
+        try:
+            server.decide_incoming_call(accept)
+        except Exception:
+            pass
+
+        status = (
+            "CALL_ACCEPTED"
+            if accept
+            else "CALL_REJECTED"
+        )
+
+        return OrchestrationResult(
+            status=status,
+            reason=reason or None,
         )
 
     def _decide(self):

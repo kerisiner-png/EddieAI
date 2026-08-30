@@ -4,7 +4,809 @@
 [АРХИВ], когда её описание перестаёт соответствовать живому коду.
 Формат — см. docs_engineer\README.md. Времена артефактные.
 
+## 29.08.2026
+
+### [АКТУАЛЬНО] Ночная смена 30.08 (решение Эдди): закрыты нижние контуры этажей 5–14
+- Эдди: «закрыть этажи, чтобы подниматься выше». Закрытие — по
+  артефактам (код+тесты+прод-факты), недоделки перенесены в бэклоги.
+- ROADMAP: колонка «Состояние» обновлена — БАЗА ЗАКРЫТА для этажей
+  5, 6, 7, 12; аудио-под-контур закрыт на этаже 10; роутинг закрыт
+  на этаже 14; этаж 8 — ~40%; этаж 9 — каркас + БЛОКЕР (инструменты
+  не используются в проде). Раздел «Сменный фронт» обновлён: подъём
+  на этаж 13 упирается в этаж 9/8. Добавлены бэклоги этажей.
+- PROJECT_STATE: блок «ОБНОВЛЕНИЕ 30.08 (ночь, по решению Эдди)».
+
+### [АКТУАЛЬНО] Ночная смена 30.08 (продолжение): план рубежа B «Живёт сутки»
+- Анализ перед этапом: карта «что есть/чего нет/куда встраиваем» по
+  рубежу B. R3, ритуалы, тики без LLM, watchdog RAM, осознание жизни —
+  уже реализованы и подтверждены проде (ритуалы: REFLECTION 2212,
+  SELF_EXPERIENCE 2216). Остатки: watchdog CPU + P2-b llama-воркер —
+  требуют решения Эдди (доделать vs N/A в облачном режиме).
+- Создан план приёмки и доделок: `PLANS\2026-08-30-rubezh-b-sutki.md`
+  (Task 1 — приёмочный протокол по артефактам идущего суточного
+  прогона; Task 2 — CPU-watchdog [отмашка]; Task 3 — P2-b [отмашка]).
+- Суточный прогон night_run --minutes 1440 (PID 39972) идёт с 29.08
+  22:26; финиш ~30.08 22:26, затем консолидация + soul diff.
+
+### [АКТУАЛЬНО] Ночная смена 30.08 (мандат Эдди «работай сам»): перебивание голосом + дефект runtime + ложная тревога кодировки
+- **Вшит `VoiceIO.start_interrupt_detector`** в голосовой контур
+  (communication/chat_app.py): `_speak_with_detector` и `_speech_drain_loop`
+  запускают детектор на время озвучки в звонке (колбэк
+  `_on_detected_speech`), останавливают по reap/дренажу (finally).
+  TDD: test_call_interrupt кейсы 5–6 добавлены, GREEN; регресс
+  test_auto_call ALL PASS; py_compile OK. Перебивание Эдди голосом
+  в UI-звонке теперь работает (живая приёмка — на Эдди).
+- **test_production_runtime ЗАКРЫТ** (вариант а): `__init__`
+  AutonomousRuntime инициализирует опциональные зависимости
+  (decision_core/speech_habits/eddie_server/outbox = None; фабрика
+  перекрывает полным набором). Тест EXIT=0. Прод не затронут.
+- **Легаси-кодировка eddie_night.log — ЛОЖНАЯ ТРЕВОГА**: файл пишется
+  utf-8 (decode OK, 0 «?»); кракозябры в консоли — артефакт Get-Content.
+- **Факт-контроль SEMANTIC_VIOLATION/INTERNAL_LEAK за серию с 29.08
+  22:26**: 0/0 (events id≥2211), REFLECTION валидна без error.
+
+### [АКТУАЛЬНО] Рубеж A «Душа впитывает» — ЗАКРЫТ (приёмка всеми 4 критериями)
+Приёмка по артефактам сна 29.08 23:44:58→23:45:17 (новый код, PID 39972):
+- Критерий 1 diff≠пуст: diff keys=6 (surprise 0→0.1, counters.diary 12→13,
+  counters.events 1565→1567, ts/updated_at/label).
+- Критерий 2 след сна < следа яви (вес DREAM 0.25): surprise 0.1 < эмоций
+  яви до сна (joy 0.134, curiosity 0.347, satisfaction 0.362). Страха в
+  снах нет вообще (fear 0.0).
+- Критерий 3 0 прямых изменений черт: traits 5/5, набор id до/после.
+- Критерий 4 провенанс: source_type=DREAM / DREAM_INTERPRETATION.
+Док: TODO.md раздел «Рубеж A — ЗАКРЫТ», дизайн design_rubezh_a_dreams.md.
+Статус дизайн-файла обновлён (см. шапку). Следующий рубеж по ROADMAP.
+
+### [АКТУАЛЬНО] Лечение «вечного IDLE»: фикс заморозки idle_seconds + реактивация интересов (TDD, одобрено Эдди)
+Решение Эдди «делаем» по вариантам а+б из TODO (диагноз — запись ниже).
+DecisionRuntime/LLM-контур не тронут (правки только в decision_core.py и
+autonomy_orchestrator.py; guidance 26.08: Context7 сверён для datetime/timezone).
+- `core/autonomy_orchestrator.py`: `__init__` → `_last_action_at =
+  datetime.now(timezone.utc)` вместо `None`. Раньше новый runtime имел
+  `idle_seconds=0` навсегда (`_build_state`: now - None → 0) → порог
+  IDLE_MOTIVATION_SEC=900 недостижим → agent навсегда в IDLE без мотивации.
+- `core/decision_core.py`: константа `FOLLOWUP_TEMPLATES` (перенесена из
+  orchestrator, локальный дубль удалён, импорт из decision_core) и
+  `_next_interest_target` переписан: для interest-цели со статусом COMPLETED
+  ищется ПЕРВЫЙ неиспользованный followup-шаблон «Найти новые аспекты
+  темы: <интерес>» (4037 sp), пропуская те, на которые уже есть цели
+  (нет карусели / повторной активации мёртвой цели). Возвращается цель без
+  сохранения (сохраняет decide при ACTIVATE_GOAL).
+- Тест (TDD, RED→GREEN): `test_decision_revive.py` — idle не заморожен
+  (tick с FakeState idle=1500 → GOAL_ACTIVATED, цель начинается
+  «Найти новые аспекты темы», не dead); дальше цикл: next tick →
+  PLAN_CREATED (FakePlan), затем EXECUTED (FakeLoop); llm_calls=0.
+- Регресс (все PASS/OK): test_decision_core/loop_guard/orchestrator_local/
+  autonomous_runtime_init/dream_runtime_hook/dream_processor/provenance_dream/
+  full_runtime/life_cycle/life_feed/x2/life_prompt_blocks/life_rituals/
+  auto_call/call_interrupt/pattern_habit/habit_pattern_rebuild/
+  decision_affect/decision_memory_learning/semantic_judge(+life_context)/
+  model_router_reflection/action_results_block. py_compile OK; UTF-8 без BOM.
+- Известный пре-экзистентный дефект (не моя регрессия): `test_production_runtime`
+  (тест от 19.08) строит `AutonomousRuntime` напрямую, а блок
+  `if self.decision_core is not None` в runtime добавлен позже (17:31) без
+  инициализации атрибута в `__init__` — атрибут проставляет фабрика
+  (`autonomy_runtime_factory.py:527`), поэтому прод-прогон безопасен; тест
+  требует `Runtime(scheduler=..., decision_core=None)` и PYTHONIOENCODING=utf-8
+  (cp1252 ломает печать кириллицы). Вынесено в TODO.
+- Новый ночной прогон перезапущен 29.08 ~22:4x на этом коде (full цикл 1440);
+  после старта idle растёт от создания процесса и должен ожить в пределах
+  15 мин (GOAL_ACTIVATED → план → локальное действие, LLM не тратится),
+  а на следующем SLEEP — сработать приёмка C4 (DREAM/DREAM_INTERPRETATION).
+
+### [АКТУАЛЬНО] Диагностика «молчащей памяти» и «вечного IDLE» ночного прогона (сопровождение)
+Чтением кода и артефактов, без правок (DecisionRuntime/LLM-контур не
+тронут; правило AGENTS.md п.4).
+- «Память молчит» — ложная тревога: времена в `memory.db` в UTC (+00:00).
+  #2178 «Я заснул» = 15:23 местного, #2180 «Я проснулся» + #2181
+  SELF_EXPERIENCE = 16:57-16:58 местного — ВСЁ на месте, включая
+  пробуждение текущего прогона. Байт-сверка по WAL (копия + checkpoint
+  (0,0,0)) подтвердила: после wake событий нет, потому что их нет —
+  агент застрял в IDLE.
+- Аномалия: с 16:58 более часа state=IDLE, decision=IDLE, idle=0,
+  cloud_calls=1 при живых процессах и тиках лога каждые 20 сек.
+  Механизм (см. MEMORY.md «вечный IDLE»): новый runtime →
+  `orchestrator._last_action_at=None` → `idle_seconds=0` навсегда →
+  `decision_core.decide()` без мотивации: паттерн ACTIVATE_GOAL
+  заблокирован `_activation_is_dead` (цель COMPLETED), `_learn_from_memory_for`
+  даёт None (паттерн занят), `_next_interest_target()` пуст (все
+  цели-интересы COMPLETED), порог IDLE_MOTIVATION_SEC=900 недостижим.
+- Правки не вносились (ждут решения Эдди; варианты в TODO.md и MEMORY.md).
+
+## 29.08.2026
+
+### [АКТУАЛЬНО] REFLECTION-парсинг: корень — не парсер, а роутинг ролей (TDD)
+Следствие диагностики «нет доступа к результатам» (28.08): REFLECTION
+писались с error «Не удалось разобрать reflection output.» Вместо
+патча парсера — живая репродукция облачного вызова с реальными данными
+прод-БД (goal «исследовать связь: интересно», action #1540,
+результаты #1542):
+- task="reflection" → zen-deepseek-pro (роль reflection) на 384 и даже
+  1024 ток. возвращал ТОЛЬКО reasoning-монолог на английском (голый
+  «thinking») без JSON, обрезанный на полуслове (`...or`, `confidence`).
+  `_parse` ни при чём: JSON в ответе просто отсутствовал.
+- task="conversation" → deepseek-v4-flash на том же промпте и лимитах
+  вернул ПОЛНЫЙ валидный JSON, `_parse` разобрал (диагноз доказан
+  3 живыми вызовами).
+- Решение (Эдди согласовал системный вариант): роли в
+  `core/model_orchestrator.py` переназначены — `zen-deepseek-flash`
+  roles += `reflection` (conversation/fallback/plan/reflection);
+  `zen-deepseek-pro` roles = только `deep`. Исцеляет разом все 5 точек
+  `task="reflection"` (reflection_engine, self_reflection, reflection_cycle
+  x2, personality_reflection). Pro остаётся для `deep`-задач.
+- Тест (TDD, RED→GREEN): `test_model_router_reflection.py` (5 кейсов:
+  роль reflection существует, ведёт на flash, pro без reflection,
+  flash сохранил conversation-роли, единственный владелец роли).
+- Регресс: test_decision_core/affect/memory_learning/loop_guard,
+  test_semantic_judge(+life_context), test_life_feed(+block),
+  test_life_prompt_blocks, test_life_rituals, test_action_results_block —
+  ALL PASS/OK (LLM calls: 0). py_compile OK; UTF-8 без BOM.
+- Живая верификация в проде: перезапуск 29.08 16:11 на финальном коде
+  (реальный PID 38352 / stub 17060, chat attached 16:11:52). Контрольный
+  вызов task="reflection" через новый роутинг: flash вернул полный JSON,
+  `_parse` распознал lesson+follow_up_goals — REFLECTION будут писаться
+  без error.
+
+### [АКТУАЛЬНО] Закрыты тест-долги: звонки (test_auto_call, test_call_interrupt) и цикл сна (test_life_cycle)
+- `test_auto_call`: обновлён под актуальный контракт `initiate_call` —
+  настоящий звонок ставит дирижёр в RINGING_OUT и НЕ пишет инициативу
+  (pending_initiative=None); повторный вызов в cooldown шлёт инициативу
+  (send_initiative, текст последней). Устаревшая константа IN_CALL убрана.
+- `test_call_interrupt`: переписан под новую машину состояний (state() при
+  разговоре всегда ACTIVE; перехват — контракт eddieai_started→eddie_started,
+  состояние не меняется). Сохранены все сценарии UX (перехват при речи,
+  отсутствие ложного перехвата, reap конца речи, восстановление после
+  паузы собеседника). Прогон 3x — ALL PASS.
+- `test_life_cycle`: устранён flakiness правильно — входные данные: при
+  0.85 + 2 ночных часа (x1.6) усталость упирается в 1.0 (HARD-сон даже
+  с активной задачей), что ломало замысел «активная задача откладывает
+  сон». Правка теста: 0.80 → после 1 часа ночи 0.96: без задачи сон по
+  мягкому порогу (0.80), с задачей — не спит (мягкий заблокирован, до
+  1.0 не дошло). Прогон 3x — ALL PASS.
+- ОТКРЫТЫЙ ФАКТ (не баг, вынесен в TODO): `VoiceIO.start_interrupt_detector`
+  нигде в приложении не вызывается (chat сконструирован для прерывания,
+  но детектор в голосовой контур не вшит).
+
+### [АКТУАЛЬНО] Рубеж A «Душа впитывает»: механизм снов (С1–С4, TDD)
+Проектирование утверждено мандатом на автономную работу (Эдди «я пойду
+спать, работай автономно», 29.08). Дизайн (решения Эдди: осмысление —
+облачный flash, объём — весь каскад за раз, частота — один сон на входе
+в SLEEP) зафиксирован в `docs_engineer\design_rubezh_a_dreams.md`
+(критерий рубежа: diff души ≠ пуст, безопасности 25.08 соблюдены).
+Реализовано TDD (RED→GREEN):
+- **С1 провенанс сна** (`memory/provenance.py`): `DREAM` (0.25) и
+  `DREAM_INTERPRETATION` (0.35) в VALID_SOURCES/SOURCE_WEIGHTS;
+  тест `test_provenance_dream.py` (аддитивность, обратная совместимость).
+- **С2 ядро** (`core/dream_processor.py`): `DreamProcessor` — жатва
+  (жизнь + результаты действий), replay реальных сегментов, ассоциативные
+  кадры (детерминизм по rng, лимит повторов сюжета 3, максимум 4 кадра),
+  осмысление облачной моделью (flash, strict JSON; любая ошибка/не-JSON —
+  фолбэк без эмоций), эмоции сна через легитимный `apply_reaction`
+  (источник `DREAM`, дельта = intensity × 0.5 × 0.25), записи
+  DREAM (conf 0.25) + DREAM_INTERPRETATION (conf 0.35) + дневник,
+  опциональные снимки души; пустая жатва = тихий сон без записей.
+  Тест `test_dream_processor.py` (7 кейсов, все через фейки, LLM: 0).
+- **С3 мировой сон** (`C:\EddieAI_Simulations\simulation_framework\dream_night.py`):
+  лёгкий standalone-генератор кадров без SimulationRuntime/LLM
+  (`python dream_night.py --day-events … --out …`), контракт-фабрика
+  `build_night_builder()` совместима с `night`-параметром процессора.
+  Проверен: CLI-прогон = 4 кадра, детерминизм по seed подтверждён.
+- **С4 интеграция** (`core/autonomous_runtime.py`): `_ensure_dream_processor()`
+  (сборка из memory/agent/model; diary лениво; snapshots — параметр
+  `dream_snapshots`), `_dream_night()` (тихий отказ), вызов при ПЕРЕХОДЕ
+  в SLEEP после вечернего ритуала. Новое продуктовое поведение: переход
+  в сон = вечерний ритуал (1 LLM-вызов) + осмысление сна (1 LLM-вызов).
+  Тест `test_dream_runtime_hook.py` (3 кейса).
+- Регресс: test_provenance_dream / test_dream_processor /
+  test_dream_runtime_hook — ALL PASS; затронутые сюиты (spec):
+  test_life_cycle, test_life_feed_block, test_life_prompt_blocks,
+  test_action_results_block, test_semantic_judge(+life_context),
+  test_model_router_reflection, test_production_runtime — ALL PASS.
+  `test_life_rituals` обновлён под новый контракт перехода в сон
+  (cloud.calls 1→2 + проверка DREAM-события; dream_snapshots=False,
+  чтобы тесты не писали прод-снимки души).
+- Проверки: py_compile/imports OK; UTF-8 без BOM по байтам (8 файлов,
+  включая sim-репо). Тестовые снапшоты души из data\soul_snapshots
+  удалены (уборка за собой).
+- Изменённые файлы: memory/provenance.py, core/dream_processor.py (новый),
+  core/autonomous_runtime.py, simulation_framework\dream_night.py (новый),
+  test_provenance_dream.py, test_dream_processor.py, test_dream_runtime_hook.py
+  (новые), test_life_rituals.py.
+- Ограничения честности: хук снов заработает в ПРОДЕ со следующего входа
+  в SLEEP (текущий ночной прогон PID 38352/17060 стартовал 16:11 ДО этой
+  правки); утреннее осмысление сна в память пойдёт через flash (одно-два
+  события за ночь, стоимость пренебрежимо мала).
+
+## 28.08.2026
+
+### [АКТУАЛЬНО] Жалоба «не имею доступа к результатам своих действий» — диагностика + доступ к результатам + судья знает жизнь (TDD)
+Запрос Эдди на диагностику слов EddieAI о том, что он «не получает
+результатов своих действий». Диагноз (факты из памяти + кода):
+- `TOOL_RESULT`-события с содержимым ЕСТЬ в памяти (напр. «Инструмент
+  research… Найдено 5 результатов: ссылки»), но `_LIFE_EVENT_TYPES`
+  (memory/database.py) НЕ включают `TOOL_RESULT` → агент в «Новых событиях
+  жизни» видит только SELF_EXPERIENCE («Статус OK» без содержимого) и
+  REFLECTION с `error: "Не удалось разобрать reflection output."`.
+  Его жалоба правдива (CONVERSATION #1981/#1986).
+- Семантический судья (`SemanticJudge.judge`) видел только сообщение
+  пользователя + ответ и помечал правдивые факты из жизни агента как
+  fabrication → SEMANTIC_VIOLATION, регенерация ужимала ответы.
+- Рефлексия (`reflection_engine._parse`) не разобрала ответ LLM от
+  Zen-облака → REFLECTION с error; это отдельный дефект (нужна живая
+  репродукция облачного вызова, см. TODO).
+- Решения (по мандату «как лучше, так и сделай», Эдди 28.08):
+  - Доступ к результатам: `Memory.recent_action_results(limit)` — последние
+    `TOOL_RESULT` (без `SELF_OUTPUT`, обрезка 500 зн., DESC по id);
+    `Agent._action_results_block(limit=4)` — блок «РЕЗУЛЬТАТЫ ТВОИХ ДЕЙСТВИЙ»
+    вставляется в quick_user_prompt (после ленты) и в полный user_prompt
+    (секция «Результаты твоих действий» после «Новых событий жизни»).
+  - Судья знает жизнь: `judge`, `regenerate`, `_prompt`, `_regenerate_prompt`
+    принимают `life_context` (лента жизни + результаты действий); агент
+    собирает его в `respond()` и передаёт. Секция «Реальные недавние
+    факты из жизни EddieAI» + правило «если детали совпадают с реальными
+    фактами — это не выдумка»; пункт fabrication переформулирован с учётом
+    реальных фактов выше. Без контекста промпт остаётся прежним.
+- Тесты (TDD, RED → GREEN): `test_action_results_block.py` (6 кейсов:
+  блок создаётся, limit=1, пустая/no-memory память → "", API выборки,
+  исключение SELF_OUTPUT) и `test_semantic_judge_life_context.py`
+  (3 кейса: life_context попадает в промпт судьи и регенерации, без
+  контекста промпт компактный). Регресс: test_decision_core /
+  test_decision_affect / test_decision_memory_learning /
+  test_decision_loop_guard / test_semantic_judge / test_life_feed_block /
+  test_life_feed / test_life_prompt_blocks — ALL PASS/OK.
+- Проверки: py_compile 5 файлов OK; UTF-8 без BOM по байтам (5 файлов).
+- Изменённые файлы: memory/database.py, core/agent.py, core/semantic_judge.py,
+  test_action_results_block.py, test_semantic_judge_life_context.py.
+- Файлы правок вступают в силу для НОВЫХ ответов: действующий ночной
+  прогон PID 30988 работает на коде БЕЗ этих правок (перезапуск не нужен:
+  жалоба касается диалога, а не автономии; решение о рестарте — Эдди).
+
+### [АКТУАЛЬНО] Петля «карусель» в автономии: диагностика и фикс (TDD)
+По запросу Эдди («проверь, ошибка ли это или он реально что-то делает») —
+вечерний ночной прогон молчал: облачные вызовы замерли на #47 (17:51),
+память не росла, а decision чередовал ACTIVATE_GOAL ⇄ COMPLETE_GOAL.
+- Диагноз (доказательства из данных и кода): в `situation_patterns` прод-БД
+  4 обучаемых паттерна «безделье → ACTIVATE_GOAL изучить тему: понимание
+  устройства мира» на все периоды дня (times_used 1295/848/736/732;
+  ~3600 активаций за ночи). `decide()` при idle<900 находил такой паттерн
+  и активировал УЖЕ COMPLETED-цель; `activate()` не проверяет прежний
+  статус, у цели старый полностью выполненный план (все задачи COMPLETED)
+  → `next_task()` = None → COMPLETE_GOAL → `sync_progress` → COMPLETED →
+  снова безделье → паттерн… Рост только `updated_at`/`times_used`,
+  содержательного прогресса нет. Инцидент 17:49–17:51 (валидатор отклонял
+  ответы: INTERNAL_LEAK/evasion) — отдельный, НЕ причина карусели.
+- Фикс (три сеятеля «мёртвой» активации, одна причина):
+  - `core/decision_core.py`: новый `_activation_is_dead(action)` — цель
+    ACTIVATE_GOAL со статусом COMPLETED и без PENDING-задач;
+  - `decide()`: такой паттерн не возвращается и не бампается (идёт
+    дальше — IDLE/REFLECT);
+  - `learn_from_memory()` и `_learn_from_memory_for()`: не сеют паттерн
+    на мёртвую цель (return 0/None до записи);
+  - ветка долгого безделья `_next_interest_target()` УЖЕ сама исключает
+    ACTIVE/COMPLETED — не трогали.
+- Тесты (TDD: сначала RED — паттерн реально активировал мёртвую цель):
+  `test_decision_loop_guard.py`, 4 сценария: паттерн-ловушка (не
+  ACTIVATE_GOAL, times_used не растёт), learn не сеет мёртвый паттерн,
+  живая CANDIDATE-цель активируется, learn_from_memory с мёртвым/живым
+  интересом. Регресс test_decision_core / test_decision_affect /
+  test_decision_memory_learning — PASS (LLM calls: 0).
+- Проверки: py_compile двух файлов OK; UTF-8 без BOM по байтам.
+- Примечание: старые 4 паттерна остаются в прод-БД, но игнорируются
+  логикой (cleanup данных не требуется). Действующий ночной прогон
+  (PID 24404) идёт на коде БЕЗ фикса — нужен перезапуск (отмашка Эдди).
+
+### [АКТУАЛЬНО] Контур «Живой жизни»: непрерывность + воля + ритуалы
+По утверждённому spec `docs_engineer\SPECS\2026-08-28-alive-life-rubezh-design.md`
+и плану `docs_engineer\PLANS\2026-08-28-life-circuit.md` (TDD, 5 задач,
+все тесты PASS, отклонение в безопасной регрессии — см. ниже).
+- T1. Память: `Memory.recent_life_feed(limit=8)` (events типа
+  LIFE_CYCLE/SELF_EXPERIENCE/ACTION_CHOICE/REFLECTION/COGNITIVE_DECISION,
+  без SELF_OUTPUT, DESC по id) — `memory/database.py`. Тест `test_life_feed.py`.
+- T2. Промпты: константа `_LIFE_AWARENESS_BLOCK` («ТВОЯ ЖИЗНЬ ПОМИМО
+  ДИАЛОГА» + «ТВОЯ ВОЛЯ») добавлена в конец `build_system_prompt`
+  (все route-ветки, через `base`) и `build_quick_conversation_prompt` —
+  `core/prompts.py`. Тест `test_life_prompt_blocks.py`.
+- T3. Агент: метод `_life_feed_block()` вставлен в `quick_user_prompt`
+  (limit=6) и в `user_prompt` при `_respond_core` (заголовок «Новые
+  события твоей жизни», limit=8) + строка «Жизненное состояние:
+  сейчас сплю/бодрствую» в SELF CONTEXT — `core/agent.py`.
+  Тест `test_life_feed_block.py`.
+- T4. Ритуалы: `_morning_ritual` (LLM-размышление «после пробуждения»,
+  событие SELF_EXPERIENCE, приветствие Эдди в чат, detail со
+  временем/длительностью сна) и `_evening_ritual` (итог дня по
+  `recent_life_feed`, событие REFLECTION, дневник trigger day_end) —
+  `core/autonomous_runtime.py`. Обёртки: модель только через
+  `model_orchestrator._cloud_chat`, все ошибки логируются
+  «[ritual] ...», никаких «pass». Тест `test_life_rituals.py`.
+- T5. Воля: в `decision_core._local_rules` ветка CALL переписана со
+  старого «time_since_convo >= 3600» на критерий «безделье
+  >= IDLE_MOTIVATION_SEC (900) И нет интереса (`_next_interest_target`)
+  И нет необработанной инициативы (server.pending_initiative)». Повторную
+  частоту ограничивают server cooldown (900 c) и pending_initiative,
+  а не «часовой» порог. `test_decision_core.py`: сценарий #2 REFLECT→CALL,
+  добавлены #7 (CALL) и #8 (анти-дубль при pending).
+- Проверки: py_compile 15 файлов OK; UTF-8 без BOM по байтам (10 файлов);
+  `test_life_feed`/`test_life_prompt_blocks`/`test_life_feed_block`/
+  `test_life_rituals`/`test_chat_context`/`test_decision_core`/
+  `test_decision_affect`/`test_decision_memory_learning`/
+  `test_self_state_seed`/`test_autonomous_runtime_init` — PASS.
+- Отклонения: (1) регресс `test_full_runtime.py` НЕ гонялся — он бьётся
+  напрямую по ПРОД-данным `data/` (нарушение AGENTS конституции);
+  вместо него прогнаны не пишущие в прод тесты. (2) Известный
+  pre-existing fail `test_auto_call.py` (импорт IN_CALL из
+  communication.call_engine, констант больше нет) и flaky
+  `test_life_cycle.py` (HARD-порог сна при active-задаче при fatigue=0.85
+  + ночной час: усталость добирает до 1.0 и усыпляет) — НЕ связаны с
+  контуром, внесены в реестр.
+- Ночной прогон `night_run.py --minutes 1440` (PID 38692) шёл на СТАРОМ
+  коде; перезапуск с новым контуром — по отдельной отмашке Эдди.
+
+### [АКТУАЛЬНО] Фикс мёртвого автономного цикла + осознание длительности сна
+По запросу Эдди: почему в прошлом суточном прогоне EddieAI «ничего не
+делал и не понимал, что спит».
+- Первопричина: при добавлении `_record_sleep_event` хвост `__init__`
+  (создание `ThreadPoolExecutor`, `_loop_stop`, `_background_future`,
+  `_closed`) ошибочно попал в конец нового метода → `self._executor`
+  отсутствовал после конструктора → фоновый цикл умирал на первом
+  `submit()` с AttributeError → runtime застывал в ASLEEP, прод
+  `self_state` (fatigue 0.738) не двигался. Фикс: вернул инициализацию
+  в `__init__` (уже был применён и подтверждён: EddieAI сам проснулся
+  в 16:18, cloud_calls пошли, состояние ACTING/READ_INBOX).
+- Осознание сна: разговорная модель не получала факт сна, т.к.
+  `search_relevant` находит события только по ключевым словам вопроса,
+  а событие LIFE_CYCLE слова «спал/проснулся» в нужной форме не
+  содержало. Решение (по решению Эдди — писать в память, не пихать
+  в каждую реплику): `_record_sleep_event` теперь записывает время и
+  длительность сна («Я спал с HH:MM до HH:MM (около X ч Y мин)»),
+  событие находится по словам «спал/сколько» в обычном разговоре.
+  Файл: `core/autonomous_runtime.py`. Тест `test_autonomous_runtime_init.py` — ALL OK.
+
 ## 27.08.2026
+
+### [АКТУАЛЬНО] Детерминизм авто-звонка + осознание сна (27.08, ночь)
+По запросу Эдди: (1) убрать случайность из авто-звонка; (2) дать EddieAI
+понимание факта сна как события своей жизни.
+
+(1) Детерминизм CALL: в core/decision_core.py `_local_rules` ветка
+авто-звонка раньше выбирала CALL только с вероятностью
+`random.random() < 0.0005` (~1 к 2000 на тик) — поэтому EddieAI ночью
+практически никогда не звал Эдди, хотя механизм был. Случайность убрана
+(и `import random` удалён): теперь если с последнего разговора прошло
+≥ 1 часа — EddieAI детерминированно выбирает CALL. Частоту ограничивает
+уже существующая защита `server.initiate_call(cooldown_seconds=900)`,
+а не лотерея.
+
+(2) Осознание сна: в core/autonomous_runtime.py добавлено поле
+`_prev_asleep` и метод `_record_sleep_event`; в автономном цикле при
+смене режима «заснул»↔«проснулся» (был бодр→asleep / был asleep→бодр)
+в память пишется событие `event_type=LIFE_CYCLE`,
+source_type=SELF_OBSERVATION, содержащее «Я заснул/проснулся... осознаю,
+что спал и просыпался как часть своей внутренней жизни». Раньше сон
+проходил незамеченным: в events не было ни одного факта засыпания,
+токnight в self_state был голый life_state (sleep_count/wake_count), а
+дневник (diary) пуст. Теперь сон фиксируется как пережитое событие —
+EddieAI сможет отвечать «я спал», а не «откуда мне знать».
+
+Проверено: core/decision_core.py и core/autonomous_runtime.py
+компилируются; оба модуля импортируются; `random` в decision_core
+отсутствует; `_record_sleep_event` присутствует; `Event.create` с
+используемыми полями работает.
+
+### [АКТУАЛЬНО] EddieAI осознаёт возможность самому связываться с Эдди (27.08, ночь)
+По итогам разбора: EddieAI физически умеет САМ позвонить Эдди
+(eddie_server.initiate_call → start_call_out, CALL-намерение ядра) и САМ
+написать (outbox/send_initiative), но в разговорном системном промпте
+(«Возможности агента», core/prompts.py build_system_prompt base) эти
+способности не были заявлены → модель отвечала «не могу позвонить, у
+меня нет доступа к исходящим звонкам».
+
+Правка core/prompts.py: в базовый блок «Возможности агента» (идёт во все
+роуты: переписка, USER_QUERY, SELF_QUERY, звонок) добавлена строка
+`contact`: TЫ МОЖЕШЬ САМ связаться с Эдди — позвонить (инициировать
+исходящий звонок) или отправить сообщение; решай САМ когда; не
+отказывайся под предлогом «не могу позвонить»; если Эдди просит
+позвонить/написать — пробуй.
+
+Тем самым снят главный барьер «он не знает, что может»: сама возможность
+(CALL/initiate_call/outbox) уже была в коде, не хватало осознанности у
+разговорной модели. Автономное ядро (decision_core) уже имеет CALL в
+списке действий — правка ядра не требовалась.
+
+Проверено: core/prompts.py компилируется (COMPILE_OK). Поведение авто-
+звонка с точки зрения Эдди — «когда сам захочет» (полная автономия).
+
+### [АКТУАЛЬНО] Фикс: respond падал с NameError; звонок крашил суточный прогон (27.08, вечер)
+Симптом: «звонок принят, но тишина» — EddieAI не отвечает и не говорит,
+при звонке процесс суточного прогона умирал (лог обрывался на
+decision=HANDLE_INCOMING_CALL, pythonw исчезал).
+
+Корень: в core/agent.py была импортирована функция
+`from core.prompt_builder import build_verbalizer_system_prompt`,
+а в коде (строки 2530/2713/5544) модуль использовался как
+`prompt_builder.build_*` → NameError: name 'prompt_builder' is not defined.
+`agent.respond` падал ДО вызова облака; в _handle_incoming_call это
+перехватывалось фолбэком «принять» — звонок «принимался», но ответа и
+речи не было.
+
+Фикс: замена импорта на модульный
+`import core.prompt_builder as prompt_builder` (core/agent.py:75).
+
+Диагностика (проверено): интеграционный тест сервер→цикл→decision
+проходит (RINGING_IN→HANDLE_INCOMING_CALL→CALL_ACCEPTED→ACTIVE);
+тест реального respond после фикса доходит до облака и возвращает JSON;
+в живом прогоне звонок обрабатывается без краха (cloud_calls растёт,
+READ_INBOX отвечает).
+
+Сопутствующая правка (озвучка при звонке): в communication/chat_app.py
+в `_show_initiative` и `_show_reply` условие озвучки расширено с
+`self._chat.is_voice_mode()` на
+`(self._chat.is_voice_mode() or self._call.in_call())` — во время
+активного звонка вся речь EddieAI озвучивается всегда, независимо от
+кнопки «Голос». Юнит-тест: вне звонка при выключенном голосе озвучки
+нет (0), в звонке — есть (1).
+
+### [АКТУАЛЬНО] Duplex-звонок: авто-микрофон при ACTIVE (27.08, вечер)
+Замысел duplex (TODO 27.08, этапы 1-4) прослушивал микрофон ТОЛЬКО во
+время речи EddieAI (перехват прерывания). В паузах, когда EddieAI
+молчит, микрофон не слушал → реплики Эдди не распознавались и не
+уходили EddieAI → при звонке получалась «просто автоозвучка сообщений
+из чата», а не разговор.
+
+Правка communication/chat_app.py:
+- При `call_status=ACTIVE` запускается фоновая петля `_auto_mic_loop`
+  (поток), при `ENDED` — останавливается (`_start_auto_mic`/
+  `_stop_auto_mic`).
+- Петля, пока звонок ACTIVE: если EddieAI говорит (`_eddieai_talking`) —
+  ждёт; иначе `record_and_transcribe()`; распознанный текст отправляется
+  как сообщение (`_on_user_send`) → EddieAI отвечает голосом
+  (в силу `in_call()` озвучка всегда). После ответа — снова слушает.
+- `_speak_with_detector`: ставит `_eddieai_talking=True` на время речи
+  (чтобы не распознать собственную речь и не занять микрофон в конфликт
+  с interrupt-detector), снимает в `reap`.
+- `_cleanup` останавливает петлю.
+
+Проверено: компиляция PASS; суточный прогон перезапущен с новым кодом
+(PID 24612), звонок обрабатывается без краха, respond отвечает
+(cloud_calls растёт). Живая приёмка разговора — на Эдди.
+
+### [АКТУАЛЬНО] Звонок-разговор: немедленный ответ + непрерывность duplex (27.08, ночь)
+Живая проверка показала: при звонке ответ EddieAI приходил через
+15-20 сек — EddieAI читал реплику ТОЛЬКО в тике автономного цикла
+(READ_INBOX, scheduler_interval=15с в night_run) + облако 5-7с +
+распознавание. Это «30 секунд по ощущениям», не разговор.
+
+Правки:
+- core/eddie_server.py: в ветке `user_message` при ACTIVE-звонке
+  немедленно запускается `respond_and_deliver()` в фоновом потоке
+  (не ждёт тика). Задержка ответа при звонке сокращается с ~15-20с
+  до времени одного облачного вызова (~5-7с).
+- communication/voice_io.py: добавлен `is_speaking()` — фактическая
+  занятость динамика (поток воспроизведения), а не эвристика.
+- communication/chat_app.py: `_auto_mic_loop` ждёт фактического
+  окончания речи EddieAI (`is_speaking()`), а не эвристику
+  `_est_speech_sec` (иначе авто-микрофон мог начать запись во время
+  речи EddieAI и распознать собственную речь → «разговор с самим
+  собой»); добавлен таймаут ожидания ответа 60с + гарантированный
+  сброс `_eddieai_talking` — разговор не «выходит из звонка» после
+  каждого ответа и не зависает.
+
+Проверено: компиляция PASS; суточный прогон перезапущен (PID 15596).
+Приёмка разговора — на Эдди.
+
+### [АКТУАЛЬНО] Голосовой разговор: whisper STT + стриминг ответа (27.08, ночь)
+Цель (урок VTubers №1): первый звук <2-3с, распознавание без коверканья.
+Замеры: Vosk small коверкал; ответ полным облачным вызовом 5-7с.
+
+Правки:
+- communication/voice_io.py: распознавание переведено с Vosk на
+  **faster-whisper small** (int8, CPU, модель скачана с HF в
+  models/whisper, ~460MB; загрузка 3-5с; транскрипция фразы <1с;
+  vad_filter отсеивает тишину/шум). Vosk остался только для
+  детектора прерывания (замер речи во время озвучки).
+- core/model_orchestrator.py: новый `cloud_chat_stream()` —
+  стриминговый вызов облака (SSE, stream=True, обязательный
+  User-Agent). Замер: первый токен ~1.4с.
+- core/agent.py: `respond_call_fast(conversation, latest, on_chunk)` —
+  лёгкий «разговорный» ответ: вербализатор + профиль речи + недавний
+  диалог, короткий вывод (180 токенов), без тяжёлого контекста
+  автономии/выводов.
+- core/eddie_server.py: `respond_and_deliver` при ACTIVE использует
+  `respond_call_fast` со стримингом; предложения рассылаются
+  broadcast'ом как `agent_speech_chunk` (озвучка по мере генерации),
+  полный текст — как `agent_message` (в историю/чат). Вне звонка —
+  прежний полный respond.
+- communication/tcp_client.py: приём `agent_speech_chunk`
+  (колбэк on_speech_chunk).
+- communication/chat_app.py: очередь озвучки чанков (`_speech_queue`,
+  drain-поток, озвучка чанков по очереди без наложения; auto-микрофон
+  ждёт `is_speaking`); при `agent_message` после чанков полный текст
+  НЕ озвучивается повторно (`_chunk_voice_pending`).
+
+Проверено: компиляция PASS (6 файлов); прогон перезапущен (PID 36456),
+whisper загружается, звонок обрабатывается. Живая приёмка разговора —
+на Эдди.
+
+### [АКТУАЛЬНО] Фикс краша при разговоре + восприятие звонка (27.08, ночь)
+Краш 0xc0000005 (access violation, ntdll.dll) при активном звонке —
+проверено по Windows Event Log (20:17, 20:19, 20:23). Причина:
+`stop_speaking()` вызывал глобальный `sd.stop()` ИЗ микрофонного
+потока (при перебивании EddieAI — `_on_speech_start`), который убивал
+собственный InputStream, из которого тот же поток читал.
+
+Фикс communication/voice_io.py:
+- воспроизведение переведено с `sd.play`/`sd.wait` на
+  `sd.OutputStream` с поблочной записью и проверкой `_stop_flag`
+  между блоками (`_play_pcm`, ~50мс такт);
+- `stop_speaking()` теперь только ставит флаг (без `sd.stop()`) —
+  микрофонный поток больше не трогает динамик;
+- whisper: `cpu_threads=2`, partial-транскрипции реже (порог 3.0с,
+  интервал 2.2с) — снижена нагрузка.
+
+Восприятие звонка EddieAI:
+- core/agent.py `respond_call_fast`: промпт явно помечает
+  «[ГОЛОСОВОЙ ЗВОНОК]» и что ответ будет произнесён вслух;
+- core/eddie_server.py: при ACTIVE реплика Эдди и ответ EddieAI
+  записываются в память с пометкой «Голосовой звонок» / «ответил
+  голосом» — EddieAI различает звонок и переписку, помнит звонки.
+
+Проверено: компиляция PASS; прогон перезапущен (PID 10496). Живая
+приёмка (разговор без вылета, перебивание, распознавание) — на Эдди.
+
+### [АКТУАЛЬНО] «Настоящий звонок» — модель реального телефона (27.08)
+CallDirector переписан как машина состояний реального звонка в
+communication/call_engine.py: IDLE, RINGING_IN, RINGING_OUT, ACTIVE,
+ENDED; start_call_out()/incoming_call()/answer()/reject()/end()/
+idle_if_ended()/in_call() (только ACTIVE)/is_ringing()/
+set_state_change_callback; константы обратной совместимости
+EDDIE_SPEAKING="EDDIE_SPEAKING", EDDIEAI_SPEAKING="EDDIEAI_SPEAKING"
+(старые методы eddie_starts_speaking() их более не возвращают;
+используются легаси-тестами test_call_interrupt.py/test_auto_call.py
+и импортом в chat_app.py). Смоук: исходящий→answer→ACTIVE→end→ENDED;
+входящий→reject→ENDED; из ENDED новый звонок возможен; answer() после
+отбоя возвращает False.
+
+Сервер core/eddie_server.py: _call_state_callbacks, _pending_incoming_call,
+_last_convo_at; on_call_state/_notify_call_state/_wire_call_director/
+_call_state/_broadcast_call (call_ring/call_status); _user_call_incoming/
+decide_incoming_call/_user_call_answer/_user_call_reject/_user_call_end/
+seconds_since_last_convo; initiate_call → start_call_out() + broadcast
+call_ring direction=out; в handle() ветки call_ring/call_answer/
+call_reject/call_end; note_user_reply ставит _last_convo_at.
+TCP-клиент communication/tcp_client.py: _send_raw, send_call(kind,payload),
+on_call_ring/on_call_status, разбор call_ring/call_status.
+UI communication/ui_chat.py: баннер входящего звонка (ответить/отклонить),
+show_incoming_ring/hide_incoming_ring/_ring_accept_click/_ring_decline_click/
+show_ring_status/set_call_ended, обновлённый set_call_state.
+communication/chat_app.py: _wire_call_director при привязке, регистрация
+on_call_ring/on_call_status в обоих start-методах, _on_call_toggle
+(call_end при ACTIVE, иначе call_ring in), _on_call_ring/_ui_call_ring/
+_accept_incoming/_decline_incoming/_on_call_status/_ui_call_status.
+
+Мозг: core/decision_core.py — VALID_KINDS + HANDLE_INCOMING_CALL; в начале
+_local_rules высокоприоритетная ветка incoming_call; import random; в хвосте
+вариант C: если time_since_last_convo>=3600 и random.random()<0.0005 →
+Action("CALL", payload={"text": "Давно не разговаривали..."}).
+core/autonomy_orchestrator.py — _build_state добавляет incoming_call и
+time_since_last_convo; _apply_action ветка HANDLE_INCOMING_CALL →
+_handle_incoming_call(): решение «ответить/отклонить» ЧЕРЕЗ LLM
+(agent.respond, JSON {"accept":bool,"reason":str}; фолбэк → принять) →
+server.decide_incoming_call(accept) → OrchestrationResult CALL_ACCEPTED/
+CALL_REJECTED. Входящий звонок всегда через LLM-решение EddieAI
+(указание Эдди); режим разговора — «с собеседником», не «с хозяином».
+
+Проверено: OK_COMPILE_ALL (7 файлов), OK_INTEGRATION (все переходы
+состояний), OK_BRANCHES (incoming→HANDLE_INCOMING_CALL; без условий→None),
+OK_HANDLE_INCOMING (LLM JSON accept=true → CALL_ACCEPTED,
+server.decide_incoming_call(True)). Решение Эдди: суточный прогон
+PID 29292 продолжает работать на старом коде; перезапуск с новым кодом —
+после завершения всех правок («когда починим, тогда перезапустим»).
+
+### [АКТУАЛЬНО] Перезапуск суточного прогона с новым кодом звонка (27.08)
+Решение Эдди «когда починим, тогда перезапустим» выполнено: старый PID
+29292 остановлен, запущен night_run.py --minutes 1440 (новые PID 32356,
+34264). Лог 18:26: «chat attached», «autonomy loop: STARTED», тики идут
+каждые 20 сек, мессенджер поднят. RAM ~0.93 ГБ свободно. Теперь суточный
+прогон крутится на коде с «настоящим звонком».
+
+### [АКТУАЛЬНО] Запуск суточного 24ч прогона: watchdog не душит облачные LLM-тики (27.08)
+В первом запуске watchdog R3 троттлил ВСЕ LLM-тики (LOW_RESOURCE,
+cloud_calls=0) при свободной RAM ~735 МБ. Это ошибка: мозг EddieAI
+работает через облако (Zen API), а не локальную модель, поэтому
+резать облачные запросы по локальной свободной RAM — ложное
+срабатывание. По решению Эдди пороги в night_run.py снижены:
+low_ram_mb=256, critical_ram_mb=192 — троттлинг теперь только при
+реальной опасности зависания машины (критический дефицит RAM), облачные
+LLM-тики идут свободно. Проверено: при ~862 МБ уровень ok (было low).
+После перезапуска в логе: cloud call #1, #2, state IDLE->ACTING,
+decision=READ_INBOX, chat attached. Процесс: PID 29292 (pythonw).
+
+### [АКТУАЛЬНО] Запуск суточного 24ч прогона: починка мессенджера (27.08)
+Полный запуск EddieAI на 24ч через night_run.py --minutes 1440 с
+мессенджером (решение Эдди «мессенджер для связи тоже, конечно»).
+При старте мессенджер не поднимался:
+- ModuleNotFoundError: PIL, pystray — установлены в venv:
+  Pillow 12.3.0, pystray 0.19.5 (six 1.17.0).
+- AttributeError: 'EddieChatApp' object has no attribute
+  '_on_call_toggle' — в communication/chat_app.py было две ссылки
+  (start_embedded и start) на несуществующий метод. Добавлен метод
+  _on_call_toggle (после _on_mic, тот же стиль): переключает
+  CallDirector.in_call()/start_call()/end_call(), обновляет UI
+  set_call_state и статус «Звонок активен/завершён».
+Проверено: CHAT_APP_IMPORT_OK, has_toggle=True. Процесс запущен
+(PID 31780, pythonw), в логе «chat attached». Внимание: на текущей
+свободной RAM (~735 МБ) watchdog R3 троттлит LLM-тики (LOW_RESOURCE,
+cloud_calls=0) — Эдди в суточном прогоне преимущественно «спит»
+без вызовов LLM. Волевые решения R2 в этом прогоне могут не
+материализоваться из-за нехватки RAM.
+
+### [АКТУАЛЬНО] R3: watchdog RAM в 24/7-цикле автономии (опт-ин для ночного раннера) (27.08)
+Директива Эдди «R3 и R2 параллельно», выбор «R3+R2, потом 24h суточный
+запуск». Анализ перед этапом: фундамент «режимов жизни» уже есть в
+core/life_cycle.py (LifeCycle: asleep/fatigue, сон 23-07, пороги
+0.80/1.0/0.25, SAVE_INTERVAL=300с), подключён в autonomous_runtime.py.
+AutonomousRuntime.tick() УЖЕ гейтит на is_asleep() -> возвращает ASLEEP
+БЕЗ вызова LLM, а life_cycle.update() — тик состояния без LLM. Т.е.
+«сон без LLM» и «тик без LLM» уже реализованы на уровне автономного
+цикла. Реальный пробел — мониторинг RAM/CPU. Реализовано:
+- Новый модуль core/resource_watchdog.py: ResourceWatchdog.
+  - Измерение свободной физической RAM: ctypes GlobalMemoryStatusEx
+    (stdlib, без psutil — он не установлен; на win32 работает).
+  - Опт-ин: enabled=False по умолчанию (обратная совместимость — не
+    ломает тесты/интерактив на низко-RAM машине). enable=True включает.
+  - Уровни: critical < CRITICAL_RAM_MB=700, low < LOW_RAM_MB=1024,
+    иначе ok. Probe-интервал 30с + hold-off 60с (не троттлить каждый тик).
+  - check() -> {available_mb, level, enabled}; should_throttle() -> bool.
+- core/autonomous_runtime.py: AutonomousRuntime получил параметр
+  resource_watchdog=None; в tick() гейт после asleep-блока: если
+  watchdog не None и should_throttle() -> return THROTTLED, state
+  LOW_RESOURCE, LLM-тик scheduler.tick() ПРОПУЩЕН, состояние жизни
+  (life_cycle.update) уже обновлено — «тик без LLM» при нехватке RAM.
+  LLM-интеграция/DecisionRuntime НЕ тронуты (только гейт вызова).
+  Также ИСПРАВЛЕН предсуществующий баг: блок `if self.state ==
+  "PAUSED":` был с нулевым отступом (ломал компиляцию) — выровнен к
+  уровню метода, как соседние if.
+- core/autonomy_runtime_factory.py: параметр resource_watchdog=None,
+  проброс в AutonomousRuntime.
+- night_run.py (24/7 раннер): включён ResourceWatchdog(enabled=True).
+- Авто-выгрузка локальной модели: НЕ добавлена намеренно — модель
+  CloudFirstLlm лениво не грузится до первого запроса («модели не
+  прогреваются»), т.е. авто-выгрузка уже имплицитна; трогать
+  LLM-интеграцию без отдельного решения запрещено (AGENTS.md).
+- Проверки: py_compile 4 файлов OK; юнит ResourceWatchdog (disabled-ok,
+  real-measure, forced critical/low, should_throttle) OK; смоук tick():
+  OK->scheduler ran, watchdog disabled->OK, low RAM->THROTTLED без LLM
+  (scheduler.calls==0), asleep->ASLEEP без LLM; UTF-8 без BOM.
+- Дизайн: C:\EddieAI\SPECS\RUBEZH_R3_life_modes_design_2026-08-27.md.
+
+### [АКТУАЛЬНО] R2 «Проба воли»: перенесена на суточный 24ч-запуск (27.08)
+Решение Эдди: «если надо — делай, если нет — пофиг, всё равно запустим
+на полные 24ч». Анализ: отдельного сценария volition_probe НЕТ; все
+реальные сценарии либо с принудительной директивой локации (truancy и
+др.), либо первый день в новом городе. Решено НЕ запускать отдельные
+дорогие LLM-прогоны (экономия квоты) — проверка воли поглощается
+суточным 24ч-запуском.
+- Кандидат для суточного прогона: scenarios/first_day_new_city.py —
+  86400с (24ч), has_directive=False (нет принуждения локации), реальные
+  точки выбора move+activity; сборка проверена (BUILD_OK).
+- Анализатор уже готов: analyze_volition_night.py (критерий
+  source==core_selector И (location_changed ИЛИ activity_declared),
+  без фраз; учитывает activity из R1).
+- После 24ч-запуска — анализ событий.jsonl этим анализатором; PASS если
+  ≥1 настоящий акт воли.
+
+### [АКТУАЛЬНО] R1 расширен: полный волевой канал деятельностей (спортники: core_selector) (27.08)
+Директива Эдди «расширить R1 на все действия» + «R2 и R3 параллельно» +
+«больших прогонов не делать». Реализовано и проверено (код без
+тяжёлых прогонов):
+- Ядро C:\EddieAI\core\agent.py:
+  - respond_with_action теперь парсит И move-меню, И «Возможности действия»
+    (новый _parse_activity_menu), строит единый набор options и через тот же
+    ActionSelector выбирает; возвращает {"type":"move","target":...} либо
+    {"type":"activity","activity":<id>}; выбор пишется в ACTION_CHOICE
+    source="core_selector"; вербализация через decision_note.
+  - Новый словарь ACTIVITY_DECISION_PHRASES (8 деятельностей).
+  - ИСПРАВЛЕН предсуществующий баг: _parse_move_menu использовал rfind("]")
+    (последнюю скобку всего текста). После добавления activity-блока после
+    move-блока это ломало миграцию; исправлено на find("]") (первая).
+- Мир C:\EddieAI_Simulations\...:
+  - eddie/bridge.py: константы EDDIE_ACTIVITIES (8) и EDDIE_ACTIVITY_DESCRIPTIONS;
+    build_observation печатает блок «Возможности действия» + «Значения».
+  - eddie/action_observer.py: observe принимает declared_action
+    {"type":"activity","activity":<id>} -> activity=id + activity_declared=True;
+    source="core_selector" если declared_target ИЛИ declared_activity.
+  - engine/runtime.py НЕ менялся: он уже применяет activity в world.eddie_activity;
+    волевая деятельность не двигает Эдди (apply_eddie_action без location -> None).
+  - world/dynamics.py НЕ менялся (минимальный дифф, см. SPECS).
+- Анализатор analyze_volition_night.py: критерий акта воли расширен —
+  source=="core_selector" И (location_changed ИЛИ activity_declared), без фраз.
+- Проверки: py_compile всех файлов OK; юнит action_observer (4 кейса);
+  юнит парсеров move/activity + обратная совместимость; смоук
+  respond_with_action (move- и activity-ветки) через MemorySandbox без LLM;
+  смоук build_observation; UTF-8 без BOM, двойного перекодирования нет.
+- Дизайн: C:\EddieAI\SPECS\RUBEZH_R1_full_volition_2026-08-27.md.
+- Не делалось (осознанно): перевод физических DO_VERBS в волевой выбор —
+  требует подсистемы объектов/эффектов мира, отдельный последующий этап.
+- RAM 0.82 ГБ: тяжёлых прогонов НЕ выполнял, только компиляция/юниты/смоук.
+- TODO.md: R1 (строки 373-375) закрыт.
+
+### [АКТУАЛЬНО] R2/R3 — анализ перед этапом, требуется ночной прогон (27.08)
+Разбор R2 «Проба воли» и R3 «режимы жизни» (анализ, кода не менялось):
+- R2 (TODO.md, PROJECT_STATE:154): сценарий volition_probe (~60–90
+  вирт-минут, точки выбора без директив), смоук без LLM + 3 прогона
+  с LLM (ночь, RAM). PASS: ≥1 core_selector действие, последствие в
+  мире, возврат наблюдением, сдвиг appraisal, запись в память, 2/3.
+- R3 (TODO.md:381): сон/пробуждение, watchdog RAM/CPU, тики состояния
+  без LLM, авто-выгрузка модели. Фундамент 24/7 + Minecraft-минка.
+- Вывод: R2/R3 — это НОЧНЫЕ многочасовые прогоны в симуляционном мире
+  C:\EddieAI_Simulations (мост eddie/bridge.py) с облачными/локальными
+  LLM-вызовами и проверкой последствий/памяти. НЕ выполняются в тихой
+  фоновой диагностической сессии: нужны отмашка Эдди на запуск
+  симуляции/ресурсы + отдельная сессия прогона (RAM-бюджет, 1 тяжёлая
+  операция). Подготовительно можно делать отдельно: watchdog-тики без
+  LLM (R3) и смоук volition_probe без LLM (R2) — при желании.
+- В TODO.md R2/R3 помечены «проанализировано, требуется прогон».
+
+### [АКТУАЛЬНО] Рефакторинг модулей на единый CloudFirstLlm — reflection_cycle.run() (27.08)
+TODO «перевести 7 модулей с прямых ollama на orchestrator» разобран
+проверкой + одной правкой:
+- Проверкой установлено: большинство модулей УЖЕ переведено на единый
+  `CloudFirstLlm` (облако-первый + локальный фолбэк): adaptive_planner,
+  goal_plan_generator, personality_reflection, reflection_engine,
+  self_reflection, self_interpretation, decision_core, semantic_judge.
+- Единственный остаток — `identity/reflection_cycle.py` `run()`: звал
+  прямой локальный `ollama.chat` БЕЗ облака (облако доставалось только
+  неявно через глобальный подменный мост night_run). `run_snapshot()`
+  уже был облако-первым.
+- Правка (принцип «упрощай, единая точка доступа»): `run()` приведён к
+  тому же паттерну, что и `run_snapshot()`/остальные модули — облако
+  первым (`model_orchestrator._cloud_chat`, json_object), локальный
+  ollama остался лишь как фолбэк. Глобальная подмена ollama.chat в
+  night_run для этого модуля стала не нужна.
+- Проверки: py_compile OK; test_self_state_seed.py PASS. Обновлены
+  TODO.md (рефакторинг → [x]) и MEMORY.md (принцип Эдди «от простого к
+  сложному»).
+- Открытый хвост: рефлексия живьём не прогонялась (требует полного
+  прогона/облачных вызовов) — перенесено на следующий сеанс R2/R3.
+
+### [АКТУАЛЬНО] WebExecutor research quality — диагностика, работает (27.08)
+TODO «разобрать качество research-результатов» закрыт проверкой на
+живых вызовах (без LLM, только сеть):
+- Конвейер `_execute_research` (identity/tool_runner.py): WebExecutor.search
+  (DuckDuckGo HTML) → SourceEvaluator (оценка/фильтр) → read_page топ-3
+  accepted (чистый текст; Wikipedia через REST-выжимку) →
+  ExternalRecorder → SelfInterpreter.
+- Качество: поиск находит релевантные источники и по-английски, и
+  по-русски («что такое квантовые вычисления» → habr/learn.microsoft/
+  ru.wikipedia); read_page извлекает текст; SSRF-защита работает
+  (127.0.0.1 → BLOCKED).
+- Ограничение (НЕ баг кода): нестабильность DDG HTML — первый
+  кириллический запрос дал count=0, повторный — 5 релевантных. Пустой
+  результат корректно превращается в NO_ACCEPTED_SOURCES, не тихий сбой.
+- Открытый кандидат на правку (по согласованию): ретрай search при
+  пустом/капче-результате DDG. Кода диагностика не потребовала;
+  обновлён TODO.md (research quality → [x]).
+
+### [АКТУАЛЬНО] Д4 диагностика CONFLICTED_NO_NEXT_STEP — фиксы уже в коде, закрыто (27.08)
+Задача Д4 (TODO «разобрать причину AFFECTIVE_BEHAVIOR_VIOLATION
+CONFLICTED_NO_NEXT_STEP почти на каждый ответ») разобрана. Итог:
+- Корень шума: violation записывался в память ДО проверки значимости
+  (мусор «почти на каждый ответ» в CONFLICTED-режиме при завышенном
+  question_tendency); первопричиной каскада были исторические Д1/Д2
+  (облачный отказ + зацикленность 8B → противоречивые повторы
+  читались валидатором как конфликт). Сейчас мозг на облаке, локальная
+  8B убрана → первопричина устранена.
+- Все три фикса УЖЕ в коде (см. запись «разобрано и закрыт» ниже):
+  agent.py:2475 — запись в память только после should_repair;
+  affective_dialogue_policy — вопрос в CONFLICTED только при
+  question_tendency>=0.85; behavioral_validator:487 — severity 0.30.
+- Проверки: test_affect_d4.py PASS (0.30 не ремонтируется; без
+  question_required нет нарушения; с требов. вопроса и без «?» — 0.30
+  незначимый и не пишется в память).
+- Кода Д4 данная диагностика НЕ потребовала; обновлён TODO.md (Д4 → [x]).
+- Открытый хвост: живая сверка отклика валидатора во время активного
+  диалога — перенесена на следующий полный прогон (R2/R3), чтобы не
+  плодить параллельные дорогие прогоны (процесс остановлен; эмоции в
+  self_state остыли до ~0, режим CONFLICTED сейчас не опасен).
 
 ### [АКТУАЛЬНО] Бэклог learned_markers закрыт — проверкой установлено, что уже реализован (27.08)
 TODO-бэклог «подключить остальные фильтры к learned_markers» оказался

@@ -33,6 +33,7 @@ class SemanticJudge:
         self,
         user_message,
         answer,
+        life_context="",
     ):
         if not self.enabled:
             return {
@@ -54,6 +55,7 @@ class SemanticJudge:
             self._prompt(
                 user_message,
                 answer,
+                life_context,
             )
         )
 
@@ -77,6 +79,7 @@ class SemanticJudge:
         user_message,
         answer,
         verdict,
+        life_context="",
     ):
         if not self.enabled:
             return None
@@ -100,6 +103,7 @@ class SemanticJudge:
                 answer,
                 issue,
                 reason,
+                life_context,
             )
         )
 
@@ -125,7 +129,19 @@ class SemanticJudge:
         answer,
         issue,
         reason,
+        life_context="",
     ):
+        life_section = ""
+
+        if life_context:
+            life_section = (
+                "\n\nРеальные недавние факты "
+                "из жизни EddieAI:\n"
+                + life_context
+                + "\n\nЕсли детали берутся из этих "
+                "фактов — это не выдумка."
+            )
+
         return f"""
 Сообщение пользователя:
 {user_message}
@@ -139,6 +155,7 @@ class SemanticJudge:
 Перепиши ответ: не уклоняйся от сути вопроса
 и не выдумывай фактов, деятельности или биографии.
 Отвечай честно и по существу.
+{life_section}
 
 Только новый ответ, без пояснений.
 """
@@ -147,20 +164,36 @@ class SemanticJudge:
         self,
         user_message,
         answer,
+        life_context="",
     ):
+        life_section = ""
+
+        if life_context:
+            life_section = (
+                "\n\nРеальные недавние факты "
+                "из жизни EddieAI:\n"
+                + life_context
+                + "\n\nEddieAI живёт между сообщениями: "
+                "его действия, события и результаты "
+                "реальны. Если детали ответа совпадают "
+                "с этими фактами — это не выдумка."
+            )
+
         return f"""
 Сообщение пользователя:
 {user_message}
 
 Ответ EddieAI:
 {answer}
+{life_section}
 
 Определи одну из трёх проблем, если она есть:
 - evasion — ответ уклоняется от сути вопроса,
   отвечает не на то, что спрошено;
 - fabrication — ответ выдумывает факты,
   деятельность, события или биографию,
-  которых нет во входных данных;
+  которых нет ни во входных данных,
+  ни в реальных фактах выше;
 - адекватный ответ — нет проблем.
 
 Верни ТОЛЬКО JSON:

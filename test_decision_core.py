@@ -37,12 +37,12 @@ with TemporaryDirectory() as temp:
     assert decision.kind == "IDLE", decision
 
     # 2. Долгое безделье, нет интересов ->
-    #    скука -> рефлексия
+    #    собственная воля -> CALL (без «часового» порога)
     decision = core.decide(
         dict(STATE, idle_seconds=900)
     )
 
-    assert decision.kind == "REFLECT", decision
+    assert decision.kind == "CALL", decision
 
     # 3. Долгое безделье + интерес ->
     #    скука -> исследовать (ACTIVATE_GOAL)
@@ -109,6 +109,56 @@ with TemporaryDirectory() as temp:
     assert decision.payload == {
         "value": "Изучить тему: звёзды"
     }
+
+    # 7. Правило воли напрямую: долгое безделье -> CALL
+    state7 = SelfState(
+        Path(temp) / "state7.json"
+    )
+    state7.set("interests", [])
+
+    gm7 = GoalManager(
+        state7,
+        GoalPlanner(state7),
+    )
+
+    core7 = DecisionCore(
+        memory=db,
+        goal_manager=gm7,
+    )
+
+    decision = core7._local_rules(
+        dict(STATE, idle_seconds=900)
+    )
+
+    assert decision.kind == "CALL", decision
+
+    # 8. Если уже есть необработанная инициатива —
+    #    CALL не дублируется
+    state8 = SelfState(
+        Path(temp) / "state8.json"
+    )
+    state8.set("interests", [])
+
+    server8 = type(
+        "S8",
+        (),
+        {"pending_initiative": {"text": "x"}},
+    )()
+
+    core8 = DecisionCore(
+        memory=db,
+        goal_manager=GoalManager(
+            state8,
+            GoalPlanner(state8),
+        ),
+        server=server8,
+    )
+
+    decision = core8._local_rules(
+        dict(STATE, idle_seconds=900)
+    )
+
+    assert decision is None, decision
 
     print("ALL PASS")
 

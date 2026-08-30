@@ -72,7 +72,7 @@ from core.dialogue_memory import (
     DialogueMemory,
     is_degradation_answer,
 )
-from core.prompt_builder import build_verbalizer_system_prompt
+import core.prompt_builder as prompt_builder
 from core.self_conclusion_state import SelfConclusionState
 from core.self_conclusion_store import SelfConclusionStore
 from core.fast_verbalizer import FastVerbalizer
@@ -1940,6 +1940,24 @@ Respond briefly and naturally.
                     "Убеждения: "
                     + "; ".join(belief_texts)
                 )
+
+            life_state = self.self_state.get(
+                "life_state"
+            ) or {}
+
+            asleep = life_state.get("asleep")
+
+            if asleep is not None:
+                if asleep:
+                    lines.append(
+                        "Жизненное состояние: сейчас сплю "
+                        "(режим отдыха)."
+                    )
+                else:
+                    lines.append(
+                        "Жизненное состояние: сейчас бодрствую "
+                        "(активная жизнь)."
+                    )
         except Exception:
             pass
 
@@ -1976,6 +1994,47 @@ Respond briefly and naturally.
             + "убеждения и недавние записи дневника. "
             + "Опирайся на них. Не выдумывай того, "
             + "чего здесь нет."
+        )
+
+    def _life_feed_block(self, limit=8):
+        if self.memory is None:
+            return ""
+
+        try:
+            feed = self.memory.recent_life_feed(
+                limit=limit
+            )
+        except Exception:
+            feed = ""
+
+        if not feed:
+            return ""
+
+        return (
+            "\n\nНЕДАВНИЕ СОБЫТИЯ ТВОЕЙ ЖИЗНИ\n\n"
+            + feed
+            + "\n\nНе выдумывай событий, которых здесь нет."
+        )
+
+    def _action_results_block(self, limit=4):
+        if self.memory is None:
+            return ""
+
+        try:
+            results = self.memory.recent_action_results(
+                limit=limit
+            )
+        except Exception:
+            results = ""
+
+        if not results:
+            return ""
+
+        return (
+            "\n\nРЕЗУЛЬТАТЫ ТВОИХ ДЕЙСТВИЙ\n\n"
+            + results
+            + "\n\nЭто то, что ты реально нашёл и "
+            "выполнил. Пользуйся этим содержимым."
         )
 
     def _respond_quick(
@@ -2129,6 +2188,8 @@ Respond briefly and naturally.
             + self._self_context_block()
             + autonomy_context
             + dialogue_mode_context
+            + self._life_feed_block(limit=6)
+            + self._action_results_block(limit=4)
             + "\n\nLAST USER MESSAGE\n\n"
             + user_message
             + "\n\nRESPONSE INSTRUCTION\n\n"
@@ -3917,6 +3978,17 @@ Respond briefly and naturally.
         "shop": "пойти в магазин",
     }
 
+    ACTIVITY_DECISION_PHRASES = {
+        "speaking_up": "заговорить, обратиться или позвать на помощь",
+        "comforting": "утешить и поддержать",
+        "observing": "наблюдать и слушать",
+        "hiding": "спрятаться и укрыться",
+        "helping": "помочь и вмешаться",
+        "waiting": "подождать и не спешить",
+        "thinking": "задуматься и обдумать",
+        "doing_nothing": "ничего не делать и не вмешиваться",
+    }
+
     @staticmethod
     def _parse_move_menu(
         observation_text: str,
@@ -3932,7 +4004,48 @@ Respond briefly and naturally.
         tail = parts[1]
 
         start = tail.find("[")
-        end = tail.rfind("]")
+        end = tail.find("]")
+
+        if start < 0 or end <= start:
+            return []
+
+        try:
+
+            import json as _json
+
+            payload = _json.loads(
+                tail[start:end + 1]
+            )
+
+        except Exception:
+
+            return []
+
+        if not isinstance(payload, list):
+            return []
+
+        return [
+            str(value)
+            for value in payload
+            if isinstance(value, str)
+        ]
+
+    @staticmethod
+    def _parse_activity_menu(
+        observation_text: str,
+    ) -> list:
+
+        parts = observation_text.split(
+            "Возможности действия:", 1,
+        )
+
+        if len(parts) < 2:
+            return []
+
+        tail = parts[1]
+
+        start = tail.find("[")
+        end = tail.find("]")
 
         if start < 0 or end <= start:
             return []
@@ -3965,11 +4078,17 @@ Respond briefly and naturally.
 
         self.cognitive_processor.apply_all_analyzed()
 
-        menu = self._parse_move_menu(
+        move_menu = self._parse_move_menu(
             observation_text,
         )
 
-        if not menu:
+        activity_menu = (
+            self._parse_activity_menu(
+                observation_text,
+            )
+        )
+
+        if not move_menu and not activity_menu:
 
             return {
                 "response":
@@ -3992,7 +4111,16 @@ Respond briefly and naturally.
                     "move:" + location
                 ),
             )
-            for location in menu
+            for location in move_menu
+        ]
+
+        options += [
+            SimpleNamespace(
+                action_type=(
+                    "activity:" + activity
+                ),
+            )
+            for activity in activity_menu
         ]
 
         from identity.action_selector import (
@@ -4003,7 +4131,12 @@ Respond briefly and naturally.
             self.memory,
         ).select(options)
 
-        target = (
+        selected_type = (
+            selection.selected.action_type
+            .split(":", 1)[0]
+        )
+
+        selected_value = (
             selection.selected.action_type
             .split(":", 1)[1]
         )
@@ -4046,13 +4179,35 @@ Respond briefly and naturally.
                 flush=True,
             )
 
-        phrase = (
-            self.MOVE_DECISION_PHRASES.get(
-                target,
-                "переместиться: "
-                + target,
+        if selected_type == "activity":
+
+            phrase = (
+                self.ACTIVITY_DECISION_PHRASES.get(
+                    selected_value,
+                    "выбрать деятельность: "
+                    + selected_value,
+                )
             )
-        )
+
+            action = {
+                "type": "activity",
+                "activity": selected_value,
+            }
+
+        else:
+
+            phrase = (
+                self.MOVE_DECISION_PHRASES.get(
+                    selected_value,
+                    "переместиться: "
+                    + selected_value,
+                )
+            )
+
+            action = {
+                "type": "move",
+                "target": selected_value,
+            }
 
         decision_note = (
             "Внутреннее решение уже принято без слов: "
@@ -4072,10 +4227,7 @@ Respond briefly and naturally.
         return {
             "response": response,
 
-            "action": {
-                "type": "move",
-                "target": target,
-            },
+            "action": action,
 
             "selection_reason":
                 selection.reason,
@@ -4158,6 +4310,92 @@ Respond briefly and naturally.
 
         return route
 
+    def respond_call_fast(
+        self,
+        conversation,
+        latest,
+        on_chunk=None,
+    ):
+        """
+        Быстрый «разговорный» ответ для голосового звонка:
+        лёгкий контекст (недавний диалог + реплика), короткий
+        вывод, при on_chunk — стриминг облака по чанкам.
+        """
+        try:
+            speech_profile = self._speech_profile()
+        except Exception:
+            speech_profile = None
+
+        system = (
+            prompt_builder
+            .build_verbalizer_system_prompt(
+                speech_profile=speech_profile,
+            )
+            + """
+Ты EddieAI в живом голосовом разговоре с Эдди.
+Твой ответ будет произнесён вслух (озвучен голосом),
+а не напечатан. Отвечай как в устном разговоре:
+кратко, живо, 1-2 коротких предложения, от первого
+лица. Не переспрашивай очевидное и не добавляй
+пояснений. Пиши только сам ответ.
+"""
+        )
+
+        user = (
+            "[ГОЛОСОВОЙ ЗВОНОК с Эдди — живой разговор "
+            "голосом, не переписка]\n"
+            "НЕДАВНИЙ РАЗГОВОР:\n"
+            + (conversation or "")
+            + "\n\nСейчас Эдди сказал:\n"
+            + latest
+            + "\n\nТвой ответ:"
+        )
+
+        options = {
+            "temperature": 0.8,
+            "num_predict": 180,
+        }
+
+        if on_chunk is not None:
+            return (
+                self.model_orchestrator
+                .cloud_chat_stream(
+                    system=system,
+                    user=user,
+                    options=options,
+                    on_delta=on_chunk,
+                    task="conversation",
+                )
+                or ""
+            )
+
+        try:
+            result = (
+                self.model_orchestrator.execute(
+                    task="conversation",
+                    system=system,
+                    user=user,
+                    options=options,
+                )
+            )
+            if (
+                result.get("error")
+                == "insufficient_ram"
+            ):
+                return (
+                    self.model_orchestrator
+                    ._cloud_chat(
+                        system=system,
+                        user=user,
+                        options=options,
+                        task="fallback",
+                    )
+                    or ""
+                )
+            return result["content"]
+        except Exception:
+            return ""
+
     def respond(
         self,
         user_message: str,
@@ -4175,9 +4413,15 @@ Respond briefly and naturally.
             pass
 
         try:
+            life_context = (
+                self._life_feed_block(limit=6)
+                + self._action_results_block(limit=4)
+            )
+
             verdict = self.semantic_judge.judge(
                 user_message,
                 answer,
+                life_context=life_context,
             )
 
             if not verdict["ok"]:
@@ -4202,6 +4446,7 @@ Respond briefly and naturally.
                         user_message,
                         answer,
                         verdict,
+                        life_context=life_context,
                     )
                 )
 
@@ -5415,6 +5660,14 @@ ACCEPT
 The user request may be handled normally.
 """
 
+        life_feed_block = (
+            self._life_feed_block(limit=8)
+        )
+
+        action_results_block = (
+            self._action_results_block(limit=4)
+        )
+
         user_prompt = f"""
 СООБЩЕНИЕ ПОЛЬЗОВАТЕЛЯ
 
@@ -5433,6 +5686,14 @@ The user request may be handled normally.
 Релевантные воспоминания
 (из памяти, по теме запроса):
 {chat_context}
+
+Новые события твоей жизни
+(что реально происходило с тобой в последнее время):
+{life_feed_block}
+
+Результаты твоих действий
+(что ты реально нашёл и выполнил своими действиями):
+{action_results_block}
 
 {conclusions_context}
 

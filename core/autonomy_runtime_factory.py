@@ -2,6 +2,7 @@ from core.agent_loop import AgentLoop
 from core.autonomy_arbitrator import AutonomyArbitrator
 from core.decision_core import DecisionCore
 from core.eddie_server import EddieServer
+from core.life_cycle import LifeCycle
 from core.model_orchestrator import ModelOrchestrator
 from core.autonomy_orchestrator import AutonomyOrchestrator
 from core.autonomous_runtime import AutonomousRuntime
@@ -77,6 +78,7 @@ class AutonomyRuntimeFactory:
         scheduler_max_ticks_per_window=3,
         scheduler_interval_seconds=300,
         enable_decision_core=False,
+        resource_watchdog=None,
     ):
         self.agent = agent
         self.filesystem_root = filesystem_root
@@ -89,6 +91,7 @@ class AutonomyRuntimeFactory:
         self.enable_decision_core = (
             enable_decision_core
         )
+        self.resource_watchdog = resource_watchdog
 
     def build(self):
         # -----------------------------------------
@@ -448,7 +451,15 @@ class AutonomyRuntimeFactory:
             scheduler=scheduler,
             memory=self.agent.memory,
             orchestrator=orchestrator,
+            life_cycle=LifeCycle(
+                self.agent.self_state
+            ),
+            resource_watchdog=(
+                self.resource_watchdog
+            ),
         )
+
+        self.agent.life_cycle = runtime.life_cycle
 
         self.agent.autonomous_runtime = runtime
 

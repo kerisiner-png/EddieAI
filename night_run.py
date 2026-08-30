@@ -69,6 +69,9 @@ from core.agent import Agent
 from core.autonomy_runtime_factory import (
     AutonomyRuntimeFactory,
 )
+from core.resource_watchdog import (
+    ResourceWatchdog,
+)
 
 agent = Agent()
 
@@ -94,6 +97,11 @@ runtime = AutonomyRuntimeFactory(
     ),
     scheduler_interval_seconds=15,
     enable_decision_core=True,
+    resource_watchdog=ResourceWatchdog(
+        enabled=True,
+        low_ram_mb=256,
+        critical_ram_mb=192,
+    ),
 ).build()
 
 original_cloud = (

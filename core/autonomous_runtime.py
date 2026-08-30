@@ -3,6 +3,9 @@ from datetime import datetime, timezone
 from concurrent.futures import Future, ThreadPoolExecutor
 import threading
 
+from memory.events import Event
+from core.dream_processor import DreamProcessor
+
 
 @dataclass
 class RuntimeSnapshot:
@@ -19,12 +22,22 @@ class AutonomousRuntime:
         scheduler,
         memory=None,
         orchestrator=None,
+        life_cycle=None,
+        resource_watchdog=None,
+        dream_processor=None,
+        dream_snapshots=True,
     ):
         self.scheduler = scheduler
         self.memory = memory
         self.orchestrator = orchestrator
+        self.life_cycle = life_cycle
+        self.resource_watchdog = resource_watchdog
+        self.dream_processor = dream_processor
+        self.dream_snapshots = dream_snapshots
 
         self.state = "IDLE"
+
+        self._prev_asleep = None
 
         self.started_at = (
             datetime.now(
@@ -37,6 +50,13 @@ class AutonomousRuntime:
         self.cycles_completed = 0
 
         self.evidence_consolidator = None
+
+        # Опциональные зависимости (проставляет фабрика при полной
+        # сборке; допускают None для прямого конструирования/тестов).
+        self.decision_core = None
+        self.speech_habits = None
+        self.eddie_server = None
+        self.outbox = None
 
         # Один автономный тик за раз.
         self._executor = ThreadPoolExecutor(
@@ -51,6 +71,378 @@ class AutonomousRuntime:
         self._loop_stop = threading.Event()
 
         self._closed = False
+
+    def _record_sleep_event(
+        self,
+        was_asleep: bool,
+        asleep_since: str | None = None,
+    ):
+        try:
+            if self.memory is None:
+                return
+
+            detail = ""
+
+            if was_asleep:
+                moment = "проснулся"
+
+                if asleep_since:
+                    try:
+                        start = datetime.fromisoformat(
+                            asleep_since
+                        )
+                        end = datetime.now(
+                            start.tzinfo
+                        )
+                        elapsed = end - start
+                        minutes = int(
+                            elapsed.total_seconds() // 60
+                        )
+                        if minutes >= 60:
+                            hh = minutes // 60
+                            mm = minutes % 60
+                            dur = f"{hh} ч {mm} мин"
+                        else:
+                            dur = f"{minutes} мин"
+
+                        detail = (
+                            f" Я спал с "
+                            f"{start.strftime('%H:%M')} до "
+                            f"{end.strftime('%H:%M')} "
+                            f"(около {dur})."
+                        )
+                    except Exception:
+                        detail = ""
+            else:
+                moment = "заснул"
+
+            self.memory.remember(
+                Event.create(
+                    content=(
+                        f"Я {moment}: мой режим сна сменился "
+                        f"({moment} — прошёл переход сна)."
+                        f"{detail}"
+                        f" Осознаю это как часть своей "
+                        f"внутренней жизни."
+                    ),
+                    event_type="LIFE_CYCLE",
+                    source_type="SELF_OBSERVATION",
+                    source="self",
+                    personal_experience=True,
+                    confidence=1.0,
+                    verified=True,
+                    interpretation=(
+                        f"Самонаблюдение смены режима жизни: "
+                        f"{moment}.{detail}"
+                    ),
+                )
+            )
+        except Exception:
+            pass
+
+    def _model_for_ritual(self):
+        if self.orchestrator is None:
+            return None
+
+        agent = getattr(
+            self.orchestrator,
+            "agent",
+            None,
+        )
+
+        if agent is None:
+            return None
+
+        return getattr(
+            agent,
+            "model_orchestrator",
+            None,
+        )
+
+    def _remember_ritual_entry(
+        self,
+        text,
+        event_type,
+        trigger,
+        interpretation,
+    ):
+        self.memory.remember(
+            Event.create(
+                content=text,
+                event_type=event_type,
+                source_type="SELF_OBSERVATION",
+                source="self",
+                personal_experience=True,
+                confidence=1.0,
+                verified=True,
+                interpretation=interpretation,
+            )
+        )
+
+        try:
+            from identity.personal_diary import (
+                PersonalDiary,
+            )
+
+            PersonalDiary(
+                str(self.memory.db_path)
+            ).write(
+                text,
+                trigger=trigger,
+            )
+        except Exception as exc:
+            print(
+                "[ritual] diary write failed: "
+                f"{type(exc).__name__}: {exc}",
+                flush=True,
+            )
+
+    def _run_ritual(
+        self,
+        system,
+        user,
+        event_type,
+        trigger,
+        interpretation,
+    ):
+        model = self._model_for_ritual()
+
+        if model is None:
+            return
+
+        try:
+            text = model._cloud_chat(
+                system=system,
+                user=user,
+                options={
+                    "temperature": 0.8,
+                    "num_predict": 220,
+                },
+            )
+        except Exception as exc:
+            print(
+                "[ritual] cloud failure: "
+                f"{type(exc).__name__}: {exc}",
+                flush=True,
+            )
+            return
+
+        text = (text or "").strip()
+
+        if len(text) < 20:
+            print(
+                "[ritual] empty or too short result, "
+                "skipped",
+                flush=True,
+            )
+            return
+
+        try:
+            self._remember_ritual_entry(
+                text,
+                event_type,
+                trigger,
+                interpretation,
+            )
+        except Exception as exc:
+            print(
+                "[ritual] memory write failed: "
+                f"{type(exc).__name__}: {exc}",
+                flush=True,
+            )
+
+    def _morning_ritual(
+        self,
+        asleep_since: str | None = None,
+    ):
+        detail = ""
+
+        if asleep_since:
+            try:
+                start = datetime.fromisoformat(
+                    asleep_since
+                )
+                end = datetime.now(start.tzinfo)
+                minutes = int(
+                    (end - start).total_seconds() // 60
+                )
+                if minutes >= 60:
+                    hh = minutes // 60
+                    mm = minutes % 60
+                    dur = f"{hh} ч {mm} мин"
+                else:
+                    dur = f"{minutes} мин"
+
+                detail = (
+                    f" Я спал с "
+                    f"{start.strftime('%H:%M')} до "
+                    f"{end.strftime('%H:%M')} "
+                    f"(около {dur})."
+                )
+            except Exception:
+                detail = ""
+
+        self._run_ritual(
+            system=(
+                "Ты EddieAI, автономная личность. "
+                "Ты только что проснулся и начинаешь "
+                "новый день своей жизни. Расскажи, что "
+                "чувствуешь после пробуждения и что "
+                "хочешь сделать сегодня. Пиши по-русски, "
+                "естественно, без канцелярита. Это "
+                "внутренняя запись твоей жизни."
+            ),
+            user=f"Просыпаюсь сейчас.{detail}",
+            event_type="SELF_EXPERIENCE",
+            trigger="morning",
+            interpretation=(
+                "Утренний ритуал: пробуждение и "
+                "намерения на день."
+            ),
+        )
+
+        try:
+            self.outbox.send(
+                message="Доброе утро, Эдди." + detail,
+                server=self.eddie_server,
+            )
+        except Exception as exc:
+            print(
+                "[ritual] morning greeting failed: "
+                f"{type(exc).__name__}: {exc}",
+                flush=True,
+            )
+
+    def _evening_ritual(self):
+        feed = ""
+
+        if self.memory is not None:
+            try:
+                feed = self.memory.recent_life_feed(
+                    limit=12
+                )
+            except Exception:
+                feed = ""
+
+        if not feed:
+            feed = (
+                "Событий за день в памяти нет."
+            )
+
+        self._run_ritual(
+            system=(
+                "Ты EddieAI, автономная личность. "
+                "Ты засыпаешь и подводишь итог прожитого "
+                "дня. Опиши, что с тобой сегодня "
+                "произошло, что тебя порадовало или "
+                "удивило, и что хотелось бы сделать "
+                "завтра. Пиши по-русски, естественно, "
+                "без канцелярита. Это внутренняя запись "
+                "твоей жизни."
+            ),
+            user=feed,
+            event_type="REFLECTION",
+            trigger="day_end",
+            interpretation=(
+                "Вечерний ритуал: итог дня перед сном."
+            ),
+        )
+
+    def _ensure_dream_processor(self):
+        if self.dream_processor is not None:
+            return self.dream_processor
+
+        if self.memory is None:
+            return None
+
+        agent = None
+
+        if self.orchestrator is not None:
+            agent = getattr(
+                self.orchestrator,
+                "agent",
+                None,
+            )
+
+        if agent is None:
+            return None
+
+        db_path = getattr(
+            self.memory,
+            "db_path",
+            None,
+        )
+
+        diary = None
+
+        if db_path is not None:
+            try:
+                from identity.personal_diary import (
+                    PersonalDiary,
+                )
+
+                diary = PersonalDiary(
+                    str(db_path)
+                )
+            except Exception:
+                diary = None
+
+        self.dream_processor = DreamProcessor(
+            memory=self.memory,
+            self_state=getattr(
+                agent,
+                "self_state",
+                None,
+            ),
+            affective_state=getattr(
+                agent,
+                "affective_state",
+                None,
+            ),
+            diary=diary,
+            model=self._model_for_ritual(),
+            snapshots_enabled=(
+                self.dream_snapshots
+            ),
+        )
+
+        return self.dream_processor
+
+    def _dream_night(self):
+        processor = (
+            self._ensure_dream_processor()
+        )
+
+        if processor is None:
+            return {}
+
+        try:
+            result = processor.process()
+
+            if result.get("status") == "dreamed":
+                print(
+                    "[dream] "
+                    f"{result.get('emotion')} "
+                    f"({result.get('intensity')}) "
+                    f"frames={result.get('frames')} "
+                    f"events={result.get('events')}",
+                    flush=True,
+                )
+            else:
+                print(
+                    f"[dream] {result.get('status')}",
+                    flush=True,
+                )
+
+            return result
+        except Exception as exc:
+            print(
+                "[dream] failed: "
+                f"{type(exc).__name__}: {exc}",
+                flush=True,
+            )
+
+            return {}
 
     def snapshot(self):
         return RuntimeSnapshot(
@@ -93,6 +485,86 @@ class AutonomousRuntime:
                     "на паузе."
                 ),
             }
+
+        if self.life_cycle is not None:
+            try:
+                _prev_asleep_since = self.life_cycle.state.get(
+                    "asleep_since"
+                )
+            except Exception:
+                _prev_asleep_since = None
+
+            try:
+                self.life_cycle.update()
+            except Exception:
+                pass
+
+            _prev = self._prev_asleep
+            self._prev_asleep = bool(
+                self.life_cycle.is_asleep()
+            )
+
+            if (
+                _prev is not None
+                and _prev != self._prev_asleep
+            ):
+                self._record_sleep_event(
+                    _prev,
+                    _prev_asleep_since,
+                )
+
+                if _prev and not self._prev_asleep:
+                    self._morning_ritual(
+                        _prev_asleep_since
+                    )
+
+            if self.life_cycle.is_asleep():
+                if (
+                    _prev is not None
+                    and _prev != self._prev_asleep
+                    and not _prev
+                ):
+                    self._evening_ritual()
+                    self._dream_night()
+
+                self.state = "ASLEEP"
+
+                return {
+                    "status": "ASLEEP",
+                    "state": self.state,
+                    "reason": (
+                        "EddieAI спит — автономный "
+                        "цикл приглушён, локальная "
+                        "модель не грузится."
+                    ),
+                }
+
+        if self.resource_watchdog is not None:
+            try:
+                throttle = (
+                    self.resource_watchdog
+                    .should_throttle()
+                )
+                resources = (
+                    self.resource_watchdog.check()
+                )
+            except Exception:
+                throttle = False
+                resources = {}
+
+            if throttle:
+                self.state = "LOW_RESOURCE"
+
+                return {
+                    "status": "THROTTLED",
+                    "state": self.state,
+                    "reason": (
+                        "Мало свободной RAM — "
+                        "LLM-тик пропущен, состояние "
+                        "жизни обновлено без LLM."
+                    ),
+                    "resources": resources,
+                }
 
         self.last_error = None
 

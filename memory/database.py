@@ -876,6 +876,88 @@ class Memory:
 
         return "\n".join(merged[:limit])
 
+    _LIFE_EVENT_TYPES = {
+        "LIFE_CYCLE",
+        "SELF_EXPERIENCE",
+        "ACTION_CHOICE",
+        "REFLECTION",
+        "COGNITIVE_DECISION",
+    }
+
+    @_synchronized
+    def recent_life_feed(
+        self,
+        limit: int = 8,
+    ) -> str:
+        placeholders = ", ".join(
+            "?" for _ in self._LIFE_EVENT_TYPES
+        )
+
+        rows = self.connection.execute(
+            f"""
+            SELECT content, source_type, event_type, timestamp
+            FROM events
+            WHERE event_type IN ({placeholders})
+            AND source_type != 'SELF_OUTPUT'
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (*tuple(self._LIFE_EVENT_TYPES), limit),
+        ).fetchall()
+
+        lines = []
+
+        for row in rows:
+            content = str(row["content"] or "").strip()
+
+            if not content:
+                continue
+
+            ts = self._local_hhmm(
+                row["timestamp"]
+            )
+
+            lines.append(
+                f"[{ts}] {content[:150]}"
+            )
+
+        return "\n".join(lines)
+
+    @_synchronized
+    def recent_action_results(
+        self,
+        limit: int = 4,
+    ) -> str:
+        rows = self.connection.execute(
+            """
+            SELECT content, source_type, event_type, timestamp
+            FROM events
+            WHERE event_type = 'TOOL_RESULT'
+            AND source_type != 'SELF_OUTPUT'
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+
+        lines = []
+
+        for row in rows:
+            content = str(row["content"] or "").strip()
+
+            if not content:
+                continue
+
+            ts = self._local_hhmm(
+                row["timestamp"]
+            )
+
+            lines.append(
+                f"[{ts}] {content[:500]}"
+            )
+
+        return "\n".join(lines)
+
     @_synchronized
     def close(self):
         self.connection.close()

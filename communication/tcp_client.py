@@ -22,6 +22,9 @@ class EddieTCPClient:
         self._history_callbacks = []
         self._thinking_callbacks = []
         self._reply_callbacks = []
+        self._speech_chunk_callbacks = []
+        self._call_ring_callbacks = []
+        self._call_status_callbacks = []
         self._reconnect_index = 0
 
     def connect(self):
@@ -91,6 +94,10 @@ class EddieTCPClient:
         with self._lock:
             self._reply_callbacks.append(callback)
 
+    def on_speech_chunk(self, callback):
+        with self._lock:
+            self._speech_chunk_callbacks.append(callback)
+
     def mark_read(self, msg_id):
         msg = json.dumps({
             "type": "mark_read",
@@ -105,6 +112,38 @@ class EddieTCPClient:
                 )
             except OSError:
                 pass
+
+    def _send_raw(self, payload):
+        data = json.dumps(
+            payload,
+            ensure_ascii=False,
+        )
+        with self._lock:
+            if not self._connected:
+                return
+            try:
+                self._sock.sendall(
+                    (data + "\n").encode("utf-8")
+                )
+            except OSError:
+                pass
+
+    def send_call(self, kind, payload=None):
+        """
+        Отправить управляющее событие звонка.
+        kind: call_ring / call_answer / call_reject / call_end.
+        """
+        msg = dict(payload or {})
+        msg["type"] = kind
+        self._send_raw(msg)
+
+    def on_call_ring(self, callback):
+        with self._lock:
+            self._call_ring_callbacks.append(callback)
+
+    def on_call_status(self, callback):
+        with self._lock:
+            self._call_status_callbacks.append(callback)
 
     def _run_loop(self):
         while self._running:
@@ -211,6 +250,41 @@ class EddieTCPClient:
             for cb in cbs:
                 try:
                     cb(msg_id)
+                except Exception:
+                    pass
+
+        elif msg_type == "agent_speech_chunk":
+            with self._lock:
+                cbs = list(
+                    self._speech_chunk_callbacks
+                )
+            for cb in cbs:
+                try:
+                    cb(text, msg_id)
+                except Exception:
+                    pass
+
+        elif msg_type in (
+            "call_ring",
+            "call_status",
+        ):
+            state = msg.get(
+                "state",
+                msg_type,
+            )
+            direction = msg.get(
+                "direction",
+            )
+
+            with self._lock:
+                cbs = list(
+                    self._call_ring_callbacks
+                    if msg_type == "call_ring"
+                    else self._call_status_callbacks
+                )
+            for cb in cbs:
+                try:
+                    cb(state, direction)
                 except Exception:
                     pass
 

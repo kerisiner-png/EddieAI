@@ -132,6 +132,87 @@ class ChatWindow:
             fill=tk.X, side=tk.BOTTOM
         )
 
+        self._ring_banner = None
+        self._ring_frame = tk.Frame(
+            self._root,
+            bg="#FADBD8",
+        )
+        self._ring_label = tk.Label(
+            self._ring_frame,
+            text="Входящий звонок",
+            bg="#FADBD8",
+            fg="#900C3F",
+            font=("TkDefaultFont", 11, "bold"),
+        )
+        self._ring_accept = tk.Button(
+            self._ring_frame,
+            text="Ответить",
+            command=self._ring_accept_click,
+        )
+        self._ring_decline = tk.Button(
+            self._ring_frame,
+            text="Отклонить",
+            command=self._ring_decline_click,
+        )
+        self._ring_label.pack(
+            side=tk.LEFT, padx=8, pady=4
+        )
+        self._ring_accept.pack(
+            side=tk.RIGHT, padx=(4, 8)
+        )
+        self._ring_decline.pack(
+            side=tk.RIGHT
+        )
+        self._ring_frame.pack(
+            fill=tk.X, side=tk.BOTTOM
+        )
+        self._ring_frame.pack_forget()
+
+        self._ring_accept_cb = None
+        self._ring_decline_cb = None
+
+    def show_incoming_ring(
+        self,
+        accept_cb,
+        decline_cb,
+        show_buttons=True,
+    ):
+        self._ring_accept_cb = accept_cb
+        self._ring_decline_cb = decline_cb
+        if show_buttons:
+            self._ring_accept.pack(
+                side=tk.RIGHT, padx=(4, 8)
+            )
+            self._ring_decline.pack(
+                side=tk.RIGHT
+            )
+        else:
+            self._ring_accept.pack_forget()
+            self._ring_decline.pack_forget()
+        self._ring_frame.pack(
+            fill=tk.X, side=tk.BOTTOM
+        )
+        self._ring_frame.lift()
+
+    def hide_incoming_ring(self):
+        self._ring_frame.pack_forget()
+
+    def _ring_accept_click(self):
+        self.hide_incoming_ring()
+        if self._ring_accept_cb:
+            try:
+                self._ring_accept_cb()
+            except Exception:
+                pass
+
+    def _ring_decline_click(self):
+        self.hide_incoming_ring()
+        if self._ring_decline_cb:
+            try:
+                self._ring_decline_cb()
+            except Exception:
+                pass
+
     def show(self):
         self._root.deiconify()
         self._root.lift()
@@ -285,10 +366,38 @@ class ChatWindow:
             self._call_btn.configure(
                 text="\U0001f6d1"
             )
+            self.set_status("Звонок активен")
         else:
             self._call_btn.configure(
                 text="\U0001f4de"
             )
+
+    def show_ring_status(self, direction):
+        if direction == "in":
+            self.show_incoming_ring(
+                self._ring_accept_click
+                if self._ring_accept_cb else None,
+                self._ring_decline_click
+                if self._ring_decline_cb else None,
+                show_buttons=True,
+            )
+            self._ring_label.configure(
+                text="Входящий звонок"
+            )
+        else:
+            self.show_incoming_ring(
+                None,
+                None,
+                show_buttons=False,
+            )
+            self._ring_label.configure(
+                text="Звоним... (исходящий)"
+            )
+
+    def set_call_ended(self):
+        self.hide_incoming_ring()
+        self.set_call_state(False)
+        self.set_status("Звонок завершён")
 
     def show_speaker(self, speaker):
         if self._in_call:
