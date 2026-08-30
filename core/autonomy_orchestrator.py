@@ -949,6 +949,35 @@ class AutonomyOrchestrator:
                     )
 
                 if not active:
+                    try:
+                        best = (
+                            self.goal_manager
+                            .best_candidate()
+                        )
+                        if best is not None:
+                            activation = (
+                                self.goal_manager
+                                .activate(
+                                    best.value
+                                )
+                            )
+                            if (
+                                activation.get(
+                                    "status"
+                                )
+                                == "ACTIVATED"
+                            ):
+                                active = (
+                                    self.goal_manager
+                                    .active()
+                                )
+                    except Exception:
+                        active = (
+                            self.goal_manager
+                            .active()
+                        )
+
+                if not active:
                     decided = self._decide()
 
                     if decided is not None:
