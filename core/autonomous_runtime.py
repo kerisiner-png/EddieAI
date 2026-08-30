@@ -149,6 +149,37 @@ class AutonomousRuntime:
         except Exception:
             pass
 
+        if was_asleep:
+            try:
+                self._probe_world_on_pressure(force=True)
+            except Exception:
+                pass
+
+    def _probe_world_on_pressure(self, force=False):
+        try:
+            if getattr(self, "world_probe", None) is None:
+                return
+            snapshot = self.world_probe.probe(force=force)
+            if snapshot.get("status") != "OK":
+                return
+            text = self.world_probe.snapshot_text(snapshot)
+            if self.memory is not None:
+                self.memory.remember(
+                    Event.create(
+                        content=(
+                            "Снимок мира: " + text
+                        ),
+                        event_type="WORLD_SNAPSHOT",
+                        source_type="WORLD",
+                        source="self",
+                        personal_experience=True,
+                        verified=True,
+                    )
+                )
+            print("WORLD_SNAPSHOT:", text)
+        except Exception as exc:
+            print("WORLD_SNAPSHOT_ERROR:", exc)
+
     def _model_for_ritual(self):
         if self.orchestrator is None:
             return None
@@ -562,6 +593,11 @@ class AutonomousRuntime:
                 resources = {}
 
             if throttle:
+                try:
+                    self._probe_world_on_pressure(force=True)
+                except Exception:
+                    pass
+
                 self.state = "LOW_RESOURCE"
 
                 return {
