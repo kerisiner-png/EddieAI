@@ -530,6 +530,8 @@ class AutonomyOrchestrator:
         except Exception:
             pass
 
+        self._advance_cognition()
+
         return OrchestrationResult(
             status="EXECUTED",
             reason=(
@@ -538,6 +540,37 @@ class AutonomyOrchestrator:
             ),
             execution=execution,
         )
+
+    def _advance_cognition(self):
+        agent = getattr(
+            self, "agent", None
+        )
+        if agent is None:
+            return
+
+        scheduler = getattr(
+            agent,
+            "reflection_scheduler",
+            None,
+        )
+        if scheduler is not None:
+            try:
+                scheduler.event_happened(
+                    significant=True
+                )
+            except Exception:
+                pass
+
+        processor = getattr(
+            agent,
+            "cognitive_processor",
+            None,
+        )
+        if processor is not None:
+            try:
+                processor.process_next()
+            except Exception:
+                pass
 
     def _reflection_action(self):
         goal = self.goal_manager.add_candidate(
@@ -1043,6 +1076,8 @@ class AutonomyOrchestrator:
                     "goal": None,
                     "task": None,
                 }
+
+        self._advance_cognition()
 
         return OrchestrationResult(
             status="EXECUTED",
