@@ -15,6 +15,7 @@ class CuriosityDirector:
         self.min_interval_seconds = min_interval_seconds
         self.last_step_at = None
         self.last_topic_index = 0
+        self._daily_topic_cache = None
 
         if self.self_state.get("usage_today") is None:
             self.self_state.set("usage_today", {})
@@ -77,3 +78,45 @@ class CuriosityDirector:
         elif kind == "llm":
             usage["llm_calls"] = int(usage.get("llm_calls", 0)) + 1
         self.self_state.set("usage_today", usage)
+
+    def daily_llm_topic(self, recent_life=""):
+        now = self._now()
+        if (
+            getattr(self, "last_daily_llm_at", None) is not None
+            and now - self.last_daily_llm_at
+            < timedelta(hours=24)
+        ):
+            return self._daily_topic_cache
+
+        if self.llm is None:
+            self.last_daily_llm_at = now
+            self._daily_topic_cache = None
+            return None
+
+        system = (
+            "Ты — EddieAI, любопытная личность. "
+            "Предложи ОДНУ тему для самостоятельного исследования. "
+            "Формат: 'Тема: <текст>'."
+        )
+        user = (
+            "Из своей жизни последнего времени:\n" + recent_life
+        ) if recent_life else "Предложи тему по своим интересам."
+
+        try:
+            raw = self.llm.chat(
+                system=system,
+                user=user,
+                options={"temperature": 0.9},
+            )
+        except Exception:
+            raw = None
+
+        self.last_daily_llm_at = now
+        self._daily_topic_cache = None
+        if raw:
+            self._daily_topic_cache = {
+                "title": f"Исследовать тему: {raw}",
+                "topic": raw,
+            }
+            return self._daily_topic_cache
+        return None
