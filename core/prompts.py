@@ -91,6 +91,11 @@ def build_quick_conversation_prompt(
         {},
     )
 
+    world_description = self_state.get(
+        "world_description",
+        None,
+    )
+
     if affective_state is None:
         affective_state = {
             "emotions": {},
@@ -140,6 +145,9 @@ def build_quick_conversation_prompt(
         Твои предпочтения: {preferences}
         Твои убеждения: {beliefs}
         Твои активные цели: {goals}
+
+        ГДЕ ТЫ ЖИВЁШЬ:
+        {world_description or 'нет данных о месте обитания'}
 
         ТЕКУЩЕЕ ФУНКЦИОНАЛЬНОЕ ЭМОЦИОНАЛЬНОЕ СОСТОЯНИЕ:
 

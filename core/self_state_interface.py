@@ -123,6 +123,11 @@ class SelfStateInterface:
                 [],
             ),
 
+            "world_description": self_state.get(
+                "world_description",
+                None,
+            ),
+
             "preferences": self_state.get(
                 "preferences",
                 [],
