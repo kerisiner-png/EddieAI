@@ -37,6 +37,55 @@ class TestUsageHooks(unittest.TestCase):
         self.assertEqual(result, "ответ")
         self.assertIn("llm", curiosity.calls)
 
+    def test_direct_web_action_increments_web(self):
+        from identity.tool_runner import ToolRunner
+
+        curiosity = FakeCuriosity()
+        registry = MagicMock()
+        tool = MagicMock()
+        tool.executor.search.return_value = {"status": "OK", "results": []}
+        registry.require.return_value = tool
+        runner = ToolRunner(
+            registry=registry,
+            filesystem_root=r"C:\EddieAI",
+        )
+        runner.curiosity = curiosity
+
+        class Action:
+            action_type = "WEB_SEARCH"
+            parameters = {"query": "test", "limit": 2}
+
+        result = runner._execute_web(
+            tool,
+            Action(),
+        )
+        self.assertEqual(result["status"], "OK")
+        self.assertIn("web", curiosity.calls)
+
+    def test_direct_web_action_without_curiosity(self):
+        from identity.tool_runner import ToolRunner
+
+        registry = MagicMock()
+        tool = MagicMock()
+        tool.executor.search.return_value = {"status": "OK", "results": []}
+        registry.require.return_value = tool
+        runner = ToolRunner(
+            registry=registry,
+            filesystem_root=r"C:\EddieAI",
+        )
+        result = runner._execute_web(
+            tool,
+            type(
+                "Action",
+                (),
+                {
+                    "action_type": "WEB_SEARCH",
+                    "parameters": {"query": "test"},
+                },
+            )(),
+        )
+        self.assertEqual(result["status"], "OK")
+
 
 if __name__ == "__main__":
     unittest.main()

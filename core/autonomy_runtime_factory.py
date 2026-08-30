@@ -517,6 +517,11 @@ class AutonomyRuntimeFactory:
                 )
             ),
         )
+        llm = director.llm
+        if getattr(
+            llm, "curiosity", None
+        ) is None:
+            llm.curiosity = director
         tool_runner.curiosity = director
         orchestrator.curiosity = director
         runtime.curiosity = director

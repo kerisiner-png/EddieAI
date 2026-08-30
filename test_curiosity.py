@@ -72,6 +72,41 @@ class TestCuriosityDirector(unittest.TestCase):
         usage = d.self_state.get("usage_today", {})
         self.assertEqual(usage.get("web_searches", 0), 1)
 
+    def test_waits_when_many_web_searches(self):
+        d = make_director()
+        res = d.evaluate(
+            asleep=False,
+            available_ram_mb=4000,
+            web_searches_today=30,
+            llm_calls_today=0,
+        )
+        self.assertFalse(res["should_act"])
+        self.assertIn(
+            "много внешних действий",
+            res["reason"].lower(),
+        )
+
+    def test_waits_when_many_llm_calls(self):
+        d = make_director()
+        res = d.evaluate(
+            asleep=False,
+            available_ram_mb=4000,
+            web_searches_today=0,
+            llm_calls_today=15,
+        )
+        self.assertFalse(res["should_act"])
+        self.assertIn(
+            "много внешних действий",
+            res["reason"].lower(),
+        )
+
+    def test_marks_step_cooling(self):
+        d = make_director()
+        d.mark_acted()
+        res = d.evaluate(asleep=False)
+        self.assertFalse(res["should_act"])
+        self.assertIn("кулдаун", res["reason"].lower())
+
 
 if __name__ == "__main__":
     unittest.main()

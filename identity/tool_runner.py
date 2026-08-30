@@ -479,6 +479,15 @@ class ToolRunner:
         action,
     ):
         if action.action_type == "WEB_SEARCH":
+            if getattr(
+                self, "curiosity", None
+            ) is not None:
+                try:
+                    self.curiosity.track_action(
+                        "web"
+                    )
+                except Exception:
+                    pass
             return tool.executor.search(
                 query=action.parameters[
                     "query"

@@ -786,15 +786,95 @@ class AutonomyOrchestrator:
                     asleep = bool(
                         life_cycle.is_asleep()
                     )
+                usage = {}
+                self_state = getattr(
+                    self.agent,
+                    "self_state",
+                    None,
+                )
+                if self_state is not None:
+                    usage = self_state.get(
+                        "usage_today", {}
+                    ) or {}
+                available_ram_mb = None
+                runtime = getattr(
+                    self.agent,
+                    "autonomous_runtime",
+                    None,
+                )
+                if runtime is not None:
+                    watchdog = getattr(
+                        runtime,
+                        "resource_watchdog",
+                        None,
+                    )
+                    if watchdog is not None:
+                        try:
+                            resources = (
+                                watchdog.check()
+                            )
+                            available_ram_mb = (
+                                resources.get(
+                                    "available_mb"
+                                )
+                            )
+                        except Exception:
+                            available_ram_mb = None
                 decision = curiosity.evaluate(
                     asleep=asleep,
+                    available_ram_mb=(
+                        available_ram_mb
+                    ),
+                    web_searches_today=(
+                        int(
+                            usage.get(
+                                "web_searches",
+                                0,
+                            )
+                            or 0
+                        )
+                    ),
+                    llm_calls_today=(
+                        int(
+                            usage.get(
+                                "llm_calls",
+                                0,
+                            )
+                            or 0
+                        )
+                    ),
                 )
                 if decision.get(
                     "should_act"
                 ):
-                    curiosity.topic_goal(
-                        curiosity.select_topic()
+                    memory = getattr(
+                        self.agent,
+                        "memory",
+                        None,
                     )
+                    recent = ""
+                    if memory is not None:
+                        try:
+                            recent = (
+                                memory
+                                .recent_life_feed()
+                            ) or ""
+                        except Exception:
+                            recent = ""
+                    try:
+                        topic = (
+                            curiosity
+                            .daily_llm_topic(
+                                recent_life=recent
+                            )
+                        )
+                    except Exception:
+                        topic = None
+                    curiosity.topic_goal(
+                        topic
+                        or curiosity.select_topic()
+                    )
+                    curiosity.mark_acted()
             except Exception as exc:
                 print(
                     "CURIOSITY_ERROR:",

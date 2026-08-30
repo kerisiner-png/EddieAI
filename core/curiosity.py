@@ -32,6 +32,9 @@ class CuriosityDirector:
             usage = {}
         return usage
 
+    def mark_acted(self):
+        self.last_step_at = self._now()
+
     def _in_cooldown(self) -> bool:
         if self.last_step_at is None:
             return False
