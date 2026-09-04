@@ -914,6 +914,35 @@ class EddieServer:
 
                     if payload.get(
                         "type"
+                    ) == "life_control":
+                        action = str(
+                            payload.get(
+                                "action",
+                                "",
+                            )
+                        )
+                        life = getattr(
+                            self.agent,
+                            "life_cycle",
+                            None,
+                        )
+                        if life is not None:
+                            try:
+                                if (
+                                    action == "wake"
+                                ):
+                                    life.force_wake()
+                                elif (
+                                    action == "sleep"
+                                ):
+                                    life.force_sleep()
+                            except Exception:
+                                pass
+
+                        continue
+
+                    if payload.get(
+                        "type"
                     ) == "user_message":
                         text = str(
                             payload.get(

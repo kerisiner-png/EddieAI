@@ -6,6 +6,16 @@
 
 ## 04.09.2026
 
+### [АКТУАЛЬНО] Команда пробуждения/усыпления (wake/sleep) через мессенджер-порт
+Эдди: «как его разбудить?». Прямой вызов force_wake() извне не работает —
+живой процесс перезаписывает self_state из памяти. Добавлена TCP-команда:
+- `core/eddie_server.py`: тип сообщения `life_control` {action: wake|sleep}
+  → agent.life_cycle.force_wake()/force_sleep() в обработчике.
+- `communication/tcp_client.py::send_life_control(action)`.
+- `wake_eddie.py` (новый): CLI `python wake_eddie.py wake|sleep|status`.
+- TDD `test_wake_eddie.py` (2: wake + sleep, на порту 7780/7781) GREEN.
+  Регресс 12 PASS. Байт-проверка чистая.
+
 ### [АКТУАЛЬНО] Фикс голоса: «читал промпт» вместо ответа + не отвечает во сне
 Диагностика (замеры, фаза 1): облако conversation 3.2с («Привет. Всё в порядке»),
 но respond_call_fast возвращал ЭХО ПРОМПТА («Мы получили голосовой звонок...

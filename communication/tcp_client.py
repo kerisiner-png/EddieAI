@@ -137,6 +137,17 @@ class EddieTCPClient:
         msg["type"] = kind
         self._send_raw(msg)
 
+    def send_life_control(self, action):
+        """
+        Отправить управление сном/бодрствованием.
+        action: wake / sleep.
+        """
+        msg = {
+            "type": "life_control",
+            "action": action,
+        }
+        self._send_raw(msg)
+
     def on_call_ring(self, callback):
         with self._lock:
             self._call_ring_callbacks.append(callback)
