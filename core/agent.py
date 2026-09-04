@@ -4375,6 +4375,18 @@ Respond briefly and naturally.
             )
 
         try:
+            content = (
+                self.model_orchestrator
+                ._cloud_chat(
+                    system=system,
+                    user=user,
+                    options=options,
+                    task="conversation",
+                )
+            )
+            if content:
+                return content
+
             result = (
                 self.model_orchestrator.execute(
                     task="conversation",

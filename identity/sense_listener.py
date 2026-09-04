@@ -200,6 +200,9 @@ class SenseListener:
 
         if not raw:
             return
+        if self._is_asleep():
+            self._last_spoken_at = time.time()
+            return
         try:
             rec.AcceptWaveform(bytes(raw))
             result = json.loads(
@@ -220,6 +223,17 @@ class SenseListener:
             return
         self._last_spoken_at = time.time()
         self._handle_spoken(cleaned)
+
+    def _is_asleep(self):
+        try:
+            life = getattr(
+                self._agent, "life_cycle", None
+            )
+            if life is not None and life.is_asleep():
+                return True
+        except Exception:
+            pass
+        return False
 
     def _handle_spoken(self, text):
         try:
