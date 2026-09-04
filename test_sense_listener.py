@@ -129,3 +129,78 @@ def test_initiative_pass_speaks_when_idle():
     sl._initiative_pass()
     assert spoken and "хочешь" in spoken[0]
     assert sl._server.msgs == []
+
+
+def test_finish_phrase_emits_spoken():
+    import json
+
+    from identity.sense_listener import SenseListener
+
+    class Agent:
+        def __init__(self):
+            self.calls = []
+
+        def respond_call_fast(self, conversation, text):
+            self.calls.append(text)
+            return "ответ"
+
+    sl = SenseListener(
+        agent=Agent(),
+        server=None,
+        screen_perceiver=None,
+    )
+    spoken = []
+    sl._speak = lambda text: spoken.append(text)
+
+    class FakeRec:
+        def __init__(self):
+            self.text = "привет как дела"
+
+        def AcceptWaveform(self, data):
+            pass
+
+        def FinalResult(self):
+            return json.dumps(
+                {"text": self.text}
+            )
+
+        def Reset(self):
+            pass
+
+    sl._finish_phrase(FakeRec(), b"some-bytes")
+    assert sl._agent.calls == ["привет как дела"]
+    assert spoken and "ответ" in spoken[0]
+
+
+def test_finish_phrase_skips_short():
+    import json
+
+    from identity.sense_listener import SenseListener
+
+    class Agent:
+        def __init__(self):
+            self.calls = []
+
+        def respond_call_fast(self, conversation, text):
+            self.calls.append(text)
+            return "x"
+
+    sl = SenseListener(
+        agent=Agent(),
+        server=None,
+        screen_perceiver=None,
+    )
+    sl._speak = lambda text: None
+
+    class FakeRec:
+        def AcceptWaveform(self, data):
+            pass
+
+        def FinalResult(self):
+            return json.dumps({"text": "да"})
+
+        def Reset(self):
+            pass
+
+    sl._finish_phrase(FakeRec(), b"x")
+    assert sl._agent.calls == []

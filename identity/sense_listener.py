@@ -5,12 +5,13 @@ import time
 class SenseListener:
     """Фоновый слушатель чувств: микрофон + вебка + голос.
 
-    Микрофон транскрибируется локальным Vosk (бесплатно),
-    ответ озвучивается голосом (Piper TTS, локально) и
-    дублируется в мессенджер (редкий канал). Вебка
-    периодически снимает кадр и описывает облачной
-    vision-моделью (лимит вызовов в ScreenPerceiver).
-    Инициатива: сам заговаривает, если тишина дольше
+    Микрофон — непрерывный стриминг через Vosk (локально,
+    не блокирует на 15с): фраза фиксируется по паузе ~1.0с,
+    ответ озвучивается голосом (Piper TTS, локально).
+    Мессенджер не используется для ответа (только редкий
+    канал). Вебка периодически снимает кадр и описывает
+    облачной vision-моделью (лимит в ScreenPerceiver).
+    Инициатива: сам заговаривает при тишине дольше
     initiative_interval.
     """
 
@@ -19,16 +20,18 @@ class SenseListener:
         agent=None,
         server=None,
         screen_perceiver=None,
-        check_interval=1.0,
         webcam_interval=600.0,
         initiative_interval=1800.0,
+        max_phrase_sec=8.0,
+        silence_end_sec=1.0,
     ):
         self._agent = agent
         self._server = server
         self._screen = screen_perceiver
-        self._check_interval = check_interval
         self._webcam_interval = webcam_interval
         self._initiative_interval = initiative_interval
+        self._max_phrase_sec = max_phrase_sec
+        self._silence_end_sec = silence_end_sec
         self._stop = threading.Event()
         self._threads = []
         self._voice = None
@@ -64,7 +67,7 @@ class SenseListener:
         self._stop.set()
 
     # -------------------------------------------------
-    # Голос (Piper TTS, локально, без Whisper)
+    # Голос (Piper TTS, локально)
     # -------------------------------------------------
 
     def _get_voice(self):
@@ -101,49 +104,122 @@ class SenseListener:
             return
 
     # -------------------------------------------------
-    # Микрофон
+    # Микрофон: непрерывный стриминг Vosk
     # -------------------------------------------------
 
     def _mic_loop(self):
         while not self._stop.is_set():
             try:
-                self._mic_pass()
+                self._stream_listen()
             except Exception:
                 pass
-            self._stop.wait(
-                timeout=self._check_interval
-            )
+            self._stop.wait(timeout=1.0)
 
-    def _mic_pass(self):
-        if self._agent is None:
+    def _stream_listen(self):
+        import json
+        import numpy as np
+        import sounddevice as sd
+
+        from voice_repl import (
+            SAMPLE_RATE,
+            CHUNK_SEC,
+            get_vosk,
+        )
+
+        rec = get_vosk()
+        rec.Reset()
+
+        with sd.InputStream(
+            samplerate=SAMPLE_RATE,
+            channels=1,
+            dtype="int16",
+            blocksize=int(SAMPLE_RATE * CHUNK_SEC),
+        ) as stream:
+            noise = self._calibrate_noise(stream)
+            threshold = noise * 3.0 + 2.0
+
+            recording = False
+            speech_sec = 0.0
+            silent_sec = 0.0
+            raw = bytearray()
+
+            while not self._stop.is_set():
+                data, _ = stream.read(
+                    int(SAMPLE_RATE * CHUNK_SEC)
+                )
+                pcm = data.reshape(-1)
+                rms = float(
+                    np.sqrt(
+                        (pcm.astype(np.float32) ** 2).mean()
+                    )
+                )
+
+                if rms > threshold:
+                    if not recording:
+                        recording = True
+                        speech_sec = 0.0
+                        silent_sec = 0.0
+                        raw = bytearray()
+                    raw.extend(pcm.tobytes())
+                    speech_sec += CHUNK_SEC
+                    silent_sec = 0.0
+                elif recording:
+                    raw.extend(pcm.tobytes())
+                    silent_sec += CHUNK_SEC
+                    speech_sec += CHUNK_SEC
+
+                    if speech_sec >= self._max_phrase_sec:
+                        self._finish_phrase(rec, raw)
+                        recording = False
+                        raw = bytearray()
+                    elif silent_sec >= self._silence_end_sec:
+                        self._finish_phrase(rec, raw)
+                        recording = False
+                        raw = bytearray()
+
+    def _calibrate_noise(self, stream):
+        import numpy as np
+
+        levels = []
+        for _ in range(6):
+            data, _ = stream.read(
+                int(16000 * 0.1)
+            )
+            pcm = data.reshape(-1)
+            levels.append(
+                float(
+                    np.sqrt(
+                        (pcm.astype(np.float32) ** 2).mean()
+                    )
+                )
+            )
+        return max(levels) if levels else 0.0
+
+    def _finish_phrase(self, rec, raw):
+        import json
+
+        if not raw:
             return
         try:
-            from voice_repl import (
-                record_until_silence,
-                transcribe,
+            rec.AcceptWaveform(bytes(raw))
+            result = json.loads(
+                rec.FinalResult()
             )
-            import numpy as np
-
-            pcm = record_until_silence()
-            if pcm is None or len(pcm) == 0:
-                return
-            rms = float(
-                np.sqrt((pcm ** 2).mean())
-            )
-            if rms < 0.02:
-                return
-            text = transcribe(pcm)
-            if not text or not text.strip():
-                return
-            cleaned = text.strip()
-            if len(cleaned) < 3:
-                return
-            if len(cleaned.split()) < 2:
-                return
-            self._last_spoken_at = time.time()
-            self._handle_spoken(cleaned)
+            text = (
+                result.get("text") or ""
+            ).strip()
         except Exception:
             return
+        rec.Reset()
+        if not text:
+            return
+        cleaned = text.strip()
+        if len(cleaned) < 3:
+            return
+        if len(cleaned.split()) < 2:
+            return
+        self._last_spoken_at = time.time()
+        self._handle_spoken(cleaned)
 
     def _handle_spoken(self, text):
         try:
@@ -253,8 +329,6 @@ class SenseListener:
         if now - self._last_spoken_at < self._initiative_interval:
             return
         try:
-            from core.life_cycle import LifeCycle
-
             life = getattr(
                 self._agent, "life_cycle", None
             )
