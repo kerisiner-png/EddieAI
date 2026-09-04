@@ -147,21 +147,47 @@ class SenseListener:
 
     def _handle_spoken(self, text):
         try:
+            answer = ""
             if self._agent is not None:
-                answer = self._agent.respond(text)
-            else:
-                answer = ""
+                try:
+                    conversation = self._recent_conversation()
+                    answer = (
+                        self._agent.respond_call_fast(
+                            conversation,
+                            text,
+                        )
+                    )
+                except Exception:
+                    answer = self._agent.respond(text)
             self._speak(answer or "")
-            if (
-                self._server is not None
-                and answer
-            ):
-                self._server.broadcast({
-                    "type": "agent_message",
-                    "text": answer,
-                })
         except Exception:
             pass
+
+    def _recent_conversation(self):
+        try:
+            server = self._server
+            if server is None:
+                return ""
+            history = getattr(
+                server, "history", None
+            )
+            if history is None:
+                return ""
+            items = history.chat_recent(6)
+            lines = []
+            for item in items:
+                sender = item.get("sender", "?")
+                label = (
+                    "Эдди"
+                    if sender == "Eddie"
+                    else "EddieAI"
+                )
+                lines.append(
+                    f"{label}: {item.get('text', '')}"
+                )
+            return "\n".join(lines)
+        except Exception:
+            return ""
 
     # -------------------------------------------------
     # Вебка
@@ -277,10 +303,5 @@ class SenseListener:
                     "Мне кажется, это было бы приятно."
                 )
                 self._speak(text)
-                if self._server is not None:
-                    self._server.broadcast({
-                        "type": "agent_initiative",
-                        "text": text,
-                    })
         except Exception:
             pass

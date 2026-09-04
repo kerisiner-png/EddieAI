@@ -44,6 +44,45 @@ def log(msg):
         pass
 
 
+def _write_status_hb(runtime):
+    import json
+
+    data = {
+        "timestamp": time.time(),
+        "state": getattr(
+            runtime, "state", "?"
+        ),
+    }
+    try:
+        life = getattr(
+            runtime, "life_cycle", None
+        )
+        if life is not None:
+            data["asleep"] = life.is_asleep()
+    except Exception:
+        pass
+    try:
+        orch = getattr(
+            runtime, "orchestrator", None
+        )
+        decision = getattr(
+            orch, "_last_decision", None
+        )
+        if decision:
+            data["decision"] = str(decision)
+    except Exception:
+        pass
+    try:
+        with open(
+            str(BASE_DIR / "data" / "status.json"),
+            "w",
+            encoding="utf-8",
+        ) as f:
+            json.dump(data, f)
+    except Exception:
+        pass
+
+
 def _signal_handler(signum, frame):
     log(f"signal {signum} received — stopping")
     _stop.set()
@@ -183,6 +222,7 @@ def main():
             try:
                 fault.update_heartbeat()
                 fault.auto_reset_error()
+                _write_status_hb(runtime)
             except Exception as exc:
                 log(
                     f"watchdog error: "

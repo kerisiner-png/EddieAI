@@ -10,6 +10,9 @@ def _make():
         memory = MagicMock()
         self_state = MagicMock()
 
+        def respond_call_fast(self, conversation, text):
+            return "ответ голосом"
+
         def respond(self, text):
             return "ответ голосом"
 
@@ -29,11 +32,11 @@ def _make():
 
 def test_mic_handles_spoken_text():
     sl = _make()
-    sl._speak = lambda text: None
+    spoken = []
+    sl._speak = lambda text: spoken.append(text)
     sl._handle_spoken("привет")
-    assert sl._server.msgs
-    assert "ответ голосом" in sl._server.msgs[0]["text"]
-    assert sl._server.msgs[0]["type"] == "agent_message"
+    assert spoken and "ответ голосом" in spoken[0]
+    assert sl._server.msgs == []
 
 
 def test_cam_pass_records_event():
@@ -125,4 +128,4 @@ def test_initiative_pass_speaks_when_idle():
     sl._speak = lambda text: spoken.append(text)
     sl._initiative_pass()
     assert spoken and "хочешь" in spoken[0]
-    assert sl._server.msgs
+    assert sl._server.msgs == []
