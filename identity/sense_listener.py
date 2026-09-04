@@ -73,14 +73,17 @@ class SenseListener:
             rms = float(
                 np.sqrt((pcm ** 2).mean())
             )
-            if rms < 0.005:
+            if rms < 0.02:
                 return
             text = transcribe(pcm)
             if not text or not text.strip():
                 return
-            if len(text.strip()) < 2:
+            cleaned = text.strip()
+            if len(cleaned) < 3:
                 return
-            self._handle_spoken(text.strip())
+            if len(cleaned.split()) < 2:
+                return
+            self._handle_spoken(cleaned)
         except Exception:
             return
 
