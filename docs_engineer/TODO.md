@@ -11,9 +11,16 @@
       agent_loop._apply_reflection_signals (signals → evidence SELF_INTERPRETATION,
       идемпотентно по independence_key=цель) + autonomous_runtime._apply_consolidation
       (PROMOTABLE → personality_lifecycle.promote). TDD 8 тестов GREEN, регресс 15 PASS.
-      test_behavior_learning (пре-экзистентная сигнатура) починен.
-- [ ] Шаг 3: pywin32 + автозапуск (служба EddieAI или планировщик).
-- [ ] Шаг 4: кодировки (реестр №1) — «?»-мусор в reason.
+      test_behavior_learning (пре-экзистентная сигнатура) починен. Коммит c7c7eb5.
+- [x] Шаг 3: автозапуск через планировщик задач (решение Эдди). pywin32==312 установлен
+      (поддержка cp314). `run_forever.py` — постоянный рантайм (background_loop +
+      eddie_server:7778 + watchdog heartbeat, без лимита времени). Живой смок:
+      процесс жив, RAM 76 МБ (облачный мозг), heartbeat IDLE, CONSCIOUS_OBSERVATION
+      пишутся, порт 7778 слушается. Задача "EddieAI" (AtLogon, RestartCount 3 /
+      Interval 1 мин, StartWhenAvailable). Ожидает: входа в систему/ручного старта.
+- [x] Шаг 4: реестр №1 КОДИРОВКИ — СНЯТ. Байтовый скан всей кодовой базы: живые файлы
+      чисты (0 «?»-мусора, 0 двойного перекодирования); находки — ложные
+      срабатывания + архивные снапшоты (бэкапы).
 - [ ] Шаг 5: суточный прогон на новом коде (приёмка).
 - [ ] Шаг 6: запуск 24/7.
 

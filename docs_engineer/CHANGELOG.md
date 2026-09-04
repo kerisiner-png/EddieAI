@@ -6,6 +6,26 @@
 
 ## 04.09.2026
 
+### [АКТУАЛЬНО] Автозапуск 24/7 (шаг 3) + реестр №1 кодировки СНЯТ (шаг 4)
+- `run_forever.py` (новый): постоянный рантайм без лимита времени — сборка
+  Agent + AutonomyRuntimeFactory (как ночной прогон), start_background_loop,
+  eddie_server.serve_forever в нити (порт 7778), FaultTolerance watchdog
+  (heartbeat + auto_reset_error), опция чата; остановка по SIGTERM/SIGINT.
+- pywin32==312 установлен (wheel cp314, Python 3.14 совместим); импорт
+  win32serviceutil/win32service/servicemanager OK. Служба не нужна — автозапуск
+  через планировщик задач (решение Эдди: без прав админа).
+- Задача "EddieAI" зарегистрирована: AtLogon, Task To Run =
+  python run_forever.py --no-chat, Start In = C:\EddieAI, RestartCount 3 /
+  Interval 1 мин, StartWhenAvailable, MultipleInstances IgnoreNew.
+- Живой смок run_forever: процесс жив (RAM 76 МБ — облачный мозг, локаль не
+  грузится), heartbeat state=IDLE, CONSCIOUS_OBSERVATION пишутся в память,
+  порт 7778 Listen. Остановлен штатно.
+- Реестр №1 (кодировки) — СНЯТ байтовым сканом всей кодовой базы: живые файлы
+  чисты; находки ложные (валидный «в лес? Потому…» в тесте; regex \xc3\x90 в
+  детекторе voice_checker.py) + архивные снапшоты (бэкапы, не исполняются).
+- Реестр №2 (незакреплённая работа) — СНЯТ (коммит ffd5dfb).
+- Реестр №13 (мёртвые хуки обучения) — СНЯТ (коммит c7c7eb5).
+
 ### [АКТУАЛЬНО] Реестр №13 ЗАКРЫТ: оживлены мёртвые хуки автономного обучения (этаж 4)
 Аудит 30.08: `EvidenceConsolidator.consolidate()` паковал кандидатов, но НЕ
 применял; `ReflectionEngine.reflect()` возвращал signals, которые нигде не
