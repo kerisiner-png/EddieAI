@@ -18,7 +18,7 @@ class ToolExecutionPolicy:
 
         self.allow_read_files = True
         self.allow_write_files = False
-        self.allow_powershell = False
+        self.allow_powershell = True
         self.allow_web = True
 
         self.max_read_bytes = 200_000
@@ -70,6 +70,17 @@ class ToolExecutionPolicy:
             return self._allow(
                 "Ожидание разрешено."
             )
+
+        if action_type == "SCREEN_CONTROL":
+            return self._allow(
+                "Управление экраном разрешено."
+            )
+
+        if action_type == "LAUNCH_APP":
+            return self._launch_app(action)
+
+        if action_type == "INSTALL_PACKAGE":
+            return self._install_package(action)
 
         return self._deny(
             "Неизвестный тип действия."
@@ -231,9 +242,84 @@ class ToolExecutionPolicy:
                 "Не указана команда."
             )
 
-        return self._deny(
-            "PowerShell ещё не прошёл "
-            "командный allowlist."
+        from identity.command_policy import (
+            CommandPolicy,
+        )
+
+        policy = CommandPolicy()
+
+        if not policy.is_safe(command):
+            reason = policy.deny_reason(
+                command
+            )
+            return self._deny(
+                f"Команда заблокирована: {reason}"
+            )
+
+        return self._allow(
+            "Команда разрешена."
+        )
+
+    def _launch_app(
+        self,
+        action,
+    ):
+        command = action.parameters.get(
+            "command"
+        )
+
+        if not command:
+            return self._deny(
+                "Не указана команда запуска."
+            )
+
+        from identity.command_policy import (
+            CommandPolicy,
+        )
+
+        policy = CommandPolicy()
+
+        if policy.is_destructive(command):
+            return self._deny(
+                policy.destructive_reason(command)
+            )
+
+        return self._allow(
+            "Запуск программы разрешён."
+        )
+
+    def _install_package(
+        self,
+        action,
+    ):
+        package = action.parameters.get(
+            "package"
+        )
+
+        manager = action.parameters.get(
+            "manager"
+        )
+
+        if not package or not manager:
+            return self._deny(
+                "Нужны package и manager."
+            )
+
+        command = f"{manager} install {package}"
+
+        from identity.command_policy import (
+            CommandPolicy,
+        )
+
+        policy = CommandPolicy()
+
+        if policy.is_destructive(command):
+            return self._deny(
+                policy.destructive_reason(command)
+            )
+
+        return self._allow(
+            "Установка пакета разрешена."
         )
 
     def _web(

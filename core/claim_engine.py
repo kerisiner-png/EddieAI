@@ -173,7 +173,9 @@ class ClaimEngine:
         )
 
         values = [
-            str(value).casefold()
+            self._extract_value_text(
+                value
+            ).casefold()
             for value in values
         ]
 
@@ -244,6 +246,24 @@ class ClaimEngine:
                 "Полярность утверждения неизвестна."
             ),
         )
+
+    @staticmethod
+    def _extract_value_text(value) -> str:
+        if isinstance(value, dict):
+            label = value.get("label")
+            if isinstance(label, str) and label.strip():
+                return label
+            parts = []
+            ctx = value.get("context")
+            mtd = value.get("method")
+            if ctx:
+                parts.append(str(ctx))
+            if mtd:
+                parts.append(str(mtd))
+            if parts:
+                return " ".join(parts)
+            return str(value)
+        return str(value)
 
     @staticmethod
     def _semantic_value_match(

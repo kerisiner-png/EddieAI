@@ -1,6 +1,6 @@
 # PROJECT_STATE — живое состояние системы EddieAI
 
-Обновлён: 30.08.2026. Ведёт: главный инженер.
+Обновлён: 04.09.2026 (ночь). Ведёт: главный инженер.
 Правило: перед работой прочитай этот файл целиком; после содержательной
 задачи — обнови разделы 3–5.
 
@@ -61,9 +61,9 @@ ActionObserver строковыми шаблонами вытаскивает д
 | 2 | Память | DONE (USER/SELF/EXTERNAL/SHARED подтверждены; retrieval под нагрузкой не тестировался) |
 | 3 | Самосогласованность | МЕХАНИЗМ ГОТОВ, ИСПОЛНЕНИЕ ТЕЧЁТ |
 | 4 | Зародыш саморазвития | DONE как зародыш (конвейер evidence→proposal→lifecycle) |
-| 5 | Личность | **~65–70%**: интересы/эмоции/история живы; привычки — ЗАЧАТОК [26.08] (ядро situation_patterns, речь speech_habits, связь паттерн→привычка); предпочтения/взросление — далее |
-| 6 | Мотивация | **ЧАСТИЧНО [26.08]**: локальное ядро решений (DecisionCore) выбирает цель/задачу локально, LLM — только новые паттерны/план; discovery-мотивация |
-| 7–15 | далее по роадмапу | НЕ НАЧАТЫ (diary — v1 есть; sleep/dream/aging — далее) |
+| 5 | Личность | **~100% [04.09]**: интересы/эмоции/история живы; привычки (П-2), предпочтения (П-1a/b/c/d: dict + типы/сила/конфликт с интересами), взросление характера (П-3) реализованы — этаж 5 закрыт |
+| 6 | Мотивация | **100% [04.09]**: DecisionCore + discovery-мотивация; закрыта конкуренция целей (М-1) и полное многошаговое планирование (М-2) — этаж 6 закрыт |
+| 7–15 | далее по роадмапу | Этаж 9 «Инструменты» — ЗАКРЫТ [04.09] (ИНСТР-1 терминал + ИНСТР-2 программы + ИНСТР-3 установка; решение Эдди «свобода, но без разрушительного»). Этаж 10 «Органы чувств» — ЗАКРЫТ [04.09] (аудио + зрение). Этаж 11 «Совместная жизнь» — ЗАКРЫТ ПОЛНОСТЬЮ [04.09] (SharedLife/SharedAppraisal + ActivityManager + мгновенные команды активности + инициатива). Этаж 8/12 — DONE. |
 
 Инженерные заметки к роадмапу:
 - Этаж 5 гигиена: «?»-мусор в reason идентичности (проблема №1)
@@ -183,6 +183,246 @@ ActionObserver строковыми шаблонами вытаскивает д
     `data/`: diary.db И personal_diary.db (два дневника).
 
 ## 4. Очередь задач
+
+### ОБНОВЛЕНИЕ 04.09 (продолжение): ЭТАЖИ 9 и 10 ЗАКРЫТЫ
+Решение Эдди 04.09: «нет никакого белого листа, все можно что захочет» →
+вариант «Свобода, но без разрушительного». Закрыты последние бэклоги:
+- Этаж 9 «Инструменты»: ИНСТР-2 (AppLauncher — свободный запуск программ,
+  фильтр только анти-катастрофический denylist), ИНСТР-3 (SoftwareInstaller —
+  установка через любой менеджер без согласования). Allowlist отменён во всей
+  командной политике (CommandPolicy.is_safe = не-разрушительно). Интеграция в
+  action_executor/action_router/tool_policy/tool_runner/factory.
+- Этаж 10 «Органы чувств»: зрение уже было реализовано (ScreenPerceiver +
+  zen-kimi-vision + ScreenController) — зафиксировано регрессом 26 тестов PASS.
+- Регресс: 62 теста инструментов + 79 общий PASS; байт-проверка 14 файлов
+  чистая. Без коммита.
+- Осталось по плану: ИНСТР-2/3 закрыты, этаж 10 закрыт → дорожная карта
+  ROADMAP_CLOSE_PLAN (этажи 5–10,12,11) ВЫПОЛНЕНА. Следующий кандидат —
+  этаж 13 «Саморазвитие» (блокеры сняты). Подробности — CHANGELOG/TODO 04.09.
+
+### ОБНОВЛЕНИЕ 04.09 (продолжение): ЭТАЖ 11 «Совместная жизнь» ЗАКРЫТ ПОЛНОСТЬЮ
+Напоминание Эдди: «чат как таковой у нас уже в прошлом, общение всегда
+доступно и в реальном времени». Команды совместных активностей применяются
+МГНОВЕННО в `handle_user_message` (не через автономный цикл). Закрыты оба
+остатка этажа 11:
+- Управляющий слой: `identity/shared_activity_manager.py::SharedActivityManager`
+  (трекер текущей активности + `suggest_activity` по аффекту/интересам),
+  `identity/shared_activity_commands.py::parse_activity_command` (детерминированный
+  парсер «давай посмотрим…»/«включи музыку»/«поиграем…»/«выключи»),
+  `core/eddie_server.py::_apply_shared_activity_command` (мгновенное применение
+  в handle_user_message + запись SHARED_EXPERIENCE).
+- Инициатива EddieAI: в tick автономии `suggest_activity` → send_initiative
+  с кулдауном 3600с. SharedAppraisal применяет intimacy/trust к
+  self_state.relationships.Eddie; SharedLife в factory получил retrieval
+  (build_feed ожил); self_model.shared_life — реальные данные; блок
+  «ТЕКУЩАЯ СОВМЕСТНАЯ АКТИВНОСТЬ» в промптах.
+- Регресс: 52 теста PASS + final_regression 7 passed + orchestrator_local PASS;
+  байт-проверка 12 файлов чистая. Без коммита. Этаж 11 — ЗАКРЫТ.
+- Осталось по плану: ИНСТР-2/3 (этаж 9, требует решения совета по безопасности),
+  этаж 10 (зрение/screen perception). Подробности — CHANGELOG/TODO 04.09.
+
+### ОБНОВЛЕНИЕ 03.09 (смена): начало закрытия бэклогов этажей 5–10,12
+Эдди поставил приоритет: СНАЧАЛА полностью закрыть прошлые этажи
+(5–10,12), ПОТОМ этаж 11 «Совместная жизнь». Первый блок утверждён —
+**П-1 «Модель предпочтений»** (этаж 5). Под-шаг **П-1a выполнено**:
+смягчён порог детекции предпочтений `ActionPreferenceDetector.MIN_CHOICES`
+6→4 (MIN_SHARE 0.75 и требование реального сравнения `loser_count>0`
+сохранены; TDD `test_preference_detector.py` 2 кейса GREEN + регресс PASS).
+Дорожная карта полного закрытия — `docs_engineer\ROADMAP_CLOSE_PLAN.md`
+(блоки П-1..П-3, М-1..М-2, В-1..В-2, МИР-1..МИР-2, ИНСТР-1..3, ЗР-1..ЗР-2,
+А-1..А-2; ~12–23 смены, реалистично).
+
+### ОБНОВЛЕНИЕ 04.09 (смена): П-1b выполнено (этаж 5, блок П-1)
+`self_state.preferences` обогащён до dict-записи `{label, context, method,
+share, total, source, ts}` с обратной совместимостью для старых строк-
+сигнатур (план `PLANS\2026-09-03-P1b-preferences-dict-format.md`, полностью
+реализован шагами 1–7). Дополнительно закрыта точка риска: claim-валидация
+dict-предпочтений больше не уходит через `str(dict)`-repr —
+`self_claim_validator._extract_compare_text`, `claim_engine._extract_value_text`,
+`predicate_registry._value_text` извлекают читаемый текст (label/context/method).
+Тесты GREEN: `test_preference_dict_format.py`, `test_claim_validator_pref_dict.py`
+(6 кейсов) + регресс (habit_pattern_rebuild, pattern_habit, life_prompt_blocks,
+life_rituals, semantic_judge, user_statement_detector) PASS. Изменения
+документированы без коммита.
+
+### ОБНОВЛЕНИЕ 04.09 (продолжение): П-1c выполнено (этаж 5, блок П-1)
+Связка preference-контура с outbox-подсказками: в
+`agent_loop._process_identity_detectors` при `category=="preference" and
+identity_result=="accepted"` в outbox уходит читаемое сообщение
+(«Заметил своё предпочтение: <label>»); label строится через
+`preference_label` (task → иначе контекст/метод). `outbox=None` — тихо
+пропускается. TDD `test_pref_outbox_link.py` (3 кейса: новое предпочтение
+→ сообщение в outbox; повторный detect без дубля; отключённый outbox не
+ломает промоушн) GREEN + регресс PASS (orchestrator_local, claim_validator,
+pref_dict, pref_detector). Блок П-1 (этаж 5) закрыт по под-шагам a/b/c.
+
+### ОБНОВЛЕНИЕ 04.09 (продолжение): П-1d выполнено (этаж 5, блок П-1)
+Модель предпочтений: тип/сила + конфликт «предпочтение-интерес».
+`identity/preference_model.py` (новый, детерминированно, без LLM):
+`preference_type` (action/topic/environment/unknown по маркерам),
+`strength_of` (0.6*share+0.4*maturity(evidence)), `enrich_entry`
+(добавляет type/strength/provenance/first_seen_ts/last_seen_ts, ts и старые
+ключи сохраняются), `preference_conflicts` (негативное предпочтение по теме
+интереса → конфликт), `format_preferences_rich` (тип+сила+подсказка конфликта;
+str — как есть). Запись: `identity_manager._evaluate_preference` обогащает dict
+через `enrich_entry(source="ACTION_CHOICE")`, дедуп по методу освежает
+`last_seen_ts` (статус прежний "already_present"). Чтение: prompts.py (2),
+current_mind_state.py (1), self_concept_resolver.py (1) — rich-формат с
+интересами; agent.py оставлен на plain-формате (мин. дифф). Обратная
+совместимость с П-1b сохранена. TDD `test_preference_model.py` (13) GREEN +
+регресс PASS + final_regression_suite 7 passed + orchestrator_local PASS.
+ЭТАЖ 5 ЗАКРЫТ (П-1a/b/c/d + П-2 + П-3). Без коммита.
+
+### ОБНОВЛЕНИЕ 04.09 (продолжение): П-2 выполнено (этаж 5)
+Привычки действий (не только речи). Ядро (HabitPatternDetector → evidence →
+identity_manager → PersonalityLifecycle.promote → self_state["habits"]) уже
+было подтверждено тестами (final_regression_suite test_unified_agent_loop /
+test_habit_pipeline). Закрыт остаток «к полноте» — читаемость: привычки
+показывались кашей `repeated_action:research`. Добавлен
+`identity/habit_label.py` (`habit_label`/`format_habits`, обратная
+совместимость с сигнатурами) и подключён в prompts.py, agent.py
+(снапшот+промпт), current_mind_state.py. Хранимое значение в self_state
+не менялось (сигнатуры остались) — риск для decision_core/speech-пути нулевой.
+TDD `test_habit_format.py` (6) GREEN + регресс PASS.
+
+Далее по карте — П-3 (взросление характера) отложен: требует дизайн-решения
+Эдди (менять ли пороги lifecycle с возрастом/опытом). Перешёл к М-1 (этаж 6) —
+см. ниже. Этаж 11 «Совместная жизнь» — НЕ трогается без явного решения Эдди.
+
+### ОБНОВЛЕНИЕ 04.09 (продолжение): М-1 выполнено (этаж 6, конкуренция целей)
+Закрыт бэклог этажа 6 «конкуренция целей» (часть М-1). Ядро уже имело
+ранжирование кандидатов (`GoalManager.rank_candidates`) и лимит активных
+`MAX_ACTIVE_GOALS=3`, но вытеснения не было: при полном слоте новая цель
+безусловно отклонялась. Добавлен `identity/goal_manager.py`:
+`activate_with_preemption(value, plan=None)` — при полном слоте, если новая
+цель приоритетнее самой слабой активной (та же оценочная функция
+priority*0.45 + motivation*0.35 + confidence*0.20), слабая уходит в PAUSED и
+новая активируется; иначе DEFERRED. Внедрено в живой цикл: оба места
+активации в `core/agent_loop.py` (review ~483 и run_once ~526) переведены на
+`activate_with_preemption`. Старый `activate` сохранён (decision_core/тесты) —
+минимальный дифф. TDD `test_goal_preemption.py` GREEN; регресс
+(goal_generation, p0b_conversation_goal, orchestrator_local) PASS.
+Остаток этажа 6 — М-2 (полное многошаговое планирование) — в бэклоге.
+
+### ОБНОВЛЕНИЕ 04.09 (продолжение): Этаж 8 «Мир» закрыт (МИР-1 + МИР-2)
+МИР-1: `core/world_process_history.py` — скользящее окно снимков процессов,
+частота/частая сводка; интегрирован в `_probe_world_on_pressure` (сводка
+дописывается в WORLD_SNAPSHOT). МИР-2: `core/world_model.py` — структурная
+модель окружения {root, folders[], pc{...}} (папки с подписями + данные ПК из
+WorldProbe), world_model_text, ensure_world_model; сохранение в self_state,
+вывод в оба промпта (build_quick_conversation_prompt, build_system_prompt),
+world_model в self_state_interface. Этаж 9 (Инструменты) пропущен — все блоки
+ИНСТР-1..3 требуют отдельного решения совета по безопасности (РИСК
+БЕЗОПАСНОСТИ). Далее по порядку — этаж 12 (Агентность, А-1/А-2).
+
+### ОБНОВЛЕНИЕ 04.09 (продолжение): А-2 (этаж 12) цикл исследования как постоянный
+До правки любопытство было разовым (одна тема → цель, без памяти текущего
+исследования и углубления). Добавлен `identity/research_tracker.py::ResearchTracker`
+— персистентный трекер (self_state.current_research / research_history):
+start/current/record_findings/add_note/should_deepen (порог источников
+MIN_SOURCES_THRESHOLD=4)/resume_candidate/complete. Интеграция: в
+`autonomy_orchestrator.tick` приоритет продолжения незавершённого исследования
+перед новой темой (через curiosity.topic_goal); в `agent_loop` при COMPLETED
+цели, совпадающей с текущей темой — research_tracker.complete(). Проводка
+общего трекера на orchestrator/runtime/agent_loop в factory. TDD
+`test_research_tracker.py` (9) GREEN; final_regression_suite 7 passed. Остаток
+этажа 12 — А-1 (собственные проекты: трек прогресса долгой задачи) — на этом
+фундаменте.
+
+### ОБНОВЛЕНИЕ 04.09 (продолжение): А-1 (этаж 12) собственные проекты — закрыт
+Этаж 12 «Агентность» закрыт полностью (А-1 + А-2). А-1 сделан на фундаменте
+ResearchTracker: добавлены `progress_text()` и read-only хелпер
+`current_research_text(self_state)`, оба промпта показывают блок
+«МОЙ ТЕКУЩИЙ ПРОЕКТ/ИССЛЕДОВАНИЕ» (тема, источников, шагов, заметок) — долгая
+исследовательская задача теперь ведётся и видна агенту как проект с прогрессом.
+TDD расширен (12) GREEN; final_regression_suite 7 passed. ЭТАЖ 9 (Инструменты) —
+ждёт решения совета по безопасности. ЭТАЖ 11 «Совместная жизнь» — НЕ трогается
+без отдельного решения Эдди.
+
+### ОБНОВЛЕНИЕ 04.09 (продолжение): П-3 (этаж 5) взросление характера — закрыт
+Закрыт отложенный блок «взросление характера». Решение Эдди: пер-чертовое
+взросление по накопленному опыту черты (evidence_count) + мягкая адаптация.
+`identity/personality_lifecycle.py`: новый узел `_status_from_strength_ev`
+использует `_effective_thresholds(evidence_count)` — с зрелостью
+(`evidence_count // 3`) порог ACTIVE мягко снижается (потолок 0.72: зрелая
+сформированная черта прочнее держится в ACTIVE), порог WEAKENING растёт
+(потолок 0.50: зрелый характер быстрее отпускает исчезающие), EMERGING
+неизменен. `decay()` — `_decay_maturity_factor` (потолок 0.5): зрелые черты
+затухают медленнее. Обратная совместимость: старый `_status_from_strength` =
+`_status_from_strength_ev(s, 0)` (базовые пороги при отсутствии опыта). Все
+операции (promote/reinforce/contradict/decay) используют опыт своей черты.
+TDD `test_personality_adulting.py` (6) GREEN; final_regression_suite 7 passed.
+Этаж 5: закрыты П-1, П-2, П-3. Pre-existing (не наш регресс): test_behavior_learning
+(сигнатура EvidenceConsolidator) и test_production_runtime (research context=None)
+падают и на базе.
+
+### ОБНОВЛЕНИЕ 04.09 (продолжение): М-2 (этаж 6) полное многошаговое планирование — закрыт
+Закрыт бэклог этажа 6 «полное многошаговое планирование» (декомпозиция,
+оценка выполнимости, пересмотр). Всё детерминированно, без LLM:
+- `identity/plan_feasibility.py::PlanFeasibility` — классификация каждого шага
+  через ActionPlanner в action_type, сверка с доступными инструментами
+  (`available_actions`), `check`/`assess` (FeasibilityIssue) и `ensure_phases`
+  (декомпозиция на этапы добыча→анализ→фиксация, вставка недостающей
+  выполнимой фазы).
+- `GoalPlanner.revise(goal, title, reason)` — пересмотр: невыполнимый/
+  провалившийся шаг SKIPPED, возврат следующего выполнимого; завершённые
+  не трогает.
+- `TaskController.revision_policy` (по умолчанию None → прежнее поведение) +
+  `identity/task_revision.py::TaskRevisionPolicy` — консервативный пересмотр
+  только при явной недоступности инструмента, транзиентные ошибки — повтор.
+- Интеграция: `goal_plan_generator._sanitize_tasks` (отсев невыполнимых +
+  вставка фазы, guard MIN_TASKS) и factory (проводка policy в TaskController).
+TDD: test_plan_feasibility (8), test_goal_planner_revise (3), test_task_revision (5)
+GREEN; final_regression_suite 7 passed; orchestrator/curiosity/decision/goal-стыки PASS.
+Этаж 6 закрыт полностью (М-1 + М-2).
+
+### ОБНОВЛЕНИЕ 04.09 (продолжение): В-1 (этаж 7) полноценный self-model — закрыт
+Первый бэклог-блок этажа 7 «полноценный self-model» закрыт. Решение Эдди:
+полный охват — способности + ограничения + состояние, единственная
+персистентная сущность. Детерминированно, без LLM:
+- `identity/self_model.py` (новый): `SelfModel` собирает `self_state.self_model`:
+  `identity` (entity=EddieAI, mission) + `capabilities` (включённые инструменты
+  из registry.describe()) + `limitations` (выключенные инструменты
+  tool_disabled:<name> + статичные факты контура по scopes: perceptual
+  нет зрения/слуха, environment ПК Эдди, resource память ~8 ГБ) +
+  `current_state` (возраст, опыт = Σ evidence_count по чертам, активные цели).
+- Методы: `build/get/snapshot/limitation_ids/render`; хелперы
+  `self_model_text` (полная проекция) и `self_model_summary_text` (однострочный
+  bullet). back-compat: self_model нет → честно «модель себя ещё не собрана».
+- Интеграция: factory (сборка после `agent.capabilities = registry.describe()`),
+  оба промпта (quick — полный блок «МОИ СПОСОБНОСТИ И ОГРАНИЧЕНИЯ», system —
+  bullet «самооценка»), `self_state_interface` (поле self_model).
+TDD: `test_self_model.py` GREEN; final_regression_suite 7 passed;
+test_orchestrator_local PASS (реальный factory собирает self_model без сбоев).
+Этаж 7: осталось В-2 (исследование сознания).
+
+### ОБНОВЛЕНИЕ 04.09 (продолжение): В-2 (этаж 7) исследование сознания — осознанное самонаблюдение — закрыт
+Закрыт последний бэклог этажа 7. Дневник-рефлексия уже существовал
+(`PersonalDiary` + ритуалы утро/вечер + recent_life_feed + ReflectionEngine) —
+не переделывался. В-2 добавил недостающее «осознанный запрос/наблюдение своих
+состояний». Решение Эдди: полный охват. Детерминированно, без LLM:
+- `identity/conscious_observer.py` (новый): `ConsciousObserver` собирает
+  `self_state.conscious_state` — единый снимок осознания себя: `affect`
+  (аффект), `self_model` (самооценка из В-1), `recent_diary` (последняя
+  запись дневника), `recent_feed` (недавние события жизни), `active_focus`
+  (активные цели + текущее исследование), `observed_at`.
+- `ask(question)` — осознанный запрос к себе по маркерам
+  (аффект/способности/ограничения/работа/фокус) → релевантная проекция,
+  иначе общий снимок. `history()` — история самонаблюдений + запись в память
+  как CONSCIOUS_OBSERVATION-события от имени SELF. `render_consciousness()` —
+  текстовая проекция.
+- Хелперы для промптов: `conscious_state_text` и
+  `conscious_state_summary_text` (однострочная).
+- Интеграция: factory — первый `observe()` после сборки self_model,
+  `agent.conscious_observer` на runtime; оба промпта (quick — блок
+  «МОЁ СОСТОЯНИЕ СОЗНАНИЯ», system — bullet «осознанное состояние»);
+  `self_state_interface` — поле `conscious_state`. Back-compat: нет наблюдения →
+  честно «самонаблюдение ещё не проведено». Данные читаются из существующих
+  источников (affective_state, self_state.self_model, PersonalDiary,
+  memory.recent_life_feed, goal_manager) — дублей нет.
+TDD: `test_conscious_observer.py` GREEN; все 7 связанных suite PASS +
+final_regression_suite 7 passed + orchestrator_local PASS.
+ЭТАЖ 7 ЗАКРЫТ ПОЛНОСТЬЮ (В-1 + В-2).
 
 ### ОБНОВЛЕНИЕ 30.08 (ночь, по решению Эдди): ЗАКРЫТЫ нижние контуры этажей 5–14
 

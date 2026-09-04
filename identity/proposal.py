@@ -11,6 +11,7 @@ class Proposal:
     evidence: list[str]
     evidence_count: int | None = None
     origin: str | None = None
+    meta: dict | None = None
 
     def to_dict(self):
         return asdict(self)

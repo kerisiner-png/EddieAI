@@ -357,6 +357,66 @@ class ModelOrchestrator:
             print(f"[cloud] {name} недоступен: {error}")
             return None
 
+    def _cloud_chat_vision(
+        self,
+        system,
+        user,
+        images=None,
+        task="vision",
+    ):
+        if images is None:
+            images = []
+        matching = [
+            p
+            for p in self.CLOUD_PROVIDERS
+            if task in (p.get("roles") or [])
+        ]
+        if not matching:
+            return {
+                "text": "",
+                "error": "no vision provider",
+            }
+        provider = matching[0]
+        if images:
+            user_content = [
+                {"type": "text", "text": user}
+            ]
+            for img_b64 in images:
+                user_content.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": (
+                                "data:image/png;"
+                                f"base64,{img_b64}"
+                            )
+                        },
+                    }
+                )
+        else:
+            user_content = user
+        options = {
+            "num_predict": provider.get(
+                "max_tokens", 1024
+            )
+        }
+        content = self._cloud_chat_provider(
+            provider,
+            system,
+            user_content,
+            options,
+            time.time(),
+        )
+        if content is None:
+            return {
+                "text": "",
+                "error": (
+                    f"cloud failure: "
+                    f"{self._cloud_last_error.get(provider['name'], '')}"
+                ),
+            }
+        return {"text": content}
+
     def cloud_chat_stream(
         self,
         *,

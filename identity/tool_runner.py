@@ -395,6 +395,29 @@ class ToolRunner:
                 action
             )
 
+        if tool_name == "powershell":
+            return self._execute_powershell(
+                tool,
+                action,
+            )
+
+        if tool_name == "programs":
+            return self._execute_programs(
+                tool,
+                action,
+            )
+
+        if tool_name == "install":
+            return self._execute_install(
+                tool,
+                action,
+            )
+
+        if tool_name == "screen_control":
+            return self._execute_screen_control(
+                action,
+            )
+
         return {
             "status": "UNAVAILABLE",
             "error": (
@@ -519,3 +542,150 @@ class ToolRunner:
                 f"support {action.action_type}."
             ),
         }
+
+    def _execute_powershell(
+        self,
+        tool,
+        action,
+    ):
+        command = action.parameters.get(
+            "command"
+        )
+
+        cwd = action.parameters.get(
+            "cwd"
+        )
+
+        result = tool.executor.execute(
+            command,
+            cwd=cwd,
+        )
+
+        return {
+            "status": result["status"],
+            "output": result["stdout"],
+            "error": result["stderr"],
+            "exit_code": result["exit_code"],
+            "command": result["command"],
+        }
+
+    def _execute_programs(
+        self,
+        tool,
+        action,
+    ):
+        command = action.parameters.get(
+            "command"
+        )
+
+        result = tool.executor.launch(command)
+
+        return {
+            "status": result["status"],
+            "reason": result.get("reason", ""),
+            "command": result.get("command", command),
+        }
+
+    def _execute_install(
+        self,
+        tool,
+        action,
+    ):
+        package = action.parameters.get(
+            "package"
+        )
+
+        manager = action.parameters.get(
+            "manager"
+        )
+
+        result = tool.executor.install(
+            package,
+            manager,
+        )
+
+        return {
+            "status": result["status"],
+            "stdout": result.get("stdout", ""),
+            "stderr": result.get("stderr", ""),
+            "reason": result.get("reason", ""),
+        }
+
+    def _execute_screen_control(
+        self,
+        action,
+    ):
+        try:
+            from identity.screen_controller import (
+                ScreenController,
+            )
+        except ImportError:
+            return {
+                "status": "FAILED",
+                "error": (
+                    "ScreenController "
+                    "не импортируется."
+                ),
+            }
+
+        sc = ScreenController()
+        params = action.parameters
+        op = action.target
+
+        if op == "click":
+            sc.click(
+                params.get("x", 0),
+                params.get("y", 0),
+            )
+        elif op == "right_click":
+            sc.right_click(
+                params.get("x", 0),
+                params.get("y", 0),
+            )
+        elif op == "double_click":
+            sc.double_click(
+                params.get("x", 0),
+                params.get("y", 0),
+            )
+        elif op == "type_text":
+            sc.type_text(
+                params.get("text", ""),
+            )
+        elif op == "key":
+            sc.key(
+                params.get("hotkey", ""),
+            )
+        elif op == "scroll":
+            sc.scroll(
+                direction=params.get(
+                    "direction", "down"
+                ),
+                amount=params.get("amount", 3),
+            )
+        elif op == "get_active_window":
+            return {
+                "status": "OK",
+                "window": sc.get_active_window(),
+            }
+        elif op == "list_windows":
+            return {
+                "status": "OK",
+                "windows": sc.list_windows(),
+            }
+        elif op == "focus_window":
+            ok = sc.focus_window(
+                params.get("title", ""),
+            )
+            return {
+                "status": "OK" if ok else "FAILED",
+            }
+        else:
+            return {
+                "status": "UNSUPPORTED",
+                "error": (
+                    f"ScreenControl не поддерживает "
+                    f"операцию '{op}'."
+                ),
+            }
+
+        return {"status": "OK"}

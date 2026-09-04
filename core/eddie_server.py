@@ -273,8 +273,11 @@ class EddieServer:
         как непрочитанное для EddieAI. respond() НЕ
         вызывается — EddieAI решает прочитать сам
         в своём цикле (respond_and_deliver).
+        Команды совместных активностей применяются
+        немедленно (без ожидания цикла).
         Возвращает msg_id.
         """
+        self._apply_shared_activity_command(text)
         if self.history is None:
             return None
 
@@ -284,6 +287,78 @@ class EddieServer:
             )
         except Exception:
             return None
+
+    def _apply_shared_activity_command(
+        self,
+        text: str,
+    ):
+        if not text:
+            return None
+        try:
+            from identity.shared_activity_commands import (
+                parse_activity_command,
+            )
+            from identity.shared_activity_manager import (
+                ACTIVITY_TYPES,
+            )
+        except Exception:
+            return None
+
+        manager = getattr(
+            self.agent, "shared_activity", None
+        )
+        if manager is None:
+            return None
+
+        cmd = parse_activity_command(text)
+        if cmd is None:
+            return None
+
+        if cmd.get("kind") == "stop":
+            ended = manager.stop_activity(
+                reason="user"
+            )
+            if ended is not None:
+                self._record_shared_event(
+                    "Остановили совместную активность: "
+                    + ended.get("type", "?"),
+                    ended.get("type", "other"),
+                )
+            return cmd
+
+        activity_type = cmd.get(
+            "activity_type"
+        )
+        title = cmd.get("title", "")
+        current = manager.start_activity(
+            activity_type,
+            title,
+            source="chat",
+        )
+        self._record_shared_event(
+            "Эдди предложил совместную активность: "
+            + (title or activity_type),
+            activity_type,
+        )
+        return cmd
+
+    def _record_shared_event(
+        self,
+        content,
+        activity_type,
+    ):
+        try:
+            shared_life = getattr(
+                self.agent, "shared_life", None
+            )
+            if shared_life is not None:
+                shared_life.record(
+                    content,
+                    activity_type,
+                    "neutral",
+                )
+        except Exception:
+            pass
 
     def respond_and_deliver(
         self,

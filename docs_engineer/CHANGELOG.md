@@ -4,7 +4,467 @@
 [АРХИВ], когда её описание перестаёт соответствовать живому коду.
 Формат — см. docs_engineer\README.md. Времена артефактные.
 
+## 04.09.2026
+
+### [АКТУАЛЬНО] Этаж 9 «Инструменты» ЗАКРЫТ (ИНСТР-2/3) + этаж 10 «Органы чувств» ЗАКРЫТ (зрение)
+Решение Эдди 04.09: «нет никакого белого листа, все можно что захочет» →
+выбран вариант «Свобода, но без разрушительного». Allowlist отменён во всей
+командной политике, блокируется только анти-катастрофический denylist.
+- `identity/app_launcher.py::AppLauncher` (новый, ИНСТР-2/ДПК2): свободный
+  запуск любых программ; фильтр только `CommandPolicy.is_destructive`
+  (форматирование/рекурсивное удаление системного/принудительное выключение);
+  история запусков в `self_state.app_launch_history`. TDD `test_app_launcher.py`
+  (6) GREEN.
+- `identity/software_install.py::SoftwareInstaller` (новый, ИНСТР-3): установка
+  ПО через любой менеджер (pip/winget/choco/npm) без согласования (решение
+  Эдди: установка не разрушительна); анти-катастрофический фильтр остаётся;
+  история в `self_state.install_history`. TDD `test_software_install.py` (8) GREEN.
+- `identity/command_policy.py`: `is_safe` = «не разрушительно» (denylist-only,
+  allowlist отменён); добавлены `is_destructive`/`destructive_reason`;
+  `deny_reason` = destructive_reason. `config/commands.yaml`: из denylist убраны
+  блокировки установки (winget/choco/pip/npm install) и сети (curl/wget/
+  Invoke-WebRequest) — не разрушительно; добавлены format_drive, diskpart_clean,
+  shutdown_force. `config/apps.yaml` (белый список приложений) — УДАЛЁН
+  (не нужен при свободе).
+- Интеграция: `identity/action_executor.py` (+LAUNCH_APP/INSTALL_PACKAGE),
+  `identity/action_router.py` (маршруты programs/install), `identity/tool_policy.py`
+  (_launch_app/_install_package), `identity/tool_runner.py` (_execute_programs/
+  _execute_install), `core/autonomy_runtime_factory.py` (регистрация инструментов
+  programs/install с self_state).
+- Обновлены тесты под режим свободы: test_command_policy (pip install/wget
+  теперь разрешены; +diskpart_clean/shutdown_force заблокированы),
+  test_tool_runner_run_command (deny на Format-Volume).
+- Этаж 10 «Органы чувств» (зрение) — реализован ранее, зафиксирован регрессом:
+  26 тестов PASS (test_screen_perceiver/test_screen_controller/tests/
+  test_integration_vision/tests/test_model_orchestrator_vision).
+- Регресс: 62 теста инструментов PASS + 79 общий (final_regression_suite 7
+  passed, orchestrator_local ALL PASS). Байт-проверка 14 файлов чистая
+  (UTF-8 no BOM). Без коммита (Конституция п.6).
+
+### [АКТУАЛЬНО] Этаж 11 «Совместная жизнь» — управляющий слой (инициатива + команды активности)
+Поверх ядра (ЗР-1/ЗР-2) закрыты оба остатка этажа 11: интеграция команд
+совместных активностей с общением в реальном времени + инициатива EddieAI.
+Напоминание Эдди учтено: «чат как таковой у нас уже в прошлом, общение
+всегда доступно и в реальном времени» — команды применяются МГНОВЕННО в
+`handle_user_message`, без ожидания автономного цикла.
+- `identity/shared_activity_manager.py` (новый): `SharedActivityManager` —
+  трекер текущей совместной активности, персистентный в
+  `self_state.current_shared_activity`: `start_activity`/`stop_activity`/
+  `get_current`/`is_active`/`activity_summary`; `suggest_activity(affective,
+  interests, history)` — детерминированный выбор активности по аффекту
+  (MOOD_ACTIVITY_MAP) + интересам (INTEREST_ACTIVITY_MAP), гашение недавно
+  повторённых (×0.7). TDD `test_shared_activity_manager.py` (14) GREEN.
+- `identity/shared_activity_commands.py` (новый): `parse_activity_command(text)`
+  — детерминированный парсер команд «давай посмотрим …»/«включи музыку»/
+  «поиграем в …»/«выключи, хватит» → {kind, activity_type, title}, по словам
+  (VERB_COMMANDS/NOUN_TYPES/GENERIC_VERBS/STOP_WORDS). TDD
+  `test_shared_activity_commands.py` (10) GREEN.
+- `core/eddie_server.py`: `_apply_shared_activity_command(text)` вызывается
+  первым в `handle_user_message` — команда применяется НЕМЕДЛЕННО
+  (start/stop активности + запись SHARED_EXPERIENCE через shared_life.record);
+  обычный путь ответа EddieAI не дублируется (инициатива-подтверждение НЕ
+  шлётся — это шум поверх живого диалога). TDD `test_server_shared_activity.py`
+  (5) GREEN.
+- `core/autonomous_runtime.py`: в tick после shared_life.observe — если
+  активности нет, `_shared_activity.suggest_activity(...)` → при наличии
+  сигнала `_enqueue_shared_suggestion` шлёт инициативу через
+  `eddie_server.send_initiative` с кулдауном 3600с (защита от спама).
+- `core/autonomy_runtime_factory.py`: создание SharedActivityManager
+  (self_state) + проводка на runtime/agent; SharedLife получает
+  `retrieval=agent.memory_retrieval` (раньше build_feed был всегда пуст —
+  retrieval не передавался); SharedAppraisal получает self_state;
+  self_model.shared_life заполняется реальными данными (events_count/
+  last_activity/is_active вместо статичной заглушки).
+- `identity/shared_appraisal.py`: `appraise()` теперь применяет дельты
+  intimacy/trust (`appraise_relationship`) к `self_state.relationships.Eddie`
+  (поля intimacy/trust, кап 1.0); back-compat через getattr (self_state=None
+  → тихо пропускается). TDD `test_shared_appraisal.py` (6) GREEN.
+- `core/prompts.py`: блок «ТЕКУЩАЯ СОВМЕСТНАЯ АКТИВНОСТЬ» в quick-промпте
+  + bullet «совместная активность» в system-промпте (из
+  self_state.current_shared_activity, читаемо, без краха при отсутствии).
+- Регресс: 52 теста (shared_* + final_regression_suite 7 + server_shared) PASS,
+  orchestrator_local ALL PASS, py_compile затронутых OK. Байт-проверка 12
+  файлов чистая (UTF-8 no BOM, без U+FFFD). Без коммита (Конституция п.6).
+
+### [АКТУАЛЬНО] Фикс final_regression_suite: module-level run_test() вызовы запускались при импорте pytest
+`final_regression_suite.py`: module-level `run_test()` вызовы внизу файла
+выполнялись при импорте модуля pytest'ом → каждый из 7 тестов отрабатывал
+дважды → данные в тестовых БД удваивались → все assert'ы падали (count 3→6,
+contradictions 1→2, observations 10→20, dedup already_present вместо accepted).
+Фикс: обёрнуто в `if __name__ == "__main__":`. 7/7 PASS. Ранее помечалось
+как «ОТДЕЛЬНАЯ проблема (не наша)» — корень был в архитектуре тест-файла,
+не в production-коде.
+
+### [АКТУАЛЬНО] Персистентный рантайм (Windows Service + отказоустойчивость) — код готов, 17 тестов
+- Task 1 `core/fault_tolerance.py::FaultTolerance` — watchdog+heartbeat; `auto_reset_error()` → `reset_error()`.
+- Task 2 `autonomous_runtime._background_loop` — try/except, при сбое state=ERROR, цикл живёт.
+- Task 3 `cognition_worker._run` — bounded auto-restart (max 5, backoff до 60с).
+- Task 4 `core/eddie_service.py` — Windows Service (pywin32 гвардируется, `_SERVICE_BASE`); + `eddie_service_install.bat` (UTF-8/CRLF).
+- 17/17 новых тестов PASS; байт-проверка 9 файлов чистая (без BOM/U+FFFD).
+- НЕ устанавливал pywin32 / не регистрировал службу (нужен финальный добор Эдди).
+- БЫЛА регрессия final_regression_suite 6 fails — ИСПРАВЛЕНА (см. запись выше: module-level run_test() двойной запуск).
+
+### [АКТУАЛЬНО] Этаж 11 «Совместная жизнь» — ЯДРО РЕАЛИЗОВАНО (ЗР-1, ЗР-2)
+Реализовано ядро совместной жизни EddieAI (TDD, 14 тестов):
+- **ЗР-1** `identity/shared_life.py::SharedLife` — наблюдение описания
+  экрана → LLM-оценка значимости момента → событие SHARED_EXPERIENCE
+  в память; `build_feed()` — лента совместных событий для промптов.
+  Адаптация к кодовой базе: Event из memory.events, remember на Memory,
+  retrieval на MemoryRetrieval. Тесты: 4 кейса (observe/record/feed/skip).
+- **ЗР-2** `identity/shared_appraisal.py::SharedAppraisal` — эмоциональная
+  оценка совместных активностей (movie/music/game/coding/browsing/other):
+  ACTIVITY_EMOTIONS + INTIMACY_DELTAS → apply_reaction(deltas) +
+  appraise_relationship(intimacy/trust). Тесты: 4 кейса.
+- Интеграция: `self_model.py` (shared_life секция), `autonomous_runtime.py`
+  (observe+appraise после screen_perceiver), `autonomy_runtime_factory.py`
+  (SharedLife/SharedAppraisal создание + проводка). Интеграционные тесты: 6.
+- Регресс: 14 new tests GREEN + final_regression_suite 7 passed +
+  orchestrator_local PASS. Байт-проверка 8 файлов OK (UTF-8, нет BOM,
+  нет двойного перекодирования).
+
+### [АКТУАЛЬНО] Задача 4 (этаж 9, терминал): интеграция CommandPolicy + TerminalExecutor в ToolRunner/ToolPolicy/Factory
+Командный контур терминала доведён до продакшн-инфраструктуры (TDD, 8 новых):
+- `identity/tool_policy.py`: `allow_powershell=True`; `_powershell()` больше не
+  hardcoded-DENY — теперь через `CommandPolicy.is_safe()`/`deny_reason()`
+  (локальный import — во избежание циклов импортов).
+- `identity/tool_runner.py`: ветка `tool_name=="powershell"` в `_execute_real()` +
+  новый `_execute_powershell(tool, action)` (command+cwd → {status, output,
+  error, exit_code, command}).
+- `core/autonomy_runtime_factory.py`: регистрация инструмента `powershell` с
+  `TerminalExecutor()` после research.
+- Новые тесты: `test_tool_runner_run_command.py` (5: echo/deny/timeout/exit_code/
+  empty), `test_command_audit.py` (3: result dict / all fields / policy blocks
+  dangerous). Адаптированы под реальный интерфейс `ActionExecutor.create`
+  (по образцу test_research_tool.py и agent_loop.py:796) и реальный статус
+  отказа политики (`REJECTED`/`stage=policy`, а не `DENIED`).
+- Регресс: 35 passed (command_policy + terminal_executor + self_model_ownership +
+  tool_runner_run_command + command_audit). Файлы байтово сверены (без BOM,
+  без U+FFFD). Без коммита (Конституция п.6).
+
+### [АКТУАЛЬНО] П-1d (этаж 5): тип/сила предпочтения + детекция конфликта «предпочтение-интерес»
+Продолжение П-1 (более полная модель предпочтений). Решение Эдди — типы
+предпочтений + конфликт с интересами. Детерминированно, без LLM. TDD
+`test_preference_model.py` (13) RED→GREEN:
+- `identity/preference_model.py` (новый): `preference_type(method, context)` —
+  context в {activity,move}→"action"; маркеры темы ("изуч","тема","про ",
+  "космо","книг","наук","музык","фильм","игр","язык")→"topic"; маркеры среды
+  ("сред","комнат","офис","улиц","природ","локац","вечер","утр","ночь")→
+  "environment"; иначе "action"; пустой method→"unknown".
+  `strength_of(entry)=clamp(0.6*share+0.4*min(1, evidence_count/10))`;
+  `enrich_entry(entry, source)` — добавляет type/strength/provenance/
+  first_seen_ts/last_seen_ts к dict (сохраняет ts и все прежние ключи);
+  `preference_conflicts(preferences, interests)` — негативное предпочтение
+  (маркеры "не люб","не нрав","избег","не хоч","против","ненави"),
+  пересекающееся по токену с интересом → конфликт {preference, interest,
+  reason}; `format_preferences_rich(items, interests)` — формат
+  `«{label} (тип: …, сила: N.NN)»` + `[конфликт с интересом «…»]`; str — как есть.
+- Интеграция в запись: `identity/identity_manager._evaluate_preference` —
+  новая запись обогащается через `enrich_entry(source="ACTION_CHOICE")`;
+  при дедупе по методу освежается `last_seen_ts` (и strength), статус
+  прежний "already_present". Обратная совместимость с П-1b (dict + label/node,
+  ts) сохранена; test_preference_dict_format GREEN.
+- Интеграция в чтение (4 точки показывают rich-формат с интересами):
+  `core/prompts.py` (2), `core/current_mind_state.py` (1),
+  `core/self_concept_resolver.py` (1). `agent.py` оставлен на plain-формате
+  (минимальный дифф); конфликты поднимаются в промптах/самоконцепции.
+- Регресс: test_preference_model, preference_dict_format, preference_detector,
+  claim_validator_pref_dict, self_model, conscious_observer, mir_world,
+  life_prompt_blocks, life_rituals, personality_adulting, goal_preemption,
+  plan_feasibility, goal_planner_revise, task_revision, habit_format — ALL OK;
+  final_regression_suite 7 passed, orchestrator_local PASS. Файлы сверил
+  байтово (без BOM, без U+FFFD), llm_procs 0. Без коммита.
+
+### [АКТУАЛЬНО] В-2 (этаж 7): исследование сознания — осознанное самонаблюдение/запрос состояний
+Закрыт второй (и последний) бэклог-блок этажа 7. Дневник-рефлексия о работе
+уже существовал (`PersonalDiary` + ритуалы утро/вечер + recent_life_feed +
+ReflectionEngine) — не переделывался. В-2 добавил недостающее «осознанный
+запрос/наблюдение своих состояний». Решение Эдди: полное осознанное
+самонаблюдение. Детерминированно, без LLM:
+- `identity/conscious_observer.py` (новый): `ConsciousObserver` собирает
+  `self_state.conscious_state` — единый снимок осознания себя: `affect`
+  (аффективное состояние), `self_model` (самооценка/модель себя из В-1),
+  `recent_diary` (последняя запись дневника), `recent_feed` (недавние
+  события жизни), `active_focus` (активные цели + текущее исследование),
+  `observed_at`.
+- `ask(question)` — осознанный запрос к себе: маркеры (аффект/способности/
+  ограничения/работа/фокус) → релевантная проекция, иначе общий снимок.
+- `history()` — история самонаблюдений + запись в память как
+  CONSCIOUS_OBSERVATION-события от имени SELF (тот же контракт, что
+  REFLECTION-события). `render_consciousness()` — текстовая проекция.
+- Хелперы для промптов: `conscious_state_text` (полная) и
+  `conscious_state_summary_text` (однострочный bullet).
+- Интеграция: `core/autonomy_runtime_factory.py` — после сборки self_model
+  первый вызов `observe()` (первичное осознание в factory), `agent.conscious_observer`
+  на runtime; оба промпта (`core/prompts.py`) — quick: блок «МОЁ СОСТОЯНИЕ
+  СОЗНАНИЯ», system: bullet «осознанное состояние»; `core/self_state_interface.py` —
+  поле `conscious_state`.
+- Back-compat: наблюдения нет → промпт честно пишет «самонаблюдение ещё не
+  проведено», без краха. Данные осознания читаются через существующие
+  источники (affective_state, self_state.self_model, PersonalDiary, memory.
+  recent_life_feed, goal_manager) — ничего не дублируется.
+TDD: `test_conscious_observer.py` (структура observe, чтение дневника/фид, ask по
+маркерам + фолбэк, render, история, хелперы, оба промпта + фолбэк) GREEN.
+Регресс: все 7 связанных suite PASS + final_regression_suite 7 passed +
+orchestrator_local PASS (factory собирает ConsciousObserver без сбоев).
+Этаж 7 закрыт полностью (В-1 + В-2).
+
+### [АКТУАЛЬНО] В-1 (этаж 7): полноценный self-model — структурированная модель себя (способности, ограничения, состояние)
+Закрыт первый бэклог-блок этажа 7 «полноценный self-model». Решение Эдди:
+полный охват — способности + ограничения + состояние, единственная
+персистентная сущность. Детерминированно, без LLM-нагрузки:
+- `identity/self_model.py` (новый): `SelfModel` собирает `self_state.self_model`
+  из четырёх частей: `identity` (entity=EddieAI, mission), `capabilities`
+  (включённые инструменты из registry.describe() → agent.capabilities),
+  `limitations` (выключенные инструменты `tool_disabled:<name>` + статичные
+  факты контура: нет зрения/слуха, живу на ПК Эдди, память ~8 ГБ — по scopes
+  perceptual/environment/resource), `current_state` (возраст, накопленный опыт
+  = Σ evidence_count по персоналити-чертам, число активных целей).
+- Методы `SelfModel`: `build(capabilities, agent=None)` (сохраняет в
+  self_state.self_model), `get`, `snapshot`, `limitation_ids`, `render` (читаемая
+  «МОИ СПОСОБНОСТИ И ОГРАНИЧЕНИЯ»), модульные хелперы `self_model_text`
+  (полная проекция) и `self_model_summary_text` (однострочная для bullet).
+- Интеграция: `core/autonomy_runtime_factory.py` собирает self_model сразу
+  после `agent.capabilities = registry.describe()`; оба промпта
+  (`core/prompts.py`) показывают сам-модель (quick-prompt — полный блок,
+  system-prompt — компактный bullet «самооценка»); `core/self_state_interface.py`
+  добавил поле `self_model` в snapshot. Обратная совместимость: self_model
+  отсутствует → промпт честно пишет «модель себя ещё не собрана», без краха.
+TDD: `test_self_model.py` (структура, ограничения из выключенных инструментов,
+current_state, render, хелперы, оба промпта + фолбэк) GREEN. Регресс:
+final_regression_suite 7 passed, test_orchestrator_local PASS (реальный factory
+собирает self_model без сбоев).
+
+### [АКТУАЛЬНО] М-2 (этаж 6): полное многошаговое планирование — выполнимость, декомпозиция фаз, пересмотр
+Закрыт бэклог этажа 6 «полное многошаговое планирование» (декомпозиция,
+оценка выполнимости, пересмотр). Всё детерминированно, без LLM-нагрузки:
+- `identity/plan_feasibility.py` (новый): `PlanFeasibility` классифицирует каждый
+  шаг через `ActionPlanner` в action_type и сверяет с доступными инструментами
+  (`available_actions`). `check`/`assess` отдают `FeasibilityIssue` по шагам без
+  доступного инструмента; `ensure_phases` — декомпозиция цели на этапы
+  (добыча→анализ→фиксация): недостающая выполнимая фаза добавляется
+  детерминированно.
+- `identity/goal_planner.py`: новый `revise(goal, title, reason)` — пересмотр:
+  помечает невыполнимый/провалившийся шаг SKIPPED, возвращает следующий
+  выполнимый; завершённые шаги не трогает.
+- `identity/task_controller.py`: `TaskController` получил опциональный
+  `revision_policy` (по умолчанию None → прежнее поведение). При policy на
+  неуспешном шаге вызывается `decide`; `revise` → шаг SKIPPED и переход к
+  следующему (TASK_REVISED), `retry` → прежнее поведение.
+- `identity/task_revision.py` (новый): `TaskRevisionPolicy` — консервативный,
+  пересмотр только если ошибка явно про недоступность инструмента
+  (нет инструмента/недоступен/не установлен/not found...), транзиентные
+  ошибки — повтор как раньше.
+- Интеграция: `core/autonomy_runtime_factory.py` передаёт `TaskRevisionPolicy()`
+  в TaskController; `identity/goal_plan_generator.py::_sanitize_tasks` прогоняет
+  план через выполнимость+фазы после генерации (отсев невыполнимых, вставка
+  недостающей фазы; guard MIN_TASKS с фолбэком).
+TDD: `test_plan_feasibility.py` (8), `test_goal_planner_revise.py` (3),
+`test_task_revision.py` (5) — GREEN. Регресс: final_regression_suite 7 passed;
+orchestrator/curiosity/decision/goal-стыки PASS. Этаж 6 закрыт (М-1+М-2).
+Закрыт блок «взросление характера» (этаж 5). Характер теперь взрослеет от
+собственного накопленного опыта черты (evidence_count), а не статичен:
+- `identity/personality_lifecycle.py`: новый узел пересчёта `_status_from_strength_ev`
+  использует `_effective_thresholds(evidence_count)` — с зрелостью
+  (`evidence_count // EVIDENCE_STEP`, EVIDENCE_STEP=3) порог ACTIVE мягко
+  снижается (−0.02 за ступень, потолок 0.72: сформированная черта прочнее
+  держится в ACTIVE), порог WEAKENING растёт (+0.02, потолок 0.50: зрелый
+  характер быстрее отпускает исчезающие черты), EMERGING неизменен.
+- `decay()`: `_decay_maturity_factor` (−0.05 за ступень, потолок 0.5) — зрелые
+  черты затухают медленнее.
+- Обратная совместимость: старый `_status_from_strength` = `_status_from_strength_ev(s, 0)`
+  (базовые константы) — при отсутствии опыта поведение идентично прежнему.
+- Все операции с чертой (promote/reinforce/contradict/decay) используют опыт
+  своей черты. Решение Эдди: пер-чертовое взросление по evidence_count (не
+  глобальный developmental_age) + мягкая адаптация.
+TDD `test_personality_adulting.py` (6: сдвиг порогов, back-compat, weakening
+вверх, promote по зрелости, decay медленнее у зрелых) GREEN. Авторитетный
+регресс final_regression_suite 7 passed. Pre-existing (не наши регрессии):
+test_behavior_learning (EvidenceConsolidator-сигнатура) и test_production_runtime
+(RESEARCH-tool context=None) падают и на базе — вне скоупа П-3.
+
+### [АКТУАЛЬНО] А-1 (этаж 12): собственные проекты — устойчивый трек прогресса как обозримая сущность
+Поверх А-2 (ResearchTracker) закрыт блок А-1 «собственные проекты: устойчивое
+ведение долгой исследовательской задачи, трек прогресса». Долгая задача теперь
+ведётся не как разовый интерес, а как наблюдаемый проект:
+- `identity/research_tracker.py`: добавлена читаемая сводка прогресса
+  `progress_text()` (тема, источников, шагов, заметок) и модульный хелпер
+  `current_research_text(self_state)` (только чтение, без изменения состояния).
+- Наблюдаемость в промптах `core/prompts.py`: в обоих сборщиках
+  (build_quick_conversation_prompt + build_system_prompt) добавлен блок
+  «МОЙ ТЕКУЩИЙ ПРОЕКТ/ИССЛЕДОВАНИЕ», показывающий текущее исследование —
+  агент видит глубину/прогресс своего долгого проекта.
+TDD: `test_research_tracker.py` расширен progress_text (12 всего), а
+`test_mir_world_integration.py` — рендер текущего проекта в обоих промптах и
+readonly-хелпер (все GREEN). Регресс: final_regression_suite 7 passed.
+Этаж 12 «Агентность»: А-1 и А-2 закрыты. Этаж 11 «Совместная жизнь» —
+НЕ трогается без отдельного решения Эдди. Этаж 9 (Инструменты) — ждёт
+решения совета по безопасности.
+
+### [АКТУАЛЬНО] А-2 (этаж 12): исследовательская деятельность как постоянный цикл
+Закрыт блок А-2 «исследовательская деятельность как постоянная: цикл нашёл
+тему → углубился → зафиксировал → следующая». До этого любопытство было
+одноразовой вспышкой: CuriosityDirector создавал цель и забывал тему
+(daily_llm_topic кэшировал в RAM, пост-рестарта терялся), не было памяти
+текущего исследования и цикла углубления.
+
+Добавлено:
+- `identity/research_tracker.py::ResearchTracker` — персистентный трекер
+  текущего исследования: `start(topic, source)` (тот же topic = продолжение,
+  новый = сброс), `current()`, `record_findings(num_sources, num_steps)`,
+  `add_note(text, type)`, `should_deepen()` (глубина < порога
+  MIN_SOURCES_THRESHOLD=4 → углубляться), `resume_candidate()` (есть
+  незавершённое и не хватило глубины), `complete()` (перенос в
+  research_history). Состояние: `self_state.current_research` и
+  `self_state.research_history`.
+- Интеграция в цикл автономии (`core/autonomy_orchestrator.py::tick`):
+  если есть незавершённое исследование, как продолжается оно
+  (`curiosity.topic_goal(текущая тема)`), иначе — прежний путь
+  (daily_llm_topic/select_topic). Приоритет продолжения перед новой темой.
+- Завершение: в `core/agent_loop.py` при достижении целью COMPLETED, если
+  завершённая тема совпадает с текущим исследованием (с учётом префикса
+  "изучить тему: "), `research_tracker.complete()` — исследование уходит в
+  историю, следующий тик начинает новую тему.
+- Проводка: `core/autonomy_runtime_factory.py` ставит общий ResearchTracker
+  на orchestrator/runtime/agent_loop.
+TDD `test_research_tracker.py` (9: создание/продолжение/сброс, накопление,
+заметки, порог глубины, complete→history, resume_candidate) GREEN.
+Регресс: final_regression_suite 7 passed, test_goal_preemption /
+test_world_model / test_mir_world_integration / П-1b/П-2 тесты — PASS.
+Этаж 12: база активна; А-1 (собственные проекты: устойчивый трек прогресса
+долгой задачи) продолжает этот фундамент.
+
+### [АКТУАЛЬНО] Этаж 8 закрыт: МИР-1 (история процессов) + МИР-2 (структурная мир-модель)
+Закрыты оба блока этажа 8 «Мир».
+- **МИР-1** `core/world_process_history.py::WorldProcessHistory`: скользящее окно
+  снимков топ-процессов, частота появления (frequency/frequent_processes),
+  читаемая сводка `summary_text()` («за последние снимки чаще всего: …»). Только
+  снимки со статусом OK, анонимные имена, `deque(maxlen=window)`. Интеграция:
+  `core/autonomous_runtime.py::_probe_world_on_pressure` — после каждого снимка
+  `.record(snapshot)` и, если есть история, сводка дописывается в текст события
+  WORLD_SNAPSHOT. Конструктору runtime добавлен параметр `world_process_history`
+  (дефолт None → создаётся свой), обратная совместимость.
+- **МИР-2** `core/world_model.py`: `build_folders_model` (папки проекта с
+  подписями FOLDER_MEANING и флагом exists), `build_world_model` (структура
+  {root, folders[], pc{ram/cpu/disk/top_processes}} из снимка WorldProbe),
+  `world_model_text` (читаемое проецирование), `ensure_world_model` (сохранение
+  в self_state). Интеграция: в `core/autonomy_runtime_factory` (рядом с
+  ensure_world_description) и в оба промпта `core/prompts.py`
+  (build_quick_conversation_prompt + build_system_prompt) добавлен блок
+  «окружение (структурная модель мира)»; `world_model` добавлен в
+  `core/self_state_interface.py`.
+TDD: `test_world_process_history.py` (5), `test_world_model.py` (7),
+`test_mir_world_integration.py` (5: оба промпта рендерят модель без краха,
+пустая модель не падает) — GREEN. py_compile всех затронутых модулей OK.
+Байт-проверка UTF-8 без BOM выполена. Этаж 9 (Инструменты) требует решения
+совета по безопасности — пропущен; далее этаж 12 (Агентность).
+
+### [АКТУАЛЬНО] М-1: конкуренция целей — вытеснение низкоприоритетных активных (этаж 6)
+Ядро lifecycle целей уже имело ранжирование кандидатов
+(`GoalManager.rank_candidates`, веса priority*0.45 + motivation*0.35 +
+confidence*0.20) и лимит активных целей `MAX_ACTIVE_GOALS=3`. Чего не было —
+вытеснения: при полном слоте новая цель безусловно отклонялась (DEFERRED),
+низкоприоритетная активная не уступала место более приоритетной.
+
+Добавлено (без изменения существующего `activate` — обратная совместимость):
+- `identity/goal_manager.py::activate_with_preemption(value, plan=None)` —
+  при свободном слоте ведёт себя как `activate`; при полном, если новая цель
+  приоритетнее самой слабой активной, слабая переводится в PAUSED и новая
+  активируется; иначе DEFERRED. Общая оценочная функция `_goal_score`, та же,
+  что в `rank_candidates`.
+- Интеграция в живой контур: `core/agent_loop.py` — оба места активации
+  (`activate` из review-пути ~483 и из `run_once` ~526) переведены на
+  `activate_with_preemption`, т.е. конкуренция целей работает в автономном цикле.
+- Старый `GoalManager.activate` сохранён (используется decision_core и тестами)
+  — минимальный дифф, обратная совместимость.
+TDD `test_goal_preemption.py` (4 кейса: вытеснение слабого, DEFERRED для
+слабого новичка, равенство без вытеснения, свободный слот без вытеснения)
+GREEN. Регресс: test_goal_generation, test_p0b_conversation_goal,
+test_orchestrator_local — PASS. База этажа 6: MOTIVATION/GoalCore остаётся,
+М-2 (полное планирование) в бэклоге.
+
+### [АКТУАЛЬНО] П-1b: dict-формат предпочтений и закрытие точки риска claim-валидации (этаж 5, блок П-1)
+`self_state.preferences` обогащён: вместо плоских строк-сигнатур
+(`"research:action_method:RESEARCH"`) пишется словарь `{label, context,
+method, share, total, source, ts}`. Обратная совместимость: старые строки
+валидны, единый хелпер `identity/preference_label.py` показывает их как есть.
+Точки конвейера (в рабочем дереве с 03.09): `proposal.py::meta`,
+`action_preference_detector` (task+meta в res), `agent_loop` (meta в Proposal),
+`identity_manager::_evaluate_preference` (dict-запись + дедуп по method),
+read-точки (prompts/self_concept/current_mind_state/agent). TDD:
+`test_preference_dict_format.py`, `test_preference_detector.py` GREEN.
+
+Дополнительно в этой сессии закрыта точка риска из плана П-1b (dict-элемент
+ломает сравнения, уходившие через `str(dict)`-repr):
+- `core/self_claim_validator.py::_extract_compare_text` — dict→label (иначе context+method, иначе str);
+  `_validate_list`/`SUPPORTED.value` используют его.
+- `core/claim_engine.py::_extract_value_text` — то же для registry-пути `_evaluate_against_self_state`.
+- `core/predicate_registry.py::_value_text` — ветки SCALAR/COLLECTION сравнивают
+  по читаемому тексту, а не по repr(dict).
+- `core/agent.py` (core_selector путь, ~4151–4176) — в choice-словарь добавлен
+  `context_type` (move/activity), чтобы детектор получал осмысленный контекст.
+Тест `test_claim_validator_pref_dict.py` (6 кейсов: validator dict/без label/нерелевант,
+claim_engine dict/по методу/repr-не-протекает) GREEN. Регресс: test_habit_pattern_rebuild,
+test_pattern_habit, test_life_prompt_blocks, test_life_rituals, test_semantic_judge,
+test_user_statement_detector — PASS. Кодировки UTF-8 без BOM. Без коммита (правило).
+
+### [АКТУАЛЬНО] П-1c: связка preference-контура с outbox-подсказками (этаж 5, блок П-1)
+`core/agent_loop.py::_process_identity_detectors`: при промоушене нового
+предпочтения (`category=="preference"` и `identity_result=="accepted"`) в
+outbox уходит читаемое сообщение «Заметил своё предпочтение: <label>».
+Label строится через `identity/preference_label.py::preference_label` из
+meta (task → иначе context/method). Если `self.outbox is None` — тихо
+пропускается (обратная совместимость, автономный режим без почты). Минимальный
+дифф, один стиль, импорт `preference_label` добавлен. TDD
+`test_pref_outbox_link.py` (3 кейса: новое предпочтение → сообщение в outbox
+с читаемым label; повторный detect без дубля outbox; outbox=None не ломает
+промоушн) GREEN. Регресс: test_orchestrator_local, test_claim_validator_pref_dict,
+test_preference_dict_format, test_preference_detector — PASS. UTF-8 без BOM.
+Без коммита. Блок П-1 (этаж 5) закрыт по под-шагам a/b/c.
+
+### [АКТУАЛЬНО] П-2: читаемые привычки действий (этаж 5)
+Ядро привычек действий (детектор → evidence → identity_manager →
+PersonalityLifecycle.promote → self_state["habits"]) уже было реализовано и
+подтверждено тестами (final_regression_suite test_unified_agent_loop /
+test_habit_pipeline, identity_manager.promote через единый lifecycle). Остаток
+для «полноты» — читаемость: в промптах привычки отображались как каша
+`["repeated_action:research"]`. Мин-дифф:
+- новый `identity/habit_label.py` — `habit_label(item)` (dict→label; иначе
+  `repeated_action:SOURCE`→«привык действовать через источник «SOURCE»»;
+  иначе строка как есть; обратная совместимость) и `format_habits(items)->list[str]`.
+- подключён в точках показа: `core/prompts.py` (привычки),
+  `core/agent.py` (снапшот + главный промпт), `core/current_mind_state.py` (render).
+  Само хранимое значение в self_state["habits"] НЕ меняется (сигнатура-строка
+  остаётся) — меняется только читаемый вид; риск для decision_core/speech-пути
+  нулевой. TDD `test_habit_format.py` (6 кейсов) GREEN; регресс
+  test_pattern_habit/test_habit_pattern_rebuild/preference_*/claim_val/
+  pref_outbox/orchestrator/life_* PASS. UTF-8 без BOM. Без коммита.
+
+## 03.09.2026
+
+### [АКТУАЛЬНО] П-1a: смягчён порог детекции предпочтений (этаж 5, блок П-1)
+`identity/action_preference_detector.py::ActionPreferenceDetector.MIN_CHOICES`:
+6 → 4 (минимальный дифф, одна строка). Порог доли `MIN_SHARE` (0.75) и
+проверка `loser_count > 0` (альтернатива хоть раз выбиралась — реальное
+сравнение) НЕ изменены. Разведка при RED показала: даже при MIN_CHOICES=3
+кейс 3/0 не срабатывает из-за требования сравнения, поэтому осмысленный
+минимум — 4 повтора (кейс 3/1 = share 0.75). TDD
+`test_preference_detector.py` (2 кейса: позитив 3/1, негатив 2/2) GREEN;
+регресс habit_pattern_rebuild / pattern_habit / evidence_consolidator PASS.
+Документация: ROADMAP_CLOSE_PLAN.md (дорожная карта П-1..П-3),
+PLANS\2026-09-03-P1a-preferences-threshold.md. Без коммита (правило).
+
 ## 30.08.2026
+
+### [АКТУАЛЬНО] Доделки этажей 4/8/9/13 по суперглубокому аудиту + консолидация Рубежа B (ночь 30.08 и 31.08)
+- **Этаж 4 — оживлена петля автономного обучения** (коммит ba8940b): `autonomy_orchestrator._advance_cognition()` вызывает `reflection_scheduler.event_happened(significant=True)` + `cognitive_processor.process_next()`, вызывается в `_execute_step` и в конце `tick()`. Автономный тик раньше НЕ продвигал cognition (агент.respond* вызывал apply_all_analyzed, автономный цикл — нет). TDD `test_autonomy_cognition_hook.py` GREEN; регресс test_orchestrator_local PASS.
+- **Этаж 7 — аудит-проблема СНЯТА (ложная)**: `dream_processor.record()` пишет DREAM/DREAM_INTERPRETATION события безусловно при сюжете; `snapshots_enabled` влияет только на снапшоты души. PROJECT_STATE п.14 переписан (коммит fad9ade).
+- **Этаж 8 — мир-проба дополнена CPU/топ-процессами** (коммит fad9ade): `world_probe.py` — `_cpu_percent()` (GetSystemTimes) и `_top_processes()` (CreateToolhelp32Snapshot + psapi); `probe()`/`snapshot_text()` обновлены (ключи cpu/top_processes), обратная совместимость сохранена. TDD `test_world_probe_extras.py` 5/5 GREEN.
+- **Этаж 9 — любопытство работает без DecisionCore** (коммит 7f0450b): в tick() пути без decision_core при отсутствии активных целей активируется `best_candidate()` (в т.ч. curiosity-кандидат) перед `_decide()`. Ранее цель любопытства застревала CANDIDATE→NO_MOTIVATION (goal_generator работал с motivation-кандидатами). TDD `test_curiosity_without_decision_core.py` GREEN; регресс PASS.
+- **Этаж 13 — листинг и поиск структуры кода** (коммит e3e437c): `FilesystemExecutor.list(path)` + `search(pattern)` (безопасный рекурсивный поиск по имени с лимитом). Сквозная интеграция типов LIST_DIR/SEARCH_FILES: VALID_ACTIONS, ROUTES→filesystem, ToolExecutionPolicy (`_list_dir`/`_search_files`), ToolRunner._execute_filesystem, триггеры ActionPlanner. TDD `test_filesystem_list_search.py` 6/6; регресс usage_hooks 4/4, orchestrator_local PASS.
+- **Рубеж B «Живёт сутки» — ПРИЁМКА ALL PASS 9/9** (`test_rubezh_b.py`): суточный прогон (PID 39972, старт 29.08 22:26) финишировал штатно 30.08 22:27 (`NIGHT RUN END` + soul diff: events 1539→1583, evidence 59→63, knowledge 167→175, diary 8→17). Чек-лист: прогон до END, консолидация без ошибки (44 события, выводов 3, llm_used=True), облачных вызовов 19 (≤40; лог многопрогонный — учёт по последнему счётчику #19 перед END), watchdog без THROTTLED, LIFE_CYCLE=4 (переходы сна), ритуалы morning=1/evening=2, soul diff не пуст.
+- Остатки рубежа B (watchdog CPU, P2-b llama-воркер) — в статусе ожидания решения Эдди (N/A в облачном режиме).
+- **Примечание по журналу**: `logs/eddie_night.log` — многопрогонный накопительный (6+ NIGHT RUN END; `cloud call` счётчик перезапускается на старте процесса). Поэтому приёмка считает облачные вызовы по ПОСЛЕДНЕМУ номеру счётчика перед текущим END (=19), а не по числу строк (+146 из прошлых прогонов).
+- Все файлы UTF-8 без BOM; FFFD-маркеров нет. Данные прогонов (`belief_self_audit.json`, `reports/outbox.md`) НЕ коммитятся.
 
 ### [АУДИТ] Суперглубокий аудит всех этажей ROADMAP (30.08, субагенты + координатор)
 Читающий проход по этажам 1–15 (5 аудитов + кросс-проверка), БЕЗ правок кода.

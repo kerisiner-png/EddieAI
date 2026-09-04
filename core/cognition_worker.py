@@ -37,6 +37,8 @@ class CognitionWorker:
         self.last_result = None
         self.last_error = None
         self.processed_count = 0
+        self.max_restarts = 5
+        self.restart_count = 0
 
     def start(self):
         if (
@@ -100,12 +102,16 @@ class CognitionWorker:
     def wake(self):
         self._wake_event.set()
 
+    def _should_restart(self):
+        return self.restart_count < self.max_restarts
+
     def snapshot(self):
         return {
             "state": self.state,
             "processed_count": (
                 self.processed_count
             ),
+            "restart_count": self.restart_count,
             "last_result": self.last_result,
             "last_error": self.last_error,
         }
@@ -122,13 +128,32 @@ class CognitionWorker:
                 if result.get("status") != "EMPTY":
                     self.processed_count += 1
 
+                self.restart_count = 0
+                self.last_error = None
+                self.state = "RUNNING"
                 self._wake_event.clear()
 
             except Exception as exc:
                 self.last_error = str(exc)
-                self.state = "ERROR"
+                self.restart_count += 1
 
-                return
+                if not self._should_restart():
+                    self.state = "ERROR"
+                    return
+
+                self.state = "RETRYING"
+                self._wake_event.clear()
+
+                if self._stop_event.wait(
+                    min(
+                        self.poll_interval
+                        * self.restart_count,
+                        60.0,
+                    )
+                ):
+                    return
+
+                continue
 
             self._wake_event.wait(
                 self.poll_interval

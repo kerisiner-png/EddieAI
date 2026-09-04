@@ -297,6 +297,24 @@ class SelfClaimValidator:
             )
         )
 
+    @staticmethod
+    def _extract_compare_text(value) -> str:
+        if isinstance(value, dict):
+            label = value.get("label")
+            if isinstance(label, str) and label.strip():
+                return label
+            parts = []
+            ctx = value.get("context")
+            mtd = value.get("method")
+            if ctx:
+                parts.append(str(ctx))
+            if mtd:
+                parts.append(str(mtd))
+            if parts:
+                return " ".join(parts)
+            return str(value)
+        return str(value)
+
     def _validate_list(
         self,
         property_name: str,
@@ -319,8 +337,11 @@ class SelfClaimValidator:
             )
 
         for value in values:
+            compare_text = self._extract_compare_text(
+                value
+            )
             value_text = self._normalize(
-                str(value)
+                compare_text
             )
 
             if (
@@ -333,7 +354,7 @@ class SelfClaimValidator:
                 return SelfClaimResult(
                     status="SUPPORTED",
                     property=property_name,
-                    value=str(value),
+                    value=compare_text,
                     polarity="POSITIVE",
                     reason=(
                         "Утверждение совпадает "

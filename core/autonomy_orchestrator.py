@@ -880,6 +880,17 @@ class AutonomyOrchestrator:
                 if decision.get(
                     "should_act"
                 ):
+                    research_tracker = getattr(
+                        self, "research_tracker", None
+                    )
+                    resume_topic = None
+                    if research_tracker is not None:
+                        try:
+                            cand = research_tracker.resume_candidate()
+                            if cand is not None:
+                                resume_topic = cand.get("topic")
+                        except Exception:
+                            resume_topic = None
                     memory = getattr(
                         self.agent,
                         "memory",
@@ -894,20 +905,24 @@ class AutonomyOrchestrator:
                             ) or ""
                         except Exception:
                             recent = ""
-                    try:
-                        topic = (
-                            curiosity
-                            .daily_llm_topic(
-                                recent_life=recent
+                    if resume_topic:
+                        curiosity.topic_goal(resume_topic)
+                        curiosity.mark_acted()
+                    else:
+                        try:
+                            topic = (
+                                curiosity
+                                .daily_llm_topic(
+                                    recent_life=recent
+                                )
                             )
+                        except Exception:
+                            topic = None
+                        curiosity.topic_goal(
+                            topic
+                            or curiosity.select_topic()
                         )
-                    except Exception:
-                        topic = None
-                    curiosity.topic_goal(
-                        topic
-                        or curiosity.select_topic()
-                    )
-                    curiosity.mark_acted()
+                        curiosity.mark_acted()
             except Exception as exc:
                 print(
                     "CURIOSITY_ERROR:",

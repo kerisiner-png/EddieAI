@@ -47,6 +47,13 @@ class PersonalityLifecycle:
     EMERGING_THRESHOLD = 0.55
     WEAKENING_THRESHOLD = 0.35
 
+    EVIDENCE_STEP = 3
+    MATURATION_STEP = 0.02
+    MIN_ACTIVE_THRESHOLD = 0.72
+    MAX_WEAKENING_THRESHOLD = 0.50
+    DECAY_MATURITY_STEP = 0.05
+    MIN_DECAY_FACTOR = 0.5
+
     def __init__(
         self,
         self_state,
@@ -90,23 +97,101 @@ class PersonalityLifecycle:
             f"{value.strip().lower()}"
         )
 
-    def _status_from_strength(
+    def _maturity(
+        self,
+        evidence_count: int,
+    ) -> int:
+        """
+        Зрелость черты по накопленному опыту.
+
+        Каждые EVIDENCE_STEP подтверждений поднимают
+        зрелость на одну ступень. Зрелая черта прочнее
+        держится в ACTIVE и быстрее отпускает слабые.
+        """
+        return max(
+            0,
+            evidence_count // self.EVIDENCE_STEP,
+        )
+
+    def _effective_thresholds(
+        self,
+        evidence_count: int,
+    ):
+        maturity = self._maturity(
+            evidence_count
+        )
+
+        active = max(
+            self.MIN_ACTIVE_THRESHOLD,
+            self.ACTIVE_THRESHOLD
+            - self.MATURATION_STEP * maturity,
+        )
+
+        weakening = min(
+            self.MAX_WEAKENING_THRESHOLD,
+            self.WEAKENING_THRESHOLD
+            + self.MATURATION_STEP * maturity,
+        )
+
+        return (
+            active,
+            self.EMERGING_THRESHOLD,
+            weakening,
+        )
+
+    def _decay_maturity_factor(
+        self,
+        evidence_count: int,
+    ) -> float:
+        """
+        Множитель затухания от зрелости.
+
+        Зрелая черта (много подтверждений) затухает
+        медленнее: фактор меньше 1.0 и стремится
+        к MIN_DECAY_FACTOR с ростом опыта.
+        """
+        maturity = self._maturity(
+            evidence_count
+        )
+
+        return max(
+            self.MIN_DECAY_FACTOR,
+            1.0 - self.DECAY_MATURITY_STEP * maturity,
+        )
+
+    def _status_from_strength_ev(
         self,
         strength: float,
+        evidence_count: int,
     ) -> str:
-        if strength >= self.ACTIVE_THRESHOLD:
+        active, emerging, weakening = (
+            self._effective_thresholds(
+                evidence_count
+            )
+        )
+
+        if strength >= active:
             return "ACTIVE"
 
-        if strength >= self.EMERGING_THRESHOLD:
+        if strength >= emerging:
             return "EMERGING"
 
-        if strength >= self.WEAKENING_THRESHOLD:
+        if strength >= weakening:
             return "WEAKENING"
 
         if strength > 0:
             return "DORMANT"
 
         return "REJECTED"
+
+    def _status_from_strength(
+        self,
+        strength: float,
+    ) -> str:
+        return self._status_from_strength_ev(
+            strength,
+            0,
+        )
 
     def get(
         self,
@@ -174,8 +259,9 @@ class PersonalityLifecycle:
             trait = TraitState(
                 field=field,
                 value=value,
-                status=self._status_from_strength(
-                    strength
+                status=self._status_from_strength_ev(
+                    strength,
+                    evidence_count,
                 ),
                 strength=max(
                     0.0,
@@ -213,8 +299,9 @@ class PersonalityLifecycle:
 
             if trait.status != "REJECTED":
                 trait.status = (
-                    self._status_from_strength(
-                        trait.strength
+                    self._status_from_strength_ev(
+                        trait.strength,
+                        trait.evidence_count,
                     )
                 )
 
@@ -292,8 +379,9 @@ class PersonalityLifecycle:
         trait.last_used = now
 
         trait.status = (
-            self._status_from_strength(
-                trait.strength
+            self._status_from_strength_ev(
+                trait.strength,
+                trait.evidence_count,
             )
         )
 
@@ -352,8 +440,9 @@ class PersonalityLifecycle:
             trait.status = "DORMANT"
         else:
             trait.status = (
-                self._status_from_strength(
-                    trait.strength
+                self._status_from_strength_ev(
+                    trait.strength,
+                    trait.evidence_count,
                 )
             )
 
@@ -392,6 +481,9 @@ class PersonalityLifecycle:
             confidence_before = float(
                 raw["confidence"]
             )
+            evidence_count = int(
+                raw.get("evidence_count", 0)
+            )
 
             if status_before == "ACTIVE":
                 delta = amount * 0.5
@@ -403,6 +495,11 @@ class PersonalityLifecycle:
                 delta = amount * 2.0
             else:
                 delta = amount
+
+            # зрелый характер затухает медленнее
+            delta *= self._decay_maturity_factor(
+                evidence_count
+            )
 
             raw["strength"] = max(
                 0.0,
@@ -416,8 +513,9 @@ class PersonalityLifecycle:
             )
 
             raw["status"] = (
-                self._status_from_strength(
-                    raw["strength"]
+                self._status_from_strength_ev(
+                    raw["strength"],
+                    evidence_count,
                 )
             )
 

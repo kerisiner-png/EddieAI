@@ -232,6 +232,43 @@ class GoalPlanner:
             status="SKIPPED",
         )
 
+    def revise(
+        self,
+        goal: str,
+        title: str,
+        reason: str = "",
+    ):
+        """
+        Пересмотр плана после невыполнимого шага.
+
+        Помечает текущий невыполнимый/провалившийся
+        шаг как SKIPPED и возвращает следующий
+        выполнимый (PENDING) шаг. Завершённые шаги
+        не трогает.
+        """
+
+        for task in self.tasks(goal):
+            if (
+                task.title.strip().lower()
+                != title.strip().lower()
+            ):
+                continue
+
+            if task.status in {
+                "COMPLETED",
+                "SKIPPED",
+            }:
+                break
+
+            self._update_task(
+                goal,
+                title,
+                status="SKIPPED",
+            )
+            break
+
+        return self.next_task(goal)
+
     def update_progress(
         self,
         goal: str,

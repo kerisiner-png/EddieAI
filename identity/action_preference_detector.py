@@ -13,7 +13,7 @@ class ActionPreferenceDetector:
     Detector does not modify self_state.
     """
 
-    MIN_CHOICES = 6
+    MIN_CHOICES = 4
     MIN_SHARE = 0.75
 
     def __init__(
@@ -133,6 +133,16 @@ class ActionPreferenceDetector:
                 )
             ).strip() or "unknown"
 
+            task = choice.get(
+                "task"
+            )
+
+            task = (
+                str(task).strip()
+                if isinstance(task, str)
+                else None
+            )
+
             signature = (
                 context_type,
                 tuple(normalized_options),
@@ -143,6 +153,7 @@ class ActionPreferenceDetector:
                 "context_type": context_type,
                 "options": normalized_options,
                 "selected": selected,
+                "task": task,
             })
 
         return groups
@@ -273,4 +284,25 @@ class ActionPreferenceDetector:
                 3,
             ),
             "created_evidence": created,
+            "meta": {
+                "context": context_type,
+                "method": winner,
+                "share": round(
+                    share,
+                    3,
+                ),
+                "total": total,
+                "task": (
+                    None
+                    if not choices
+                    else next(
+                        (
+                            c["task"]
+                            for c in choices
+                            if c["task"]
+                        ),
+                        None,
+                    )
+                ),
+            },
         }

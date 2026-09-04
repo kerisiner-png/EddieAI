@@ -1,0 +1,90 @@
+allowlist:
+  - name: git_status
+    pattern: "^git\\s+status"
+    category: git
+  - name: git_diff
+    pattern: "^git\\s+diff"
+    category: git
+  - name: git_log
+    pattern: "^git\\s+log(\\s|$)"
+    category: git
+  - name: git_add
+    pattern: "^git\\s+add\\s+"
+    category: git
+  - name: git_commit
+    pattern: "^git\\s+commit\\s+"
+    category: git
+  - name: git_branch
+    pattern: "^git\\s+branch(\\s|$)"
+    category: git
+  - name: git_checkout
+    pattern: "^git\\s+checkout\\s+"
+    category: git
+  - name: git_pull
+    pattern: "^git\\s+pull(\\s|$)"
+    category: git
+  - name: git_status_short
+    pattern: "^git\\s+status\\s+-s"
+    category: git
+  - name: get_process
+    pattern: "^Get-Process(\\s|$)"
+    category: system
+  - name: get_childitem
+    pattern: "^Get-ChildItem(\\s|$)"
+    category: filesystem
+  - name: get_psdrive
+    pattern: "^Get-PSDrive(\\s|$)"
+    category: system
+  - name: python_run
+    pattern: "^python(\\s|$)"
+    category: scripts
+  - name: python3_run
+    pattern: "^python3(\\s|$)"
+    category: scripts
+  - name: pip_list
+    pattern: "^pip(\\s+list|$)"
+    category: scripts
+  - name: start_process
+    pattern: "^Start-Process(\\s|$)"
+    category: programs
+  - name: echo
+    pattern: "^echo(\\s|$)"
+    category: system
+  - name: cat_type
+    pattern: "^(cat|type)(\\s|$)"
+    category: filesystem
+  - name: dir_ls
+    pattern: "^(dir|ls)(\\s|$)"
+    category: filesystem
+
+denylist:
+  - name: format_volume
+    pattern: "Format-Volume"
+    reason: "Форматирование диска — всегда блок"
+  - name: remove_recursive_system
+    pattern: "Remove-Item.*-Recurse.*C:\\\\"
+    reason: "Рекурсивное удаление в корне диска"
+  - name: remove_recursive_windows
+    pattern: "Remove-Item.*-Recurse.*Windows"
+    reason: "Удаление системных файлов"
+  - name: set_service
+    pattern: "Set-Service"
+    reason: "Изменение сервисов — через разрешение Эдди"
+  - name: set_item_property
+    pattern: "Set-ItemProperty"
+    reason: "Изменение свойств — через разрешение Эдди"
+  - name: remove_item_recursive
+    pattern: "Remove-Item.*-Recurse"
+    reason: "Рекурсивное удаление — через разрешение Эдди"
+  - name: del_recursive
+    pattern: "(del|rd)\\s.*/[Ss]"
+    reason: "Рекурсивное удаление — через разрешение Эдди"
+  - name: format_drive
+    pattern: "format\\s+[a-z]:"
+    reason: "Форматирование диска — всегда блок"
+  - name: diskpart_clean
+    pattern: "diskpart.*clean"
+    reason: "Очистка диска — всегда блок"
+  - name: shutdown_force
+    pattern: "(shutdown|Stop-Computer).*(/f|/Force|-Force|\\s-f)"
+    reason: "Принудительное выключение системы"

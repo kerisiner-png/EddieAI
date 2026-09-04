@@ -15,6 +15,9 @@ VALID_ACTIONS = {
     "WEB_SEARCH",
     "OPEN_URL",
     "WAIT",
+    "SCREEN_CONTROL",
+    "LAUNCH_APP",
+    "INSTALL_PACKAGE",
 }
 
 

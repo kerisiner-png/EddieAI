@@ -1,6 +1,50 @@
 from textwrap import dedent
 
 from core.self_concept_policy import build_self_concept_policy
+from identity.preference_model import format_preferences_rich
+from identity.habit_label import format_habits
+from core.world_model import world_model_text
+from identity.research_tracker import current_research_text
+from identity.self_model import (
+    self_model_text,
+    self_model_summary_text,
+)
+from identity.conscious_observer import (
+    conscious_state_text,
+    conscious_state_summary_text,
+)
+
+
+def _shared_activity_text(self_state):
+    activity = self_state.get(
+        "current_shared_activity"
+    )
+    if not activity or not isinstance(activity, dict):
+        return None
+    if activity.get("status") != "active":
+        return None
+    parts = [
+        f"Тип: {activity.get('type', '?')}"
+    ]
+    if activity.get("title"):
+        parts.append(
+            f"Название: {activity['title']}"
+        )
+    return (
+        "ТЕКУЩАЯ СОВМЕСТНАЯ АКТИВНОСТЬ: "
+        + ", ".join(parts)
+    )
+
+
+def _shared_activity_summary(self_state):
+    activity = self_state.get(
+        "current_shared_activity"
+    )
+    if not activity or not isinstance(activity, dict):
+        return None
+    if activity.get("status") != "active":
+        return None
+    return activity.get("type", "?")
 
 
 def _active_personality_traits(self_state):
@@ -96,6 +140,11 @@ def build_quick_conversation_prompt(
         None,
     )
 
+    world_model = self_state.get(
+        "world_model",
+        None,
+    )
+
     if affective_state is None:
         affective_state = {
             "emotions": {},
@@ -142,12 +191,26 @@ def build_quick_conversation_prompt(
         )}.
 
         Твои текущие интересы: {interests}
-        Твои предпочтения: {preferences}
+        Твои предпочтения: {format_preferences_rich(preferences, interests)}
         Твои убеждения: {beliefs}
         Твои активные цели: {goals}
 
         ГДЕ ТЫ ЖИВЁШЬ:
         {world_description or 'нет данных о месте обитания'}
+
+        ТВОЁ ОКРУЖЕНИЕ (структурная модель мира):
+        {world_model_text(world_model) or 'структурная модель ещё не построена'}
+
+        МОЙ ТЕКУЩИЙ ПРОЕКТ/ИССЛЕДОВАНИЕ:
+        {current_research_text(self_state) or 'сейчас нет активного проекта'}
+
+        МОИ СПОСОБНОСТИ И ОГРАНИЧЕНИЯ:
+        {self_model_text(self_state) or 'модель себя ещё не собрана'}
+
+        МОЁ СОСТОЯНИЕ СОЗНАНИЯ:
+        {conscious_state_text(self_state) or 'осознанное самонаблюдение ещё не проведено'}
+
+        {_shared_activity_text(self_state) or ''}
 
         ТЕКУЩЕЕ ФУНКЦИОНАЛЬНОЕ ЭМОЦИОНАЛЬНОЕ СОСТОЯНИЕ:
 
@@ -387,6 +450,11 @@ def build_system_prompt(
         [],
     )
 
+    world_model = self_state.get(
+        "world_model",
+        None,
+    )
+
     active_traits = _active_personality_traits(
         self_state
     )
@@ -405,10 +473,15 @@ def build_system_prompt(
         - базовые ценности: {values}
         - активные черты личности: {active_traits}
         - интересы: {interests}
-        - предпочтения: {preferences}
-        - привычки: {habits}
+        - предпочтения: {format_preferences_rich(preferences, interests)}
+        - привычки: {', '.join(format_habits(habits)) if format_habits(habits) else habits}
         - убеждения: {beliefs}
         - цели: {goals}
+        - окружение (структурная модель мира): {world_model_text(world_model) or 'нет данных'}
+        - текущий проект/исследование: {current_research_text(self_state) or 'нет активного'}
+        - самооценка (способности и ограничения): {self_model_summary_text(self_state) or 'модель себя ещё не собрана'}
+        - осознанное состояние: {conscious_state_summary_text(self_state) or 'самонаблюдение ещё не проведено'}
+        - совместная активность: {_shared_activity_summary(self_state) or 'нет'}
 
         ВАЖНОЕ РАЗДЕЛЕНИЕ:
 

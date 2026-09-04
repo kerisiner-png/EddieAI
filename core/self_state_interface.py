@@ -128,6 +128,21 @@ class SelfStateInterface:
                 None,
             ),
 
+            "world_model": self_state.get(
+                "world_model",
+                None,
+            ),
+
+            "self_model": self_state.get(
+                "self_model",
+                None,
+            ),
+
+            "conscious_state": self_state.get(
+                "conscious_state",
+                None,
+            ),
+
             "preferences": self_state.get(
                 "preferences",
                 [],

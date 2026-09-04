@@ -68,6 +68,8 @@ from identity.reflection_scheduler import ReflectionScheduler
 from identity.self_consistency import SelfConsistency
 from identity.self_reflection import SelfReflection
 from identity.self_state import SelfState
+from identity.preference_label import format_preferences
+from identity.habit_label import format_habits
 from core.dialogue_memory import (
     DialogueMemory,
     is_degradation_answer,
@@ -672,8 +674,8 @@ class Agent:
                 ),
                 "values": values,
                 "interests": interests,
-                "preferences": preferences,
-                "habits": habits,
+                "preferences": format_preferences(preferences),
+                "habits": format_habits(habits),
                 "beliefs": beliefs,
                 "goals": goals,
             }
@@ -1097,10 +1099,10 @@ Interests:
 {self.self_state.get("interests", [])}
 
 Preferences:
-{self.self_state.get("preferences", [])}
+{format_preferences(self.self_state.get("preferences", []))}
 
 Habits:
-{self.self_state.get("habits", [])}
+{format_habits(self.self_state.get("habits", []))}
 
 Beliefs:
 {self.self_state.get("beliefs", [])}
@@ -4160,6 +4162,9 @@ Respond briefly and naturally.
 
                                 "selected":
                                     selection.selected.action_type,
+
+                                "context_type":
+                                    selected_type,
                             },
                         },
                         ensure_ascii=False,

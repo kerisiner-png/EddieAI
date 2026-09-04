@@ -1,6 +1,7 @@
 import json
 
 from identity.llm_access import CloudFirstLlm
+from identity.plan_feasibility import PlanFeasibility
 
 
 MODEL_OPTIONS = {
@@ -26,8 +27,14 @@ class GoalPlanGenerator:
         self,
         goal_planner,
         model_orchestrator=None,
+        feasibility=None,
     ):
         self.goal_planner = goal_planner
+        self.feasibility = (
+            feasibility
+            if feasibility is not None
+            else PlanFeasibility()
+        )
         self.llm = CloudFirstLlm(
             model_orchestrator
         )
@@ -110,15 +117,71 @@ class GoalPlanGenerator:
         if raw:
             tasks = self._parse_tasks(raw)
 
+        tasks = self._sanitize_tasks(
+            goal,
+            tasks,
+        )
+
         if not tasks:
             tasks = self._fallback(
                 goal
+            )
+
+            tasks = self._sanitize_tasks(
+                goal,
+                tasks,
             )
 
         return self.goal_planner.create_plan(
             goal=goal,
             tasks=tasks,
         )
+
+    def _sanitize_tasks(
+        self,
+        goal: str,
+        tasks: list[str],
+    ) -> list[str]:
+        """
+        Прогон плана через оценку выполнимости
+        и декомпозицию фаз.
+
+        Отсекает шаги без доступного инструмента
+        и добавляет недостающие выполнимые фазы.
+        """
+
+        if not tasks:
+            return []
+
+        feasible, _ = self.feasibility.assess(
+            goal,
+            tasks,
+        )
+
+        if not feasible:
+            return []
+
+        phases = self.feasibility.ensure_phases(
+            goal,
+            feasible,
+        )
+
+        seen = set()
+        cleaned = []
+
+        for task in phases:
+            key = task.strip().lower()
+
+            if key in seen:
+                continue
+
+            seen.add(key)
+            cleaned.append(task)
+
+        if len(cleaned) < self.MIN_TASKS:
+            return []
+
+        return cleaned[: self.MAX_TASKS]
 
     def _parse_tasks(
         self,

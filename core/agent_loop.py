@@ -7,6 +7,7 @@ from identity.habit_pattern_detector import HabitPatternDetector
 from identity.belief_pattern_detector import BeliefPatternDetector
 from memory.events import Event
 from identity.proposal import Proposal
+from identity.preference_label import preference_label
 
 from dataclasses import dataclass
 
@@ -302,6 +303,11 @@ class AgentLoop:
                     confidence=confidence,
                     evidence=evidence,
                     evidence_count=evidence_count,
+                    meta=(
+                        item.get("meta")
+                        if category == "preference"
+                        else None
+                    ),
                 )
 
                 identity_result = (
@@ -310,6 +316,32 @@ class AgentLoop:
                         proposal
                     )
                 )
+
+                if (
+                    category == "preference"
+                    and identity_result == "accepted"
+                    and self.outbox is not None
+                ):
+                    meta = item.get("meta") or {}
+                    if isinstance(meta, dict):
+                        label = preference_label({
+                            "label": meta.get("task"),
+                            "context": (
+                                meta.get("context", "")
+                            ),
+                            "method": (
+                                meta.get("method", "")
+                            ),
+                        })
+                    else:
+                        label = item.get(
+                            "value",
+                            "",
+                        )
+                    self.outbox.send(
+                        f"Заметил своё предпочтение: "
+                        f"{label}"
+                    )
 
                 results.append({
                     "category": category,
@@ -448,7 +480,7 @@ class AgentLoop:
                 continue
 
             activation = (
-                self.goal_manager.activate(
+                self.goal_manager.activate_with_preemption(
                     goal_value
                 )
             )
@@ -491,7 +523,7 @@ class AgentLoop:
 
         ):
 
-            activation = self.goal_manager.activate(
+            activation = self.goal_manager.activate_with_preemption(
 
                 goal.value
 
@@ -587,7 +619,6 @@ class AgentLoop:
                     )
 
                 )
-
 
 
                 if (
@@ -1257,6 +1288,46 @@ class AgentLoop:
                         f"{goal.value}"
 
                     )
+
+                research_tracker = getattr(
+
+                    self, "research_tracker", None
+
+                )
+
+                if research_tracker is not None:
+
+                    try:
+
+                        current = research_tracker.current()
+
+                        if current is not None:
+
+                            goal_topic = goal.value
+
+                            if goal_topic.startswith(
+
+                                "изучить тему: "
+
+                            ):
+
+                                goal_topic = goal_topic[
+
+                                    len("изучить тему: "):
+
+                                ]
+
+                            if current.get(
+
+                                "topic"
+
+                            ) == goal_topic:
+
+                                research_tracker.complete()
+
+                    except Exception:
+
+                        pass
 
                 return LoopResult(
 

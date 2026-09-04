@@ -569,7 +569,7 @@ class PredicateRegistry:
             match = any(
                 self._match_value(
                     value,
-                    str(item),
+                    self._value_text(item),
                 )
                 for item in values
             )
@@ -790,6 +790,24 @@ class PredicateRegistry:
             }
 
         return None
+
+    @staticmethod
+    def _value_text(value) -> str:
+        if isinstance(value, dict):
+            label = value.get("label")
+            if isinstance(label, str) and label.strip():
+                return label
+            parts = []
+            ctx = value.get("context")
+            mtd = value.get("method")
+            if ctx:
+                parts.append(str(ctx))
+            if mtd:
+                parts.append(str(mtd))
+            if parts:
+                return " ".join(parts)
+            return str(value)
+        return str(value)
 
     @staticmethod
     def _match_value(

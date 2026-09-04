@@ -425,6 +425,23 @@ class SelfConsistency:
             )
 
             for existing in current_values:
+                if isinstance(existing, dict) and claim_type == "preference":
+                    candidates = [
+                        str(existing.get("label", "")),
+                        str(existing.get("method", "")),
+                        f"{existing.get('context', '')}:action_method:{existing.get('method', '')}",
+                    ]
+                    if any(
+                        self._normalize(c) == normalized
+                        for c in candidates
+                        if c
+                    ):
+                        return {
+                            **claim,
+                            "status": "consistent",
+                        }
+                    continue
+
                 if (
                     self._normalize(
                         str(existing)

@@ -6,6 +6,7 @@ import threading
 from memory.events import Event
 from core.dream_processor import DreamProcessor
 from core.world_probe import WorldProbe
+from core.world_process_history import WorldProcessHistory
 
 
 @dataclass
@@ -29,6 +30,7 @@ class AutonomousRuntime:
         dream_snapshots=True,
         curiosity=None,
         world_probe=None,
+        world_process_history=None,
     ):
         self.scheduler = scheduler
         self.memory = memory
@@ -42,6 +44,11 @@ class AutonomousRuntime:
             world_probe
             if world_probe is not None
             else WorldProbe()
+        )
+        self.world_process_history = (
+            world_process_history
+            if world_process_history is not None
+            else WorldProcessHistory()
         )
 
         self.state = "IDLE"
@@ -155,6 +162,43 @@ class AutonomousRuntime:
             except Exception:
                 pass
 
+    def _enqueue_shared_suggestion(self, suggestion):
+        if not suggestion:
+            return
+        now = datetime.now(timezone.utc)
+        last = getattr(
+            self, "_last_shared_suggestion_at", None
+        )
+        if last is not None:
+            elapsed = (
+                now - last
+            ).total_seconds()
+            if elapsed < 3600:
+                return
+        self._last_shared_suggestion_at = now
+        act_type = suggestion.get("activity_type", "")
+        ACTIVITY_LABELS = {
+            "movie": "посмотреть фильм",
+            "music": "послушать музыку",
+            "game": "поиграть вместе",
+            "coding": "поработать над кодом",
+            "reading": "почитать вместе",
+            "conversation": "поболтать",
+        }
+        label = ACTIVITY_LABELS.get(act_type, act_type)
+        text = (
+            f"Хочешь {label}? "
+            f"Мне кажется, это было бы приятно."
+        )
+        server = getattr(self, 'eddie_server', None)
+        if server and hasattr(
+            server, 'send_initiative'
+        ):
+            try:
+                server.send_initiative(text)
+            except Exception:
+                pass
+
     def _probe_world_on_pressure(self, force=False):
         try:
             if getattr(self, "world_probe", None) is None:
@@ -163,6 +207,14 @@ class AutonomousRuntime:
             if snapshot.get("status") != "OK":
                 return
             text = self.world_probe.snapshot_text(snapshot)
+            if self.world_process_history is not None:
+                self.world_process_history.record(snapshot)
+                hist_text = (
+                    self.world_process_history
+                    .summary_text()
+                )
+                if hist_text:
+                    text = text.rstrip(".") + ". " + hist_text + "."
             if self.memory is not None:
                 self.memory.remember(
                     Event.create(
@@ -579,6 +631,66 @@ class AutonomousRuntime:
                     ),
                 }
 
+        if hasattr(self, '_screen_perceiver') and self._screen_perceiver:
+            try:
+                self._screen_perceiver.tick()
+            except Exception:
+                pass
+
+            if hasattr(self, '_shared_life') and self._shared_life:
+                try:
+                    current = (
+                        self._screen_perceiver.get_current()
+                        if hasattr(
+                            self._screen_perceiver,
+                            'get_current',
+                        )
+                        else {}
+                    )
+                    if current.get("description"):
+                        obs = self._shared_life.observe(
+                            current["description"],
+                            eddie_present=True,
+                        )
+                        if (
+                            hasattr(self, '_shared_appraisal')
+                            and self._shared_appraisal
+                            and obs.get("is_shared")
+                        ):
+                            self._shared_appraisal.appraise(
+                                obs,
+                            )
+                except Exception:
+                    pass
+
+            if (
+                hasattr(self, '_shared_activity')
+                and self._shared_activity
+                and not self._shared_activity.is_active()
+            ):
+                try:
+                    suggestion = (
+                        self._shared_activity
+                        .suggest_activity(
+                            affective_state=getattr(
+                                self.agent,
+                                'affective_state',
+                                None,
+                            ),
+                            interests=getattr(
+                                self.agent.self_state,
+                                'get',
+                                lambda k, d=None: d,
+                            )("interests", []),
+                        )
+                    )
+                    if suggestion:
+                        self._enqueue_shared_suggestion(
+                            suggestion
+                        )
+                except Exception:
+                    pass
+
         if self.resource_watchdog is not None:
             try:
                 throttle = (
@@ -832,12 +944,13 @@ class AutonomousRuntime:
             if self._closed:
                 break
 
-            if self.state != "PAUSED":
-                self.tick_background()
+            try:
+                if self.state != "PAUSED":
+                    self.tick_background()
+            except Exception as exc:
+                self.last_error = str(exc)
+                self.state = "ERROR"
 
-            # Короткое ожидание нужно только для
-            # отзывчивого shutdown. Сам scheduler
-            # всё равно контролирует реальный интервал.
             self._loop_stop.wait(
                 timeout=1.0
             )

@@ -219,6 +219,75 @@ class GoalManager:
             ),
         }
 
+    def activate_with_preemption(
+        self,
+        value: str,
+        plan: list[str] | None = None,
+    ):
+        """
+        Активирует цель, при необходимости
+        вытеснив низкоприоритетную активную.
+
+        При полном слоте активных целей новая цель
+        активируется только если она приоритетнее
+        самой слабой активной — тогда та переводится
+        в PAUSED. Иначе — DEFERRED.
+        """
+
+        goal = self.get(value)
+
+        if goal is None:
+            raise ValueError(
+                f"Goal does not exist: {value}"
+            )
+
+        active = self.active()
+
+        if (
+            goal.status == "ACTIVE"
+            or len(active) < self.MAX_ACTIVE_GOALS
+        ):
+            return self.activate(
+                value,
+                plan=plan,
+            )
+
+        weakest = min(
+            active,
+            key=lambda g: self._goal_score(g),
+        )
+
+        if (
+            self._goal_score(goal)
+            <= self._goal_score(weakest)
+        ):
+            return {
+                "status": "DEFERRED",
+                "reason": (
+                    "Активные цели приоритетнее "
+                    "новой кандидатуры."
+                ),
+                "goal": goal,
+            }
+
+        weakest.status = "PAUSED"
+        weakest.updated_at = self._now()
+        self._write(weakest)
+
+        return self.activate(
+            value,
+            plan=plan,
+        )
+
+    @staticmethod
+    def _goal_score(goal) -> float:
+        return (
+            goal.priority * 0.45
+            + goal.motivation * 0.35
+            + goal.confidence * 0.20
+        )
+
+
     def ensure_plan(
         self,
         value: str,

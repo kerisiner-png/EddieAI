@@ -728,50 +728,51 @@ def test_production_runtime():
 # RUN
 # ============================================================
 
-run_test(
-    "1. Evidence independence",
-    test_evidence_independence,
-)
+if __name__ == "__main__":
+    run_test(
+        "1. Evidence independence",
+        test_evidence_independence,
+    )
 
-run_test(
-    "2. Personality lifecycle",
-    test_lifecycle,
-)
+    run_test(
+        "2. Personality lifecycle",
+        test_lifecycle,
+    )
 
-run_test(
-    "3. Habit pipeline + idempotency",
-    test_habit_pipeline,
-)
+    run_test(
+        "3. Habit pipeline + idempotency",
+        test_habit_pipeline,
+    )
 
-run_test(
-    "4. Belief pipeline + idempotency",
-    test_belief_pipeline,
-)
+    run_test(
+        "4. Belief pipeline + idempotency",
+        test_belief_pipeline,
+    )
 
-run_test(
-    "5. IdentityManager deduplication",
-    test_identity_manager,
-)
+    run_test(
+        "5. IdentityManager deduplication",
+        test_identity_manager,
+    )
 
-run_test(
-    "6. Unified AgentLoop",
-    test_unified_agent_loop,
-)
+    run_test(
+        "6. Unified AgentLoop",
+        test_unified_agent_loop,
+    )
 
-run_test(
-    "7. Production runtime",
-    test_production_runtime,
-)
+    run_test(
+        "7. Production runtime",
+        test_production_runtime,
+    )
 
 
-print()
-print("=" * 70)
-print(
-    f"RESULT: {passed} passed, {failed} failed"
-)
-print("=" * 70)
+    print()
+    print("=" * 70)
+    print(
+        f"RESULT: {passed} passed, {failed} failed"
+    )
+    print("=" * 70)
 
-if failed:
-    sys.exit(1)
+    if failed:
+        sys.exit(1)
 
-print("FINAL REGRESSION: PASS")
+    print("FINAL REGRESSION: PASS")

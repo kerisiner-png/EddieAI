@@ -5,6 +5,81 @@
 
 ## АКТУАЛЬНОЕ
 
+### [04.09 смена] Этаж 9 «Инструменты» — ЗАКРЫТ (ИНСТР-1/2/3); этаж 10 — закрыт (зрение)
+Решение Эдди 04.09: «нет никакого белого листа, все можно что захочет»
+→ вариант «Свобода, но без разрушительного»: всё разрешено, блокируется
+только анти-катастрофический denylist (форматирование, рекурсивное
+удаление системного, принудительное выключение). Allowlist отменён.
+- [x] ИНСТР-2 Программы (ДПК2): `identity/app_launcher.py::AppLauncher` —
+  свободный запуск программ, фильтр только `CommandPolicy.is_destructive`,
+  история в self_state.app_launch_history. TDD test_app_launcher (6) GREEN.
+- [x] ИНСТР-3 Установка ПО: `identity/software_install.py::SoftwareInstaller` —
+  любой менеджер (pip/winget/choco/npm), анти-катастрофический фильтр,
+  история в self_state.install_history. TDD test_software_install (8) GREEN.
+- [x] Команды/конфиг: `config/commands.yaml` — allowlist удалён из логики
+  (is_safe = не разрушительно), из denylist убраны блокировки установки/
+  сети (не разрушительно), добавлены format_drive/diskpart_clean/
+  shutdown_force. CommandPolicy.is_destructive/destructive_reason.
+- [x] Интеграция: action_executor (LAUNCH_APP/INSTALL_PACKAGE),
+  action_router (маршруты programs/install), tool_policy (_launch_app/
+  _install_package), tool_runner (_execute_programs/_execute_install),
+  factory (регистрация tools programs/install).
+- [x] Этаж 10 «Органы чувств» (зрение) — реализован ранее
+  (ScreenPerceiver/ScreenController/vision-модель zen-kimi-vision):
+  зафиксирован регрессом 26 тестов PASS (test_screen_perceiver/
+  test_screen_controller/tests/test_integration_vision/
+  tests/test_model_orchestrator_vision). ЭТАЖ 10 ЗАКРЫТ.
+- [x] Регресс: 62 теста инструментов + 79 общий PASS (final_regression 7,
+  orchestrator_local). Байт-проверка 14 файлов чистая. Без коммита.
+
+### [04.09 смена] Этаж 11 «Совместная жизнь» — ЗАКРЫТ ПОЛНОСТЬЮ (управляющий слой)
+Ядро (ЗР-1/ЗР-2) уже было; закрыты оба остатка:
+- [x] Интеграция команд совместных активностей с общением в реальном времени
+  (напоминание Эдди: «чат в прошлом, общение реального времени»): команды
+  применяются МГНОВЕННО в `handle_user_message` (`_apply_shared_activity_command`),
+  без ожидания автономного цикла. `identity/shared_activity_commands.py` —
+  детерминированный парсер «давай посмотрим…»/«включи музыку»/«поиграем…»/
+  «выключи, хватит». TDD test_shared_activity_commands (10) GREEN.
+- [x] Инициатива EddieAI: `identity/shared_activity_manager.py::SharedActivityManager`
+  — трекер активности (start/stop/current/summary, персистентный в
+  self_state.current_shared_activity) + `suggest_activity` по аффекту/интересам
+  с гашением недавнего; в tick — инициатива через send_initiative с кулдауном
+  3600с. TDD test_shared_activity_manager (14) GREEN.
+- [x] SharedAppraisal применяет intimacy/trust к self_state.relationships.Eddie
+  (кап 1.0). SharedLife в factory получил retrieval (build_feed ожил).
+  self_model.shared_life — реальные данные. Промпты: блок «ТЕКУЩАЯ СОВМЕСТНАЯ
+  АКТИВНОСТЬ» (quick) + bullet (system).
+- [x] Регресс: 52 теста PASS + orchestrator_local ALL PASS. Байт-проверка 12
+  файлов чистая. Без коммита.
+
+### [04.09 смена] Персистентный рантайм (persistent-runtime) — код готов, код pending добора
+- [x] Task 1: `core/fault_tolerance.py` + авто-сброс через `reset_error()` (7 тестов).
+- [x] Task 2: `autonomous_runtime._background_loop` отказоустойчив (2 теста).
+- [x] Task 3: `cognition_worker._run` bounded auto-restart (3 теста).
+- [x] Task 4: `core/eddie_service.py` Windows Service + `eddie_service_install.bat` (5 тестов).
+- [x] 17/17 новых тестов PASS; byte-check 9 файлов чисто.
+- [ ] ОТМАШКА ЭДДИ: установить pywin32 и зарегистрировать/поднять живую службу EddieAI.
+- [x] ОТДЕЛЬНАЯ проблема final_regression_suite 6 fails — ИСПРАВЛЕНА 04.09 (позже): module-level `run_test()` вызовы в `final_regression_suite.py` запускались при импорте pytest → каждый тест отрабатывал дважды → данные удваивались. Фикс: обёрнуто в `if __name__ == "__main__":`. 7/7 PASS.
+
+### [03.09 смена] Закрытие бэклогов этажей 5–10,12 → затем этаж 11 (дор. карта ROADMAP_CLOSE_PLAN.md)
+- [x] Дорожная карта закрытия составлена: `docs_engineer\ROADMAP_CLOSE_PLAN.md` (блоки П-1..П-3, М-1..М-2, В-1..В-2, МИР-1..МИР-2, ИНСТР-1..3, ЗР-1..ЗР-2, А-1..А-2), порядок по возрастанию этажа; ~12–23 смены.
+- [x] В-2 (этаж 7) исследование сознания — осознанное самонаблюдение/запрос состояний: `identity/conscious_observer.py::ConsciousObserver` собирает `self_state.conscious_state` (аффект + самооценка/self_model + последний дневник + недавние события + активный фокус); `ask(question)` — осознанный запрос по маркерам (аффект/способности/ограничения/работа/фокус); `history()` + CONSCIOUS_OBSERVATION-события в память. Решение Эдди: полный охват. Интеграция: factory (первый observe после self_model), оба промпта (блок «МОЁ СОСТОЯНИЕ СОЗНАНИЯ» / bullet «осознанное состояние»), self_state_interface (поле). Хелперы conscious_state_text / conscious_state_summary_text. Дневник-рефлексия не переделывался (уже был PersonalDiary+ритуалы). TDD `test_conscious_observer.py` GREEN + final_regression_suite 7 passed + orchestrator_local PASS. ЭТАЖ 7 ЗАКРЫТ (В-1+В-2).
+- [x] В-1 (этаж 7) полноценный self-model: структурированная персистентная модель себя `self_state.self_model` — `identity/self_model.py::SelfModel` (identity + capabilities из registry.describe + limitations [выключенные инструменты + статичные факты контура: perceptual/environment/resource] + current_state [возраст, Σ evidence_count по чертам, активные цели]). Решение Эдди: полный охват. Интеграция: factory (сборка после capabilities), оба промпта (блок «МОИ СПОСОБНОСТИ И ОГРАНИЧЕНИЯ» / bullet «самооценка»), self_state_interface (поле self_model). Хелперы self_model_text / self_model_summary_text. TDD `test_self_model.py` GREEN + final_regression_suite 7 passed + orchestrator_local PASS. Осталось на этаже 7: В-2 (исследование сознания).
+- [x] М-1 Конкуренция целей: `GoalManager.activate_with_preemption` (вытеснение слабейшей активной при полном слоте) + интеграция в `agent_loop` (2 места). TDD `test_goal_preemption.py` GREEN; регресс goal/orchestrator PASS.
+- [x] М-2 Полное многошаговое планирование (этаж 6): оценка выполнимости (`identity/plan_feasibility.py::PlanFeasibility` — классификация шагов через ActionPlanner + FeasibilityIssue при недоступном инструменте) + декомпозиция фаз (`ensure_phases`: добыча→анализ→фиксация) + пересмотр (`GoalPlanner.revise`, `TaskController.revision_policy`, `identity/task_revision.py::TaskRevisionPolicy` консервативный), интеграция в goal_plan_generator (`_sanitize_tasks`) и factory. TDD: test_plan_feasibility (8), test_goal_planner_revise (3), test_task_revision (5) GREEN + регресс PASS. Этаж 6 закрыт (М-1+М-2).
+- [x] Этаж 8 «Мир» закрыт: МИР-1 (`core/world_process_history.py::WorldProcessHistory`, история/частота процессов + сводка; интеграция в `_probe_world_on_pressure`), МИР-2 (`core/world_model.py` структурная модель папок/ПК + world_model_text + ensure_world_model; интеграция в factory и оба промпта; world_model в self_state_interface). TDD: test_world_process_history, test_world_model, test_mir_world_integration GREEN.
+- [x] А-2 (этаж 12) исследовательская деятельность как постоянная: `identity/research_tracker.py::ResearchTracker` (персистентное текущее исследование + history + заметки + порог глубины MIN_SOURCES=4) + интеграция: в tick приоритет продолжения незавершённого исследования, в agent_loop завершение исследования при COMPLETED цели; проводка в factory. TDD `test_research_tracker.py` (9) GREEN; регресс PASS.
+- [x] А-1 (этаж 12) собственные проекты: устойчивый трек прогресса как обозримая сущность — `progress_text()`/`current_research_text()` в research_tracker + блок «МОЙ ТЕКУЩИЙ ПРОЕКТ/ИССЛЕДОВАНИЕ» в обоих промптах. TDD расширен (12) GREEN. Этаж 12 закрыт (А-1+А-2).
+- [x] П-3 (этаж 5) Взросление характера: пер-чертовое взросление по накопленному опыту (evidence_count) — `_status_from_strength_ev` (адаптивные пороги ACTIVE↓/weakening↑ на ±0.02 за каждые 3 подтверждения, emerging неизменен, потолки 0.72/0.50) + `_decay_maturity_factor` (зрелые затухают медленнее). Старый `_status_from_strength` = базовые пороги (evidence=0), обратная совместимость. Решение Эдди: пер-чертовое по evidence_count + мягкая адаптация. TDD `test_personality_adulting.py` (6) GREEN + final_regression_suite 7 passed. Осталось: (П-1) более полная модель предпочтений — типы/конфликт, (М-2) полное многошаговое планирование.
+- [x] Блок П-1 (этаж 5) подтверждён Эдди как первый. План: `PLANS\2026-09-03-P1a-preferences-threshold.md`.
+- [x] П-1a: MIN_CHOICES 6→4 в `ActionPreferenceDetector` (MIN_SHARE 0.75 и `loser_count>0` не тронуты). TDD `test_preference_detector.py` (2 кейса) GREEN + регресс PASS. CHANGELOG записан. Без коммита.
+- [x] П-1b: обогащение формата `self_state.preferences` — РЕШЕНИЕ Эдди (03.09): словарь-запись с обратной совместимостью. План: `PLANS\2026-09-03-P1b-preferences-dict-format.md`. Точки: Proposal.meta, preference_label.py, action_preference_detector (task+meta), agent_loop, identity_manager (dict+дедуп по методу), read (prompts/self_concept/current_mind_state/agent). Реализация по TDD. Выполнено 04.09: dict-запись пишется и читается; дополнительно закрыта точка риска claim-валидации dict (self_claim_validator `_extract_compare_text`, claim_engine `_extract_value_text`, predicate_registry `_value_text` вместо `str(dict)`-repr). Тесты: test_preference_dict_format, test_claim_validator_pref_dict (6) GREEN + регресс PASS.
+- [x] П-1c: связка preference-контура с реальными «предпочтениями» outbox-подсказками (детектор подсказывает, outbox применяет). Выполнено 04.09: в `agent_loop._process_identity_detectors` при `category=="preference" and identity_result=="accepted"` в outbox уходит сообщение с читаемым label («Заметил своё предпочтение: ...»); `outbox=None` — тихо пропускается. TDD `test_pref_outbox_link.py` (3 кейса: уход в outbox при новом предпочтении, без дубля на повторе, outbox=None не ломает) GREEN + регресс PASS.
+- [x] П-1d: модель предпочтений — тип/сила + конфликт с интересами. `identity/preference_model.py` (новый): `preference_type` (action/topic/environment/unknown по маркерам), `strength_of` (share+evidence), `enrich_entry` (type/strength/provenance/first_seen/last_seen), `preference_conflicts` (негатив по теме интереса), `format_preferences_rich`. Запись: identity_manager обогащает dict + освежает last_seen при дедупе. Чтение (prompts 2 / current_mind_state 1 / self_concept_resolver 1) — rich-формат с интересами; agent.py plain (мин. дифф). TDD `test_preference_model.py` (13) GREEN + регресс PASS + final_regression_suite 7 passed + orchestrator_local PASS. ЭТАЖ 5, блок П-1 (взросление характера S-статусами / предпочтения) закрыт.
+- [x] П-2 Привычки действий (не только речи): накопление устойчивого паттерна действия → habit-черта через единый lifecycle. Ядро уже было (HabitPatternDetector → evidence → identity_manager → PersonalityLifecycle.promote; подтверждено test_unified_agent_loop/final_regression_suite). 04.09 закрыт остаток «к полноте»: читаемость (привычки показывались как `repeated_action:research`). Добавлен `identity/habit_label.py` (`habit_label`/`format_habits`: dict→label, иначе `repeated_action:SOURCE`→«привык действовать через источник», иначе—как есть; обратная совместимость) + подключён в prompts.py, agent.py (снапшот+промпт), current_mind_state.py. TDD `test_habit_format.py` (6) GREEN + регресс PASS.
+- [x] Этаж 11 «Совместная жизнь» — ядро реализовано: `identity/shared_life.py::SharedLife` (наблюдение + LLM-оценка + SHARED_EXPERIENCE-события + build_feed), `identity/shared_appraisal.py::SharedAppraisal` (эмоции по типу активности + интимитет/доверие), интеграция в runtime/factory/self_model. 14 тестов GREEN + регресс PASS. Байт-проверка 8 файлов OK.
+- [x] Задача 4 (этаж 9, терминал): интеграция командного контура в инфраструктуру. CommandPolicy+TerminalExecutor подключены: `tool_policy._powershell()` → CommandPolicy; `tool_runner._execute_powershell()` ветка; factory регистрирует инструмент `powershell`. TDD `test_tool_runner_run_command.py` (5) + `test_command_audit.py` (3) GREEN + регресс 35 passed. Задачи 1–4 этажа 9 (терминал) выполнены.
+
 ### [30.08 дневная смена] Смена living-tools-world (этажи 9/8) — РЕАЛИЗОВАНА, ревью APPROVE
 - [x] CuriosityDirector (evaluate/select_topic/topic_goal/track_action/daily_llm_topic/mark_acted) — ядро.
 - [x] Проводка в прод: фабрика (tool_runner/orchestrator/runtime/world_probe/llm.curiosity), tick() с реальными счётчиками + суточной темой, кулдаун ожил.
@@ -715,17 +790,19 @@ ROADMAP. Рубежи A→B→C — это проверки, после кото
 - [x] Рубеж A «Душа впитывает» = закрыт 30.08: критерии снов (см. выше)
       подтверждены артефактами сна 29.08 23:45 (diff души ≠ пуст на
       первом же полном цикле C4; остальные 3 критерия тоже PASS).
-- [ ] Рубеж B «Живёт сутки»: R3 сон/бодрствование, тики состояния
+- [x] Рубеж B «Живёт сутки»: R3 сон/бодрствование, тики состояния
       без LLM, watchdog RAM/CPU, авто-выгрузка модели, рестарт
       llama-воркера по расписанию (P2-b аудита). PASS: первые
       непрерывные сутки в песочнице без человека, утром дневник +
       diff души.
-      [30.08 ночь: суточный прогон ИДЁТ (night_run --minutes 1440,
-      PID 39972, старт 29.08 22:26, финиш ~30.08 22:26). План
-      приёмки готов: PLANS\2026-08-30-rubezh-b-sutki.md. R3/
-      ритуалы/тики-без-LLM/watchdog RAM — уже в проде работают.
-      Остаток на решение Эдди: watchdog CPU + P2-b llama-воркер
-      (доделать vs N/A в облачном режиме).]
+      [ЗАКРЫТ ПРИЁМКОЙ 30.08 22:27: суточный прогон (PID 39972)
+      финишировал штатно (NIGHT RUN END + soul diff). test_rubezh_b.py
+      — ALL PASS 9/9: прогон до END, консолидация без ошибки
+      (44 события, выводов 3), облачных вызовов 19 (≤40), watchdog без
+      THROTTLED, LIFE_CYCLE=4, ритуалы morning=1/evening=2, soul diff
+      не пуст. R3/ритуалы/тики-без-LLM/watchdog RAM подтверждены в бое.
+      Остаток на решение Эдди: watchdog CPU + P2-b llama-воркера
+      (N/A в облачном режиме — текущий мозг облако Zen).]
 - [ ] Рубеж C «Голос в сутках»: неблокирующий голосовой REPL
       (слушает во время генерации), семантический судья P1-b,
       периодические снимки P6. PASS: разговор в любой момент суток,

@@ -1,5 +1,7 @@
 from textwrap import dedent
 
+from identity.preference_model import format_preferences_rich
+
 
 class SelfConceptResolver:
     """
@@ -165,7 +167,7 @@ class SelfConceptResolver:
             {state["interests"]}
 
             Preferences:
-            {state["preferences"]}
+            {format_preferences_rich(state["preferences"], state["interests"])}
 
             Beliefs:
             {state["beliefs"]}

@@ -27,6 +27,8 @@ class ActionRouter:
         "WEB_SEARCH": "web",
         "OPEN_URL": "web",
         "WAIT": "scheduler",
+        "LAUNCH_APP": "programs",
+        "INSTALL_PACKAGE": "install",
     }
 
     def __init__(

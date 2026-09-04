@@ -50,10 +50,35 @@ from identity.self_experience import (
 from identity.task_controller import (
     TaskController,
 )
+from identity.task_revision import (
+    TaskRevisionPolicy,
+)
+from identity.self_model import SelfModel
+from identity.conscious_observer import (
+    ConsciousObserver,
+)
+from identity.terminal_executor import (
+    TerminalExecutor,
+)
+from identity.app_launcher import AppLauncher
+from identity.software_install import SoftwareInstaller
 from identity.tool_registry import ToolRegistry
 from identity.tool_runner import ToolRunner
 from identity.web_executor import (
     WebExecutor,
+)
+from identity.screen_perceiver import (
+    ScreenPerceiver,
+)
+from identity.screen_controller import (
+    ScreenController,
+)
+from identity.shared_life import SharedLife
+from identity.shared_appraisal import (
+    SharedAppraisal,
+)
+from identity.shared_activity_manager import (
+    SharedActivityManager,
 )
 
 from memory.external_knowledge import (
@@ -234,12 +259,56 @@ class AutonomyRuntimeFactory:
             enabled=True,
         )
 
+        registry.register(
+            name="powershell",
+            executor=TerminalExecutor(),
+            description=(
+                "Безопасный терминал для команд."
+            ),
+            enabled=True,
+        )
+
+        registry.register(
+            name="programs",
+            executor=AppLauncher(
+                self_state=self.agent.self_state,
+            ),
+            description=(
+                "Запуск программ на ПК Эдди."
+            ),
+            enabled=True,
+        )
+
+        registry.register(
+            name="install",
+            executor=SoftwareInstaller(
+                self_state=self.agent.self_state,
+            ),
+            description=(
+                "Установка ПО через менеджеры пакетов."
+            ),
+            enabled=True,
+        )
+
         # Встраивание self-model и описания
         # зарегистрированных capabilities.
         self.agent.capabilities = registry.describe()
         self.agent.self_consistency.capabilities = (
             self.agent.capabilities
         )
+        self.agent.self_model = SelfModel(
+            self.agent.self_state
+        ).build(
+            self.agent.capabilities,
+            agent=self.agent,
+        )
+        self.agent.conscious_observer = (
+            ConsciousObserver(
+                self.agent.self_state,
+                agent=self.agent,
+            )
+        )
+        self.agent.conscious_observer.observe()
 
         tool_runner = ToolRunner(
             registry,
@@ -315,6 +384,7 @@ class AutonomyRuntimeFactory:
         task_controller = TaskController(
             goal_manager,
             goal_planner,
+            revision_policy=TaskRevisionPolicy(),
         )
 
         reflection_engine = ReflectionEngine(
@@ -528,11 +598,42 @@ class AutonomyRuntimeFactory:
         runtime.world_probe = WorldProbe()
 
         try:
+            from identity.research_tracker import (
+                ResearchTracker,
+            )
+
+            research_tracker = ResearchTracker(
+                self.agent.self_state
+            )
+            orchestrator.research_tracker = (
+                research_tracker
+            )
+            runtime.research_tracker = (
+                research_tracker
+            )
+            agent_loop.research_tracker = (
+                research_tracker
+            )
+        except Exception:
+            pass
+
+        try:
             from core.world_description import (
                 ensure_world_description,
             )
 
             ensure_world_description(
+                self.agent.self_state
+            )
+        except Exception:
+            pass
+
+        try:
+            from core.world_model import (
+                ensure_world_model,
+            )
+
+            ensure_world_model(
                 self.agent.self_state
             )
         except Exception:
@@ -565,6 +666,77 @@ class AutonomyRuntimeFactory:
         )
 
         runtime.reflection_engine = reflection_engine
+
+        screen_perceiver = ScreenPerceiver(
+            model_orchestrator=(
+                self.agent.model_orchestrator
+            ),
+            memory=self.agent.memory,
+        )
+        screen_controller = ScreenController()
+        runtime._screen_perceiver = screen_perceiver
+        runtime._screen_controller = screen_controller
+        self.agent.screen_perceiver = (
+            screen_perceiver
+        )
+        self.agent.screen_controller = (
+            screen_controller
+        )
+
+        shared_appraisal = SharedAppraisal(
+            affective_state=(
+                self.agent.affective_state
+            ),
+            self_state=self.agent.self_state,
+        )
+        shared_life = SharedLife(
+            model_orchestrator=(
+                self.agent.model_orchestrator
+            ),
+            memory=self.agent.memory,
+            retrieval=getattr(
+                self.agent,
+                "memory_retrieval",
+                None,
+            ),
+        )
+        runtime._shared_life = shared_life
+        runtime._shared_appraisal = shared_appraisal
+        self.agent.shared_life = shared_life
+        self.agent.shared_appraisal = (
+            shared_appraisal
+        )
+
+        shared_activity = SharedActivityManager(
+            self_state=self.agent.self_state,
+        )
+        runtime._shared_activity = shared_activity
+        self.agent.shared_activity = shared_activity
+
+        try:
+            model = self.agent.self_state.get(
+                "self_model", {}
+            )
+            if isinstance(model, dict):
+                current = shared_activity.get_current()
+                model["shared_life"] = {
+                    "events_count": len(
+                        shared_life.get_recent(limit=100)
+                    ),
+                    "last_activity": (
+                        current.get("type", "")
+                        if current
+                        else ""
+                    ),
+                    "is_active": (
+                        shared_activity.is_active()
+                    ),
+                }
+                self.agent.self_state.set(
+                    "self_model", model
+                )
+        except Exception:
+            pass
 
         self.agent.cognition_worker.start()
         return runtime

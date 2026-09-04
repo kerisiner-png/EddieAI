@@ -7,9 +7,11 @@ class TaskController:
         self,
         goal_manager,
         planner,
+        revision_policy=None,
     ):
         self.goal_manager = goal_manager
         self.planner = planner
+        self.revision_policy = revision_policy
 
     def execute_result(
         self,
@@ -53,6 +55,50 @@ class TaskController:
                 "goal": updated_goal,
                 "next_task": next_task,
             }
+
+        if self.revision_policy is not None:
+            decision = (
+                self.revision_policy.decide(
+                    goal,
+                    task_title,
+                    result,
+                )
+            )
+
+            if (
+                decision.get("action")
+                == "revise"
+            ):
+                self.planner.revise(
+                    goal,
+                    task_title,
+                    reason=decision.get(
+                        "reason",
+                        "",
+                    ),
+                )
+
+                next_task = None
+
+                if activate_next:
+                    next_task = (
+                        self.goal_manager
+                        .activate_next_task(
+                            goal
+                        )
+                    )
+
+                return {
+                    "status": "TASK_REVISED",
+                    "task": self._current_task(
+                        goal,
+                        task_title,
+                    ),
+                    "goal": self.goal_manager.get(
+                        goal
+                    ),
+                    "next_task": next_task,
+                }
 
         return {
             "status": "TASK_NOT_COMPLETED",

@@ -1,3 +1,7 @@
+from identity.preference_model import format_preferences_rich
+from identity.habit_label import format_habits
+
+
 class CurrentMindState:
     """
     Read-only snapshot of the agent's current internal state.
@@ -155,10 +159,10 @@ Interests:
 {state["interests"]}
 
 Preferences:
-{state["preferences"]}
+{format_preferences_rich(state["preferences"], state["interests"])}
 
 Habits:
-{state["habits"]}
+{format_habits(state["habits"])}
 
 Beliefs:
 {state["beliefs"]}
