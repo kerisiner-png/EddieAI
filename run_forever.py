@@ -74,6 +74,11 @@ def main():
         action="store_true",
         help="Не поднимать голосовой контур.",
     )
+    parser.add_argument(
+        "--no-senses",
+        action="store_true",
+        help="Не поднимать микрофон/вебку.",
+    )
     args = parser.parse_args()
 
     log("=== EDDIE FOREVER START ===")
@@ -149,6 +154,30 @@ def main():
 
     log("=== EDDIE FOREVER RUNNING ===")
 
+    senses = None
+
+    if not args.no_senses:
+        try:
+            from identity.sense_listener import SenseListener
+
+            senses = SenseListener(
+                agent=agent,
+                server=server,
+                screen_perceiver=getattr(
+                    runtime,
+                    "_screen_perceiver",
+                    None,
+                ),
+            )
+            senses.start()
+            log("senses started (mic + webcam)")
+        except Exception as exc:
+            senses = None
+            log(
+                f"senses unavailable: "
+                f"{type(exc).__name__}: {exc}"
+            )
+
     try:
         while not _stop.is_set():
             try:
@@ -169,6 +198,12 @@ def main():
             _stop.wait(timeout=5.0)
     finally:
         log("stopping...")
+
+        if senses is not None:
+            try:
+                senses.stop()
+            except Exception:
+                pass
 
         if chat is not None:
             try:

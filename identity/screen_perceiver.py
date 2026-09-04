@@ -9,8 +9,9 @@ except ImportError:
 from PIL import Image
 
 class ScreenPerceiver:
-    INTERVAL = 3.0
+    INTERVAL = 120.0
     RESIZE = (1280, 720)
+    VISION_DAILY_LIMIT = 150
 
     def __init__(self, model_orchestrator=None, memory=None):
         self._orchestrator = model_orchestrator
@@ -19,6 +20,7 @@ class ScreenPerceiver:
         self._last_screenshot_b64 = None
         self._last_timestamp = 0.0
         self._prev_screenshot_b64 = None
+        self._vision_calls = 0
 
     def tick(self):
         now = time.time()
@@ -40,8 +42,13 @@ class ScreenPerceiver:
         self._last_timestamp = time.time()
         if self._memory and description:
             try:
-                from memory.memory import Event
-                self._memory.remember(Event(kind="WORLD_SNAPSHOT", payload={"description": description}))
+                from memory.events import Event
+                self._memory.remember(Event.create(
+                    content=f"Экран: {description}",
+                    event_type="WORLD_SNAPSHOT",
+                    source_type="VISION",
+                    source="screen",
+                ))
             except Exception:
                 pass
         return {"description": description, "timestamp": self._last_timestamp, "screenshot_b64": screenshot_b64}
@@ -68,10 +75,82 @@ class ScreenPerceiver:
     def _vision_describe(self, screenshot_b64):
         if self._orchestrator is None:
             return ""
+        if self._vision_calls >= self.VISION_DAILY_LIMIT:
+            return self._last_description or ""
         try:
             system = "Ты — глаза EddieAI. Опиши кратко что на экране: какое приложение, что открыто, что происходит. Максимум 3 предложения."
             user = "Опиши что на экране."
-            result = self._orchestrator.execute(system=system, user=user, task="vision", images=[screenshot_b64])
+            vision_fn = getattr(
+                self._orchestrator,
+                "_cloud_chat_vision",
+                None,
+            )
+            if vision_fn is None:
+                return ""
+            result = vision_fn(
+                system,
+                user,
+                [screenshot_b64],
+            )
+            self._vision_calls += 1
+            if isinstance(result, dict):
+                return result.get("text", "")
+            return str(result) if result else ""
+        except Exception:
+            return ""
+
+    def webcam_capture(self):
+        try:
+            import cv2
+            import base64 as b64mod
+
+            cap = cv2.VideoCapture(0)
+            if not cap.isOpened():
+                return None
+            try:
+                ret, frame = cap.read()
+            finally:
+                cap.release()
+            if not ret:
+                return None
+            import io
+            from PIL import Image
+
+            img = Image.fromarray(
+                cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            )
+            img = img.resize(self.RESIZE, Image.LANCZOS)
+            buf = io.BytesIO()
+            img.save(buf, format="PNG", optimize=True)
+            return b64mod.b64encode(
+                buf.getvalue()
+            ).decode("ascii")
+        except Exception:
+            return None
+
+    def webcam_describe(self):
+        if self._vision_calls >= self.VISION_DAILY_LIMIT:
+            return ""
+        b64 = self.webcam_capture()
+        if b64 is None:
+            return ""
+        if self._orchestrator is None:
+            return ""
+        try:
+            vision_fn = getattr(
+                self._orchestrator,
+                "_cloud_chat_vision",
+                None,
+            )
+            if vision_fn is None:
+                return ""
+            result = vision_fn(
+                "Ты — глаза EddieAI. Опиши что видно с камеры: есть ли человек, "
+                "что он делает, что вокруг. Максимум 3 предложения.",
+                "Что на камере?",
+                [b64],
+            )
+            self._vision_calls += 1
             if isinstance(result, dict):
                 return result.get("text", "")
             return str(result) if result else ""
