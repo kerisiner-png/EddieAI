@@ -509,6 +509,103 @@ class AgentLoop:
         return results
 
 
+    def _apply_reflection_signals(
+        self,
+        reflection,
+        completed_goal: str,
+    ):
+        if self.evidence is None:
+            return []
+
+        if not isinstance(
+            reflection,
+            dict,
+        ):
+            return []
+
+        signals = reflection.get(
+            "signals",
+            [],
+        )
+
+        if not isinstance(
+            signals,
+            list,
+        ):
+            return []
+
+        allowed = {
+            "interest",
+            "preference",
+            "habit",
+            "belief",
+        }
+
+        applied = []
+
+        for signal in signals:
+            if not isinstance(
+                signal,
+                dict,
+            ):
+                continue
+
+            category = signal.get(
+                "category",
+            )
+
+            value = str(
+                signal.get(
+                    "value",
+                    "",
+                )
+            ).strip()
+
+            if category not in allowed:
+                continue
+
+            if not value:
+                continue
+
+            try:
+                conn = self.evidence.memory.connection
+                exists = conn.execute(
+                    """
+                    SELECT COUNT(*) AS c
+                    FROM evidence_events
+                    WHERE category = ?
+                      AND value = ?
+                      AND source = ?
+                      AND independence_key = ?
+                    """,
+                    (
+                        category,
+                        value,
+                        "SELF_INTERPRETATION",
+                        completed_goal,
+                    ),
+                ).fetchone()
+
+                if exists and exists["c"] > 0:
+                    continue
+
+                self.evidence.add(
+                    category=category,
+                    value=value,
+                    source="SELF_INTERPRETATION",
+                    independence_key=completed_goal,
+                )
+            except Exception:
+                continue
+
+            applied.append({
+                "category": category,
+                "value": value,
+            })
+
+        return applied
+
+
     def run_once(self):
 
         goal = self.goal_manager.best_candidate()
@@ -1127,6 +1224,21 @@ class AgentLoop:
                     )
 
                 )
+
+
+
+            reflection_signals = []
+
+            if reflection is not None:
+                try:
+                    reflection_signals = (
+                        self._apply_reflection_signals(
+                            reflection,
+                            goal.value,
+                        )
+                    )
+                except Exception:
+                    reflection_signals = []
 
 
 

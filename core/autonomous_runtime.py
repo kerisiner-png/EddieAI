@@ -162,6 +162,63 @@ class AutonomousRuntime:
             except Exception:
                 pass
 
+    def _apply_consolidation(self, consolidation):
+        if not consolidation:
+            return consolidation
+
+        lifecycle = getattr(
+            self.agent,
+            "personality_lifecycle",
+            None,
+        )
+
+        if lifecycle is None:
+            return consolidation
+
+        applied = []
+
+        for candidate in consolidation:
+            if not isinstance(
+                candidate,
+                dict,
+            ):
+                applied.append(candidate)
+                continue
+
+            if candidate.get("status") != "PROMOTABLE":
+                applied.append(candidate)
+                continue
+
+            field = candidate.get("field")
+            value = candidate.get("value")
+
+            if not field or not value:
+                applied.append(candidate)
+                continue
+
+            try:
+                lifecycle.promote(
+                    field=field,
+                    value=value,
+                    strength=candidate.get(
+                        "strength", 0.5
+                    ),
+                    confidence=candidate.get(
+                        "confidence", 0.7
+                    ),
+                    evidence_count=candidate.get(
+                        "evidence_count", 0
+                    ),
+                )
+                candidate = dict(candidate)
+                candidate["status"] = "PROMOTED"
+            except Exception:
+                pass
+
+            applied.append(candidate)
+
+        return applied
+
     def _enqueue_shared_suggestion(self, suggestion):
         if not suggestion:
             return
@@ -745,6 +802,15 @@ class AutonomousRuntime:
                     self.evidence_consolidator
                     .consolidate()
                 )
+
+                try:
+                    consolidation = (
+                        self._apply_consolidation(
+                            consolidation
+                        )
+                    )
+                except Exception:
+                    pass
 
             if self.decision_core is not None:
                 try:

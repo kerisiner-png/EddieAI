@@ -6,6 +6,28 @@
 
 ## 04.09.2026
 
+### [АКТУАЛЬНО] Реестр №13 ЗАКРЫТ: оживлены мёртвые хуки автономного обучения (этаж 4)
+Аудит 30.08: `EvidenceConsolidator.consolidate()` паковал кандидатов, но НЕ
+применял; `ReflectionEngine.reflect()` возвращал signals, которые нигде не
+потреблялись. Автономное накопление личностных evidence/рефлексии де-факто
+не работало. Оживлено (TDD):
+- `core/agent_loop.py::_apply_reflection_signals(reflection, completed_goal)` —
+  после `reflect()` signals рефлексии (interest/preference/habit/belief)
+  добавляются как evidence через `EvidenceEngine.add(source="SELF_INTERPRETATION",
+  independence_key=completed_goal)`. Идемпотентность: проверка существования
+  (category+value+source+independence_key) перед добавлением — одна завершённая
+  цель не дублирует evidence. Вызов в `run_once` сразу после reflect().
+- `core/autonomous_runtime.py::_apply_consolidation(consolidation)` —
+  PROMOTABLE кандидаты (confidence≥0.70, weighted≥2.5, ≥3 источника) применяются
+  через `personality_lifecycle.promote(...)`, статус → PROMOTED; WAITING и без
+  lifecycle остаются без изменений. Вызов в tick сразу после consolidate().
+- `test_behavior_learning.py` — пре-экзистентная поломка сигнатуры устранена
+  (конструктор `EvidenceConsolidator(evidence)` вместо старого `(evidence,
+  lifecycle)`); диагностический скрипт завершается штатно.
+TDD: `test_reflection_signals.py` (4), `test_apply_consolidation.py` (4) GREEN.
+Регресс: evidence_consolidator + final_regression_suite 7 + decision_* — 15 PASS.
+Байт-проверка 5 файлов чистая. Без коммита (общий коммит сессии — после шага 3).
+
 ### [АКТУАЛЬНО] Этаж 9 «Инструменты» ЗАКРЫТ (ИНСТР-2/3) + этаж 10 «Органы чувств» ЗАКРЫТ (зрение)
 Решение Эдди 04.09: «нет никакого белого листа, все можно что захочет» →
 выбран вариант «Свобода, но без разрушительного». Allowlist отменён во всей

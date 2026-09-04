@@ -39,13 +39,12 @@ with TemporaryDirectory() as temp:
 
         detector = BehaviorPatternDetector(
             memory,
-            evidence,
+evidence,
         )
 
         consolidator = (
             EvidenceConsolidator(
                 evidence,
-                lifecycle,
             )
         )
 
