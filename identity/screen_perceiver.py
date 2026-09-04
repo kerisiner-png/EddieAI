@@ -104,7 +104,12 @@ class ScreenPerceiver:
             import cv2
             import base64 as b64mod
 
-            cap = cv2.VideoCapture(0)
+            index = self._find_webcam_index()
+            if index is None:
+                return None
+            cap = cv2.VideoCapture(
+                index, cv2.CAP_DSHOW
+            )
             if not cap.isOpened():
                 return None
             try:
@@ -125,6 +130,72 @@ class ScreenPerceiver:
             return b64mod.b64encode(
                 buf.getvalue()
             ).decode("ascii")
+        except Exception:
+            return None
+
+    def _find_webcam_index(self):
+        """Выбор физической вебки ноутбука.
+
+        Отбрасывает виртуальные камеры (Snap Camera и т.п.):
+        открывает индексы 0..4 и предпочитает устройство,
+        чьё имя НЕ содержит 'snap', 'virtual', 'obs'.
+        Фолбэк — первый открывшийся.
+        """
+        try:
+            import cv2
+            import subprocess
+
+            opened = []
+            for idx in range(5):
+                cap = cv2.VideoCapture(
+                    idx, cv2.CAP_DSHOW
+                )
+                ok = cap.isOpened()
+                cap.release()
+                if ok:
+                    opened.append(idx)
+            if not opened:
+                return None
+
+            try:
+                script = (
+                    "Get-PnpDevice -Class Camera,Image "
+                    "-Status OK | "
+                    "Select-Object -ExpandProperty FriendlyName"
+                )
+                r = subprocess.run(
+                    [
+                        "powershell",
+                        "-NoProfile",
+                        "-Command",
+                        script,
+                    ],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=10,
+                )
+                names = [
+                    line.strip()
+                    for line in r.stdout.splitlines()
+                    if line.strip()
+                ]
+            except Exception:
+                names = []
+
+            bad = ("snap", "virtual", "obs", "camera effects")
+            for idx in opened:
+                name = (
+                    names[idx].lower()
+                    if idx < len(names)
+                    else ""
+                )
+                if name and not any(
+                    b in name for b in bad
+                ):
+                    return idx
+            return opened[0]
         except Exception:
             return None
 
