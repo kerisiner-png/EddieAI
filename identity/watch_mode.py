@@ -23,6 +23,9 @@ VIDEO_TITLE_MARKERS = (
 COMMENT_INTERVAL = 600.0
 EXIT_QUIET_SEC = 300.0
 TITLE_SUSTAIN_SEC = 60.0
+MIN_PAUSE_COMMENT_LEN = 40
+HOLD_RESUME_SEC = 180.0
+SPEECH_CHARS_PER_SEC = 13.0
 
 
 def looks_like_video_title(title) -> bool:
@@ -33,6 +36,61 @@ def looks_like_video_title(title) -> bool:
         marker in needle
         for marker in VIDEO_TITLE_MARKERS
     )
+
+
+def estimate_speech_seconds(text) -> float:
+    text = (text or "").strip()
+    if not text:
+        return 0.0
+    return max(
+        4.0,
+        len(text) / SPEECH_CHARS_PER_SEC
+        + 3.0,
+    )
+
+
+def is_question(text) -> bool:
+    text = (text or "").strip()
+    if text.endswith("?"):
+        return True
+    markers = (
+        "как думаешь",
+        "что думаешь",
+        "как тебе",
+        "а у тебя",
+        "тебе нравится",
+        "видел ли",
+        "замечал ли",
+    )
+    lowered = text.lower()
+    return any(
+        marker in lowered for marker in markers
+    )
+
+
+def pause_decision(
+    text,
+    audio_playing,
+):
+    """
+    Удобство восприятия, не закон: ставим
+    паузу перед заметной репликой, если
+    видео действительно играет. Возврат:
+    None | "resume_auto" (договорил и
+    снял) | "resume_hold" (ждёт ответа).
+    """
+    text = (text or "").strip()
+
+    if not audio_playing:
+        return None
+
+    if len(text) < MIN_PAUSE_COMMENT_LEN:
+        return None
+
+    if is_question(text):
+        return "resume_hold"
+
+    return "resume_auto"
 
 
 class WatchMode:
@@ -132,3 +190,22 @@ class WatchMode:
 
     def mark_commented(self, now):
         self.last_comment_ts = now
+
+    def press_media_pause(self) -> bool:
+        """
+        Медиа-клавиша Play/Pause (VK 0xB3):
+        Chrome/Edge и плееры обрабатывают её
+        глобально.
+        """
+        try:
+            import ctypes
+
+            ctypes.windll.user32.keybd_event(
+                0xB3, 0, 0, 0
+            )
+            ctypes.windll.user32.keybd_event(
+                0xB3, 0, 2, 0
+            )
+            return True
+        except Exception:
+            return False

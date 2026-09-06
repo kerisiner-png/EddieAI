@@ -156,10 +156,10 @@ class ScreenPerceiver:
         try:
             with mss.mss() as sct:
                 monitor = sct.monitors[1]
-                img = sct.grab(monitor)
-                raw = img.raw
-                size = img.size
-            img = Image.frombytes("RGB", size, raw, "raw", "RGB")
+                shot = sct.grab(monitor)
+                size = shot.size
+                rgb = shot.rgb
+            img = Image.frombytes("RGB", size, rgb)
             img = img.resize(self.RESIZE, Image.LANCZOS)
             buf = io.BytesIO()
             img.save(buf, format="PNG", optimize=True)

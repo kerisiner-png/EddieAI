@@ -316,10 +316,11 @@ class AutonomousRuntime:
         if watch.should_comment(now):
             watch.mark_commented(now)
             self._watch_comment(
-                current.get("description", "")
+                watch,
+                current.get("description", ""),
             )
 
-    def _watch_comment(self, description):
+    def _watch_comment(self, watch, description):
         if not description:
             return
 
@@ -355,6 +356,21 @@ class AutonomousRuntime:
         if not text:
             return
 
+        from identity.watch_mode import (
+            HOLD_RESUME_SEC,
+            estimate_speech_seconds,
+            pause_decision,
+        )
+
+        decision = pause_decision(
+            text,
+            watch.audio_recent(time.time()),
+        )
+
+        if decision is not None:
+            if not watch.press_media_pause():
+                decision = None
+
         server = getattr(
             self, "eddie_server", None
         )
@@ -368,6 +384,28 @@ class AutonomousRuntime:
                 )
             except Exception:
                 pass
+
+        if decision == "resume_auto":
+            delay = estimate_speech_seconds(
+                text
+            )
+            threading.Timer(
+                delay,
+                self._resume_media,
+                args=(watch,),
+            ).start()
+        elif decision == "resume_hold":
+            threading.Timer(
+                HOLD_RESUME_SEC,
+                self._resume_media,
+                args=(watch,),
+            ).start()
+
+    def _resume_media(self, watch):
+        try:
+            watch.press_media_pause()
+        except Exception:
+            pass
 
     def _maybe_comment_screen(self, current):
         if not current:

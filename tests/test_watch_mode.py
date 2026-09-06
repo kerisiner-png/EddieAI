@@ -112,3 +112,67 @@ if __name__ == "__main__":
     test_comment_cadence()
     test_force_exit_from_eddie_command()
     print("ALL OK")
+
+
+def test_estimate_speech_seconds():
+    from identity.watch_mode import (
+        estimate_speech_seconds,
+    )
+
+    assert estimate_speech_seconds("") == 0.0
+    assert (
+        estimate_speech_seconds("коротко")
+        == 4.0
+    )
+    long_text = "а" * 130
+    assert (
+        estimate_speech_seconds(long_text) == 13.0
+    )
+
+
+def test_is_question():
+    from identity.watch_mode import is_question
+
+    assert is_question("Что думаешь?") is True
+    assert (
+        is_question("Как тебе этот момент?")
+        is True
+    )
+    assert (
+        is_question("Интересный поворот.")
+        is False
+    )
+
+
+def test_pause_decision():
+    from identity.watch_mode import (
+        pause_decision,
+    )
+
+    long = "а" * 80
+    short = "коротко."
+
+    assert (
+        pause_decision(long, audio_playing=False)
+        is None
+    )
+    assert (
+        pause_decision(short, audio_playing=True)
+        is None
+    )
+    assert (
+        pause_decision(long, audio_playing=True)
+        == "resume_auto"
+    )
+    assert (
+        pause_decision(
+            "Что думаешь по этому поводу, "
+            "согласен? Это интересно.",
+            audio_playing=True,
+        )
+        == "resume_hold"
+    )
+
+
+if __name__ == "__main__":
+    pass
