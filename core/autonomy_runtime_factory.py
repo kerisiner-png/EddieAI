@@ -694,6 +694,16 @@ class AutonomyRuntimeFactory:
         self.agent.mood = Mood(
             self.agent.self_state
         )
+
+        from identity.body import Body
+        from identity.inner_stream import (
+            ThinkRhythm,
+        )
+
+        self.agent.body = Body(
+            self.agent.self_state
+        )
+        self.agent.think_rhythm = ThinkRhythm()
         self.agent.screen_perceiver = (
             screen_perceiver
         )

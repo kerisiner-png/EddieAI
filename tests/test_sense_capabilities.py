@@ -1,5 +1,5 @@
 class _FakePerceiver:
-    def webcam_describe(self):
+    def webcam_describe(self, camera="face"):
         return "Рядом сидит Эдди за ноутбуком."
 
     def capture_now(self):

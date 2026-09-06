@@ -337,16 +337,31 @@ class AutonomousRuntime:
                         .get("count", 0)
                     )
                     if unread:
-                        stream.note_event(
-                            "сообщение",
-                            f"unread-{unread}",
-                            (
-                                "Эдди написал: "
-                                f"{unread} непрочитанных"
-                            ),
-                            1.5,
-                            now,
+                        noted = (
+                            stream.note_event(
+                                "сообщение",
+                                f"unread-{unread}",
+                                (
+                                    "Эдди написал: "
+                                    f"{unread} "
+                                    "непрочитанных"
+                                ),
+                                1.5,
+                                now,
+                            )
                         )
+                        body = getattr(
+                            agent,
+                            "body",
+                            None,
+                        )
+                        if (
+                            noted
+                            and body is not None
+                        ):
+                            body.satisfy_social(
+                                now
+                            )
                 except Exception:
                     pass
 
@@ -380,8 +395,186 @@ class AutonomousRuntime:
             except Exception:
                 pass
 
-        if stream.should_speak(now):
+        body = getattr(agent, "body", None)
+        seconds_since_contact = None
+
+        if server is not None:
+            try:
+                seconds_since_contact = (
+                    server.seconds_since_last_convo()
+                )
+            except Exception:
+                seconds_since_contact = None
+
+        if body is not None:
+            screen_stale = (
+                stream.age_of_kind("экран", now)
+            )
+            try:
+                body.update(
+                    now,
+                    seconds_since_contact=seconds_since_contact,
+                    screen_stale_sec=screen_stale,
+                )
+            except Exception:
+                pass
+
+        rhythm = getattr(
+            agent, "think_rhythm", None
+        )
+        if rhythm is not None:
+            try:
+                materials = {}
+                if (
+                    seconds_since_contact
+                    is not None
+                ):
+                    materials[
+                        "minutes_since_contact"
+                    ] = (
+                        seconds_since_contact
+                        / 60.0
+                    )
+                mood_local = getattr(
+                    agent, "mood", None
+                )
+                if mood_local is not None:
+                    materials["mood"] = (
+                        mood_local.snapshot()[
+                            "label"
+                        ]
+                    )
+                memory = getattr(
+                    agent, "memory", None
+                )
+                if memory is not None:
+                    try:
+                        row = memory.connection.execute(
+                            "SELECT content FROM "
+                            "events WHERE "
+                            "timestamp >= ? "
+                            "ORDER BY RANDOM() "
+                            "LIMIT 1",
+                            (
+                                time.strftime(
+                                    "%Y-%m-%dT%H:%M:%S",
+                                    time.gmtime(
+                                        now - 48 * 3600
+                                    ),
+                                ),
+                            ),
+                        ).fetchone()
+                        if row:
+                            materials[
+                                "memory_line"
+                            ] = str(
+                                row["content"]
+                            )[:110]
+                    except Exception:
+                        pass
+                rhythm.maybe_think(
+                    stream, now, materials
+                )
+            except Exception:
+                pass
+
+        extra = (
+            body.urgency_contribution()
+            if body is not None
+            else 0.0
+        )
+
+        if stream.should_speak(
+            now, extra_urgency=extra
+        ):
             self._inner_speak(stream)
+
+        self._narrator(now, agent, stream)
+
+    def _narrator(self, now, agent, stream):
+        last = getattr(
+            self, "_last_narrated_ts", 0.0
+        )
+
+        if now - last < 3600.0:
+            return
+
+        if not stream.items:
+            return
+
+        self._last_narrated_ts = now
+
+        mood = getattr(agent, "mood", None)
+        mood_text = (
+            mood.snapshot()["label"]
+            if mood is not None
+            else "ровно"
+        )
+        context = stream.render_context(12)
+
+        try:
+            text = (
+                agent.model_orchestrator
+                .cloud_chat_stream(
+                    system=(
+                        "Ты EddieAI. Напиши СЕБЕ "
+                        "короткий абзац (2-3 "
+                        "предложения) о том, что с "
+                        "тобой происходило в "
+                        "последний час: что видел, "
+                        "слышал, делал, что чувствовал. "
+                        "От первого лица, честно, "
+                        "без пафоса."
+                    ),
+                    user=(
+                        "Настроение: "
+                        f"{mood_text}. "
+                        "Поток: "
+                        f"{context}"
+                    ),
+                    options={
+                        "num_predict": 300,
+                        "temperature": 0.8,
+                    },
+                    task="conversation",
+                )
+            )
+        except Exception:
+            return
+
+        text = (text or "").strip()
+
+        if not text:
+            return
+
+        stream.add(
+            "рассказ",
+            text[:120],
+            0.5,
+            now,
+        )
+
+        memory = getattr(
+            agent, "memory", None
+        )
+
+        if memory is not None:
+            try:
+                from memory.events import Event
+
+                memory.remember(
+                    Event.create(
+                        content=(
+                            "Рассказчик: "
+                            f"{text[:400]}"
+                        ),
+                        event_type="REFLECTION",
+                        source_type="SELF",
+                        source="narrator",
+                    )
+                )
+            except Exception:
+                pass
 
     def _inner_speak(self, stream):
         stream.mark_spoke(time.time())

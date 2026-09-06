@@ -47,7 +47,7 @@ def test_cam_pass_records_event():
         respond = MagicMock(return_value="x")
 
     class FakeScreen:
-        def webcam_describe(self):
+        def webcam_describe(self, camera="face"):
             return "вижу человека"
 
     sl = SenseListener(
@@ -67,7 +67,7 @@ def test_cam_pass_skips_empty_desc():
         respond = MagicMock(return_value="x")
 
     class FakeScreen:
-        def webcam_describe(self):
+        def webcam_describe(self, camera="face"):
             return ""
 
     sl = SenseListener(

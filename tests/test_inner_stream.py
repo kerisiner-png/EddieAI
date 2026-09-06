@@ -171,3 +171,74 @@ def test_render_context_lines():
 
     assert "экран: youtube" in rendered
     assert "привет" in rendered
+
+
+def test_compose_micro_thought_priority():
+    from identity.inner_stream import (
+        compose_micro_thought,
+    )
+
+    assert "вспоминаю" in (
+        compose_micro_thought(
+            {
+                "memory_line": "утром изучал волны",
+                "goal": "дело",
+            }
+        )
+    )
+    assert "Эдди нет" in (
+        compose_micro_thought(
+            {
+                "minutes_since_contact": 45,
+                "goal": "дело",
+            }
+        )
+    )
+    assert "продолжаю" in (
+        compose_micro_thought(
+            {"goal": "изучить космос"}
+        )
+    )
+    assert "настроение" in (
+        compose_micro_thought({"mood": "ровно"})
+    )
+    assert (
+        compose_micro_thought({}) is None
+    )
+
+
+def test_think_rhythm_gate_and_weight():
+    from identity.inner_stream import (
+        InnerStream,
+        ThinkRhythm,
+    )
+
+    stream = InnerStream()
+    rhythm = ThinkRhythm(
+        think_interval=180.0, weight=0.2
+    )
+
+    first = rhythm.maybe_think(
+        stream,
+        1000.0,
+        {"mood": "ровно"},
+    )
+    assert first is not None
+    before = stream.urgency(1000.0)
+
+    again = rhythm.maybe_think(
+        stream,
+        1100.0,
+        {"mood": "ровно"},
+    )
+    assert again is None
+
+    third = rhythm.maybe_think(
+        stream,
+        1200.0,
+        {"mood": "ровно"},
+    )
+    assert third is not None
+    assert (
+        stream.urgency(1200.0) > before
+    )

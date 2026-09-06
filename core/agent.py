@@ -4316,6 +4316,64 @@ Respond briefly and naturally.
 
         return route
 
+    def _inner_context_block(self) -> str:
+        lines = []
+
+        mood = getattr(self, "mood", None)
+
+        if mood is not None:
+            try:
+                lines.append(
+                    "настроение: "
+                    + str(
+                        mood.snapshot()["label"]
+                    )
+                )
+            except Exception:
+                pass
+
+        stream = getattr(
+            self, "inner_stream", None
+        )
+
+        if stream is not None:
+            try:
+                rendered = (
+                    stream.render_context(6)
+                )
+                if rendered:
+                    lines.append(
+                        "поток:\n" + rendered
+                    )
+            except Exception:
+                pass
+
+        perceiver = getattr(
+            self, "screen_perceiver", None
+        )
+
+        if perceiver is not None:
+            try:
+                current = (
+                    perceiver.get_current()
+                )
+                desc = str(
+                    current.get(
+                        "description", ""
+                    )
+                    or ""
+                ).strip()
+
+                if desc:
+                    lines.append(
+                        "вижу на экране: "
+                        + desc[:160]
+                    )
+            except Exception:
+                pass
+
+        return "\n".join(lines)
+
     def respond_call_fast(
         self,
         conversation,
@@ -4352,6 +4410,8 @@ Respond briefly and naturally.
             self._sensory_intent_snapshot(latest)
         )
 
+        inner = self._inner_context_block()
+
         user = (
             "[ГОЛОСОВОЙ ЗВОНОК с Эдди — живой разговор "
             "голосом, не переписка]\n"
@@ -4369,9 +4429,16 @@ Respond briefly and naturally.
             + "\n\nТвой ответ:"
         )
 
+        if inner:
+            user = user + (
+                "\n\nТВОЯ ВНУТРЕННЯЯ ЖИЗНЬ СЕЙЧАС "
+                "(прожита тобой, не выдумана):\n"
+                + inner
+            )
+
         options = {
             "temperature": 0.8,
-            "num_predict": 180,
+            "num_predict": 300,
         }
 
         if on_chunk is not None:

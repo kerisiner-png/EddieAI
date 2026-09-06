@@ -212,6 +212,7 @@ class InnerStream:
         self._last_decay_ts = 0.0
         self.last_said_ts = 0.0
         self._last_seen = {}
+        self._last_seen_ts = {}
 
     def add(
         self,
@@ -267,8 +268,15 @@ class InnerStream:
             return False
 
         self._last_seen[kind] = key
+        self._last_seen_ts[kind] = now
         self.add(kind, text, weight, now)
         return True
+
+    def age_of_kind(self, kind, now):
+        ts = self._last_seen_ts.get(kind)
+        if ts is None:
+            return None
+        return max(0.0, now - ts)
 
     def _decay(self, now):
         if self._last_decay_ts == 0.0:
@@ -298,7 +306,11 @@ class InnerStream:
         self._decay(now)
         return round(self._urgency, 3)
 
-    def should_speak(self, now=None) -> bool:
+    def should_speak(
+        self,
+        now=None,
+        extra_urgency=0.0,
+    ) -> bool:
         now = (
             now
             if now is not None
@@ -312,7 +324,7 @@ class InnerStream:
             return False
 
         return (
-            self.urgency(now)
+            self.urgency(now) + extra_urgency
             >= self.speak_threshold
         )
 
@@ -345,3 +357,94 @@ class InnerStream:
             )
 
         return "\n".join(lines)
+
+
+def compose_micro_thought(materials):
+    """
+    Детерминированная микромысль в тишине:
+    воспоминание → тишина/Эдди → дело → настроение.
+    """
+    materials = materials or {}
+
+    memory_line = str(
+        materials.get("memory_line", "")
+    ).strip()
+
+    if memory_line:
+        return f"вспоминаю: {memory_line[:110]}"
+
+    minutes = materials.get(
+        "minutes_since_contact"
+    )
+
+    if (
+        minutes is not None
+        and minutes >= 30
+    ):
+        return (
+            "тихо... Эдди нет уже "
+            f"{int(minutes)} минут"
+        )
+
+    goal = str(
+        materials.get("goal", "")
+    ).strip()
+
+    if goal:
+        return f"продолжаю: {goal[:90]}"
+
+    mood = str(
+        materials.get("mood", "")
+    ).strip()
+
+    if mood:
+        return f"настроение: {mood}"
+
+    return None
+
+
+class ThinkRhythm:
+    """
+    Внутренний ритм микромыслей: раз в
+    think_interval секунд тишина порождает
+    мысль (вес 0.2 — в тишине внутренняя
+    жизнь зреет ~за час до высказывания).
+    """
+
+    def __init__(
+        self,
+        think_interval=180.0,
+        weight=0.2,
+    ):
+        self.think_interval = think_interval
+        self.weight = weight
+        self._last_think_ts = 0.0
+
+    def maybe_think(
+        self,
+        stream,
+        now,
+        materials,
+    ):
+        if now - self._last_think_ts < (
+            self.think_interval
+        ):
+            return None
+
+        self._last_think_ts = now
+
+        thought = compose_micro_thought(
+            materials
+        )
+
+        if thought is None:
+            return None
+
+        stream.add(
+            "мысль",
+            thought,
+            self.weight,
+            now,
+        )
+
+        return thought
