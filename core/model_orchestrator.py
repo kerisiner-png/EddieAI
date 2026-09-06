@@ -56,9 +56,10 @@ class ModelOrchestrator:
     SECRETS_DIR = Path.home() / ".eddieai_secrets"
     MISTRAL_MODEL = "mistral-small-latest"
 
-    # Решение Эдди 06.09: локальные модели не грузим вовсе —
-    # 8 ГБ RAM, мозг только в облаке (ollama-cloud → zen → glm).
-    LOCAL_MODELS_ENABLED = False
+    # Решение Эдди 06.09: локальные модели — ПОСЛЕДНИЙ РУБЕЖ
+    # (только когда все облака недоступны) и выгрузка сразу
+    # после ответа (keep_alive=0, модель не висит в RAM).
+    LOCAL_MODELS_ENABLED = True
 
     CLOUD_PROVIDERS = [
         {
@@ -1073,7 +1074,7 @@ class ModelOrchestrator:
                         "num_predict": 1,
                         "temperature": 0.0,
                     },
-                    keep_alive="3m",
+                    keep_alive=0,
                     think=False,
                 )
 
@@ -1152,18 +1153,6 @@ class ModelOrchestrator:
                     ),
                 }
 
-            if not self.LOCAL_MODELS_ENABLED:
-                return {
-                    "status": "FAILED",
-                    "content": "",
-                    "model": "cloud-only",
-                    "provider": "cloud",
-                    "error": (
-                        "local fallback disabled "
-                        "(cloud-only mode)"
-                    ),
-                }
-
             qwen = next(
                 (
                     item
@@ -1197,18 +1186,6 @@ class ModelOrchestrator:
                     "model": (
                         self._cloud_used
                         or self.MISTRAL_MODEL
-                    ),
-                }
-
-            if not self.LOCAL_MODELS_ENABLED:
-                return {
-                    "status": "FAILED",
-                    "content": "",
-                    "model": "cloud-only",
-                    "provider": "cloud",
-                    "error": (
-                        "local fallback disabled "
-                        "(cloud-only mode)"
                     ),
                 }
 
@@ -1277,11 +1254,11 @@ class ModelOrchestrator:
             default_num_predict = (
                 128 if is_fast else 256
             )
-            keep_alive = "3m"
+            keep_alive = 0
 
         elif model.name == "qwen3.5:4b":
             default_num_predict = 256
-            keep_alive = "3m"
+            keep_alive = 0
 
         else:
             default_num_predict = 256
@@ -1379,7 +1356,7 @@ class ModelOrchestrator:
                     "num_predict": 128,
                     "temperature": fallback.temperature,
                 },
-                "keep_alive": "3m",
+                "keep_alive": 0,
             }
 
             if response_format is not None:
