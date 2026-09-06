@@ -4542,7 +4542,7 @@ Respond briefly and naturally.
 
         options = {
             "temperature": 0.8,
-            "num_predict": 300,
+            "num_predict": 400,
         }
 
         if on_chunk is not None:

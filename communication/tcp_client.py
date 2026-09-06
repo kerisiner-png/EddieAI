@@ -237,7 +237,7 @@ class EddieTCPClient:
 
         elif msg_type == "agent_initiative":
             speak = bool(
-                payload.get("speak", True)
+                msg.get("speak", True)
             )
             with self._lock:
                 cbs = list(
