@@ -73,6 +73,56 @@ def _write_status_hb(runtime):
     except Exception:
         pass
     try:
+        cycles = getattr(
+            runtime, "cycles_completed", None
+        )
+        if cycles is not None:
+            data["cycles"] = cycles
+        future = getattr(
+            runtime,
+            "_background_future",
+            None,
+        )
+        data["future_done"] = (
+            future.done()
+            if future is not None
+            else None
+        )
+        if future is not None and future.done():
+            try:
+                exc = future.exception(
+                    timeout=0.1
+                )
+                data["future_exc"] = (
+                    repr(exc)[:200]
+                    if exc
+                    else None
+                )
+            except Exception:
+                pass
+        err = getattr(
+            runtime, "last_error", None
+        )
+        if err:
+            data["last_error"] = str(err)[
+                :200
+            ]
+    except Exception:
+        pass
+    try:
+        last = getattr(
+            runtime, "last_result", None
+        )
+        if isinstance(last, dict):
+            inner = last.get(
+                "runtime_result"
+            ) or last
+            status = inner.get("status")
+            if status:
+                data["last_status"] = status
+    except Exception:
+        pass
+    try:
         with open(
             str(BASE_DIR / "data" / "status.json"),
             "w",
@@ -134,6 +184,9 @@ def main():
     )
 
     agent = Agent()
+    # Отключаем прогрев локальных моделей – будем пользоваться облачной gpt‑oss:120b‑cloud сразу
+    agent.model_orchestrator.warm_up_models(enabled=False)
+
 
     runtime = AutonomyRuntimeFactory(
         agent,
@@ -217,6 +270,27 @@ def main():
                 f"{type(exc).__name__}: {exc}"
             )
 
+    pc_audio = None
+
+    if not args.no_senses:
+        try:
+            from identity.pc_audio_listener import (
+                PcAudioListener,
+            )
+
+            pc_audio = PcAudioListener(
+                agent=agent
+            )
+            pc_audio.start()
+            agent.pc_audio = pc_audio
+            log("pc audio listener started")
+        except Exception as exc:
+            pc_audio = None
+            log(
+                f"pc audio unavailable: "
+                f"{type(exc).__name__}: {exc}"
+            )
+
     try:
         while not _stop.is_set():
             try:
@@ -242,6 +316,12 @@ def main():
         if senses is not None:
             try:
                 senses.stop()
+            except Exception:
+                pass
+
+        if pc_audio is not None:
+            try:
+                pc_audio.stop()
             except Exception:
                 pass
 

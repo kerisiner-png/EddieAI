@@ -6,7 +6,73 @@ try:
     import mss.tools
 except ImportError:
     mss = None
-from PIL import Image
+from PIL import Image, ImageChops
+import ctypes
+
+
+CHANGE_DIFF_PIXEL_THRESHOLD = 24
+CHANGE_FRACTION_THRESHOLD = 0.02
+ACTIVE_WINDOW_CLASS = ctypes.windll.user32
+
+
+def active_window_title() -> str:
+    """
+    Заголовок активного окна Windows
+    (ctypes, без зависимостей).
+    """
+    try:
+        hwnd = ACTIVE_WINDOW_CLASS.GetForegroundWindow()
+        if not hwnd:
+            return ""
+        length = ACTIVE_WINDOW_CLASS.GetWindowTextLengthW(hwnd)
+        if length <= 0:
+            return ""
+        buf = ctypes.create_unicode_buffer(length + 1)
+        ACTIVE_WINDOW_CLASS.GetWindowTextW(hwnd, buf, length + 1)
+        return buf.value.strip()
+    except Exception:
+        return ""
+
+
+def changed_significantly(
+    prev_b64: str,
+    new_b64: str,
+) -> bool:
+    """
+    Значимая ли смена кадра: доля заметно
+    отличшихся пикселей в уменьшенном
+    градациях серого (мигание курсора и
+    мелкий шум отсекаются).
+    """
+    if not prev_b64 or not new_b64:
+        return True
+
+    try:
+        prev = Image.open(
+            io.BytesIO(base64.b64decode(prev_b64))
+        ).convert("RGB").resize((160, 90))
+        new = Image.open(
+            io.BytesIO(base64.b64decode(new_b64))
+        ).convert("RGB").resize((160, 90))
+    except Exception:
+        return True
+
+    diff = ImageChops.difference(prev, new)
+    r, g, b = diff.split()
+    max_diff = ImageChops.lighter(
+        ImageChops.lighter(r, g), b
+    )
+    hist = max_diff.histogram()
+    total = 160 * 90
+    notable = sum(
+        hist[CHANGE_DIFF_PIXEL_THRESHOLD + 1:]
+    )
+
+    return (
+        notable / total
+        >= CHANGE_FRACTION_THRESHOLD
+    )
+
 
 class ScreenPerceiver:
     INTERVAL = 120.0
@@ -20,6 +86,8 @@ class ScreenPerceiver:
         self._last_screenshot_b64 = None
         self._last_timestamp = 0.0
         self._prev_screenshot_b64 = None
+        self._last_window_title = ""
+        self._last_title_seen = ""
         self._vision_calls = 0
 
     def tick(self):
@@ -35,16 +103,42 @@ class ScreenPerceiver:
         if screenshot_b64 == self._prev_screenshot_b64:
             self._last_timestamp = time.time()
             return {"description": self._last_description or "", "timestamp": self._last_timestamp, "screenshot_b64": screenshot_b64}
-        description = self._vision_describe(screenshot_b64)
+        if self._prev_screenshot_b64 and not changed_significantly(self._prev_screenshot_b64, screenshot_b64):
+            self._prev_screenshot_b64 = screenshot_b64
+            self._last_screenshot_b64 = screenshot_b64
+            self._last_timestamp = time.time()
+            return {"description": self._last_description or "", "timestamp": self._last_timestamp, "screenshot_b64": screenshot_b64}
+        title = active_window_title()
+        if title and title != self._last_title_seen:
+            self._last_title_seen = title
+            if self._memory:
+                try:
+                    from memory.events import Event
+                    self._memory.remember(Event.create(
+                        content=f"Эдди переключился на окно: {title}",
+                        event_type="WORLD_SNAPSHOT",
+                        source_type="CONTEXT",
+                        source="window",
+                    ))
+                except Exception:
+                    pass
+        try:
+            from identity.window_text import focused_window_text
+            context_text = focused_window_text()
+        except Exception:
+            context_text = ""
+        description = self._vision_describe(screenshot_b64, window_title=title, context_text=context_text)
         self._prev_screenshot_b64 = screenshot_b64
         self._last_screenshot_b64 = screenshot_b64
         self._last_description = description
+        self._last_window_title = title
         self._last_timestamp = time.time()
         if self._memory and description:
             try:
                 from memory.events import Event
+                label = f"Экран [окно: {title}]: {description}" if title else f"Экран: {description}"
                 self._memory.remember(Event.create(
-                    content=f"Экран: {description}",
+                    content=label,
                     event_type="WORLD_SNAPSHOT",
                     source_type="VISION",
                     source="screen",
@@ -62,9 +156,10 @@ class ScreenPerceiver:
         try:
             with mss.mss() as sct:
                 monitor = sct.monitors[1]
-                with sct.grab(monitor) as img:
-                    raw = img.raw
-            img = Image.frombytes("RGB", img.size, raw, "raw", "RGB")
+                img = sct.grab(monitor)
+                raw = img.raw
+                size = img.size
+            img = Image.frombytes("RGB", size, raw, "raw", "RGB")
             img = img.resize(self.RESIZE, Image.LANCZOS)
             buf = io.BytesIO()
             img.save(buf, format="PNG", optimize=True)
@@ -72,7 +167,7 @@ class ScreenPerceiver:
         except Exception:
             return None
 
-    def _vision_describe(self, screenshot_b64):
+    def _vision_describe(self, screenshot_b64, window_title="", context_text=""):
         if self._orchestrator is None:
             return ""
         if self._vision_calls >= self.VISION_DAILY_LIMIT:
@@ -80,6 +175,16 @@ class ScreenPerceiver:
         try:
             system = "Ты — глаза EddieAI. Опиши кратко что на экране: какое приложение, что открыто, что происходит. Максимум 3 предложения."
             user = "Опиши что на экране."
+            if window_title:
+                user = (
+                    f"Активное окно Windows: {window_title}. "
+                    "Опиши что на экране."
+                )
+            if context_text:
+                user += (
+                    " Текст сфокусированного элемента окна "
+                    f"(фрагмент): {context_text[:400]}"
+                )
             vision_fn = getattr(
                 self._orchestrator,
                 "_cloud_chat_vision",

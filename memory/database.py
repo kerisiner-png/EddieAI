@@ -959,5 +959,42 @@ class Memory:
         return "\n".join(lines)
 
     @_synchronized
+    def recent_dialogue(
+        self,
+        limit: int = 6,
+    ):
+        rows = self.connection.execute(
+            """
+            SELECT content, source_type, source
+            FROM events
+            WHERE event_type = 'CONVERSATION'
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+
+        items = []
+
+        for row in reversed(rows):
+            content = str(row["content"] or "").strip()
+
+            if not content:
+                continue
+
+            label = (
+                "Эдди"
+                if row["source"] == "Eddie"
+                else "EddieAI"
+            )
+
+            items.append({
+                "label": label,
+                "text": content,
+            })
+
+        return items
+
+    @_synchronized
     def close(self):
         self.connection.close()

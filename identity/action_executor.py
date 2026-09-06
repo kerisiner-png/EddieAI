@@ -18,6 +18,7 @@ VALID_ACTIONS = {
     "SCREEN_CONTROL",
     "LAUNCH_APP",
     "INSTALL_PACKAGE",
+    "PERCEIVE",
 }
 
 

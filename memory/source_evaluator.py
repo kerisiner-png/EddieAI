@@ -43,6 +43,16 @@ class SourceEvaluator:
         "nationalgeographic.com",
         "skyandtelescope.org",
         "space.com",
+        "habr.com",
+        "stackoverflow.com",
+        "stackoverflow.blog",
+        "github.com",
+        "python.org",
+        "docs.python.org",
+        "developer.mozilla.org",
+        "arxiv.org",
+        "ieee.org",
+        "acm.org",
     }
 
     LOW_TRUST_DOMAINS = {

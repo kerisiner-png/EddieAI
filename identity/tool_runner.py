@@ -11,6 +11,7 @@ class ToolRunner:
         external_recorder=None,
         self_interpreter=None,
         source_evaluator=None,
+        model_orchestrator=None,
     ):
         self.registry = registry
         self.executor = ActionExecutor()
@@ -21,6 +22,10 @@ class ToolRunner:
 
         self.policy = ToolExecutionPolicy(
             filesystem_root
+        )
+
+        self.model_orchestrator = (
+            model_orchestrator
         )
 
         self.external_recorder = (
@@ -224,7 +229,17 @@ class ToolRunner:
 
         if not accepted:
             return {
-                "status": "NO_ACCEPTED_SOURCES",
+                "status": "OK",
+                "no_accepted_sources": True,
+                "honest_note": (
+                    "Исследование проведено, но "
+                    "проверяемых источников по "
+                    f"запросу «{query}» не "
+                    "нашлось: все кандидаты не "
+                    "прошли оценку качества. "
+                    "Результаты не записаны как "
+                    "знание."
+                ),
                 "query": query,
                 "results": raw_results,
                 "evaluated_sources": [
@@ -415,6 +430,11 @@ class ToolRunner:
 
         if tool_name == "screen_control":
             return self._execute_screen_control(
+                action,
+            )
+
+        if tool_name == "perceive":
+            return self._execute_perceive(
                 action,
             )
 
@@ -689,3 +709,51 @@ class ToolRunner:
             }
 
         return {"status": "OK"}
+
+    def _execute_perceive(
+        self,
+        action,
+    ):
+        source = action.parameters.get(
+            "source", "webcam"
+        )
+        try:
+            from identity.screen_perceiver import (
+                ScreenPerceiver,
+            )
+
+            sp = ScreenPerceiver(
+                model_orchestrator=(
+                    self.model_orchestrator
+                ),
+            )
+            if source == "webcam":
+                desc = sp.webcam_describe()
+            elif source == "screen":
+                current = sp.capture_now()
+                desc = current.get(
+                    "description", ""
+                )
+            else:
+                return {
+                    "status": "FAILED",
+                    "error": (
+                        f"Неизвестный источник "
+                        f"восприятия: {source}"
+                    ),
+                }
+            if not desc or not desc.strip():
+                return {
+                    "status": "EMPTY",
+                    "description": "",
+                }
+            return {
+                "status": "OK",
+                "description": desc,
+                "source": source,
+            }
+        except Exception as exc:
+            return {
+                "status": "FAILED",
+                "error": str(exc),
+            }

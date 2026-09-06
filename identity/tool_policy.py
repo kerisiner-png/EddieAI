@@ -82,6 +82,11 @@ class ToolExecutionPolicy:
         if action_type == "INSTALL_PACKAGE":
             return self._install_package(action)
 
+        if action_type == "PERCEIVE":
+            return self._allow(
+                "Восприятие камерой/экраном разрешено."
+            )
+
         return self._deny(
             "Неизвестный тип действия."
         )

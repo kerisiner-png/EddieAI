@@ -29,6 +29,7 @@ class ActionRouter:
         "WAIT": "scheduler",
         "LAUNCH_APP": "programs",
         "INSTALL_PACKAGE": "install",
+        "PERCEIVE": "perceive",
     }
 
     def __init__(

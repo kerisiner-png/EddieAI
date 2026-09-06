@@ -45,15 +45,60 @@ class ModelOrchestrator:
     Сам выбирает наиболее подходящую доступную модель
     для конкретной когнитивной задачи.
 
-    Сейчас доступны только локальные модели:
-        qwen3.5:4b
-        phi4-mini
+    Приоритет очереди (решение Эдди 06.09):
+        1. ollama-cloud: gpt-oss:120b-cloud, gemma4:31b-cloud
+           (локальный демон ollama оффлоадит в облако,
+           auth — ollama signin; fast ~0.5-1.5 с)
+        2. zen (ключи истекли — быстрый 401, фолбэк)
+        3. glm z.ai (медленный при рейт-лимите)
     """
 
     SECRETS_DIR = Path.home() / ".eddieai_secrets"
     MISTRAL_MODEL = "mistral-small-latest"
 
     CLOUD_PROVIDERS = [
+        {
+            "name": "ollama-gpt-oss",
+            "key_path": (
+                SECRETS_DIR / "ollama.key"
+            ),
+            "url": (
+                "http://127.0.0.1:11434/v1"
+                "/chat/completions"
+            ),
+            "model": "gpt-oss:120b-cloud",
+            "max_tokens": 1024,
+            "roles": [
+                "conversation",
+                "fallback",
+                "plan",
+                "reflection",
+                "affective",
+            ],
+            "extra_payload": {
+                "reasoning_effort": "low"
+            },
+        },
+        {
+            "name": "ollama-gemma",
+            "key_path": (
+                SECRETS_DIR / "ollama.key"
+            ),
+            "url": (
+                "http://127.0.0.1:11434/v1"
+                "/chat/completions"
+            ),
+            "model": "gemma4:31b-cloud",
+            "max_tokens": 1024,
+            "roles": [
+                "conversation",
+                "fallback",
+                "plan",
+                "reflection",
+                "affective",
+                "vision",
+            ],
+        },
         {
             "name": "zen-deepseek-flash",
             "key_path": (
@@ -122,7 +167,10 @@ class ModelOrchestrator:
                 "https://api.z.ai/api/paas/v4"
                 "/chat/completions"
             ),
-            "model": "glm-4.5-flash",
+            "model": "glm-4.7-flash",
+            "extra_payload": {
+                "thinking": {"type": "disabled"}
+            },
         },
         {
             "name": "deepseek",
@@ -316,10 +364,6 @@ class ModelOrchestrator:
                 data = json.loads(resp.read().decode("utf-8"))
             msg = data["choices"][0]["message"]
             content = msg.get("content", "")
-            if not content:
-                content = msg.get(
-                    "reasoning_content", ""
-                )
             content = content.strip() if content else None
             if content is not None:
                 self._cloud_used = name
@@ -966,6 +1010,14 @@ class ModelOrchestrator:
         models: list[str] | None = None,
         enabled: bool = True,
     ) -> dict[str, float | str]:
+
+        # Ensure stdout/stderr are UTF‑8 to avoid UnicodeEncodeError when printing Cyrillic
+        try:
+            import sys
+            sys.stdout.reconfigure(encoding='utf-8')
+            sys.stderr.reconfigure(encoding='utf-8')
+        except Exception:
+            pass
 
         from time import perf_counter
 
