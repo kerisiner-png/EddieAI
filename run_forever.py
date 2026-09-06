@@ -293,6 +293,21 @@ def main():
             )
 
     try:
+        from identity.self_model import SelfModel
+
+        agent.self_model = SelfModel(
+            agent.self_state
+        ).build(
+            agent.capabilities,
+            agent=agent,
+        )
+    except Exception as exc:
+        log(
+            f"self_model rebuild failed: "
+            f"{type(exc).__name__}: {exc}"
+        )
+
+    try:
         while not _stop.is_set():
             try:
                 fault.update_heartbeat()
