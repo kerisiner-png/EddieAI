@@ -576,6 +576,60 @@ class AutonomousRuntime:
             except Exception:
                 pass
 
+    def _eddie_present(self) -> bool:
+        """
+        Эдди рядом? Голос — основной канал,
+        чат — для «меня нет рядом». Сигналы:
+        недавний звук ПК, голосовая фраза,
+        живой экран.
+        """
+        now = time.time()
+
+        orchestrator = getattr(
+            self, "orchestrator", None
+        )
+        agent = getattr(
+            orchestrator, "agent", None
+        )
+        stream = getattr(
+            agent, "inner_stream", None
+        )
+
+        if stream is not None:
+            heard = stream.age_of_kind(
+                "Эдди сказал", now
+            )
+            if (
+                heard is not None
+                and heard <= 900
+            ):
+                return True
+
+            screen = stream.age_of_kind(
+                "экран", now
+            )
+            if (
+                screen is not None
+                and screen <= 600
+            ):
+                return True
+
+        pc_audio = getattr(
+            agent, "pc_audio", None
+        ) if agent is not None else None
+
+        if pc_audio is not None:
+            last = getattr(
+                pc_audio, "last_audio_ts", 0.0
+            )
+            if (
+                last
+                and now - last <= 600
+            ):
+                return True
+
+        return False
+
     def _inner_speak(self, stream):
         stream.mark_spoke(time.time())
 
@@ -644,6 +698,7 @@ class AutonomousRuntime:
                         "eddie_server",
                         None,
                     ),
+                    speak=self._eddie_present(),
                 )
                 return
             except Exception:
@@ -658,7 +713,8 @@ class AutonomousRuntime:
         ):
             try:
                 server.send_initiative(
-                    text[:280]
+                    text[:280],
+                    speak=self._eddie_present(),
                 )
             except Exception:
                 pass
@@ -798,7 +854,8 @@ class AutonomousRuntime:
         ):
             try:
                 server.send_initiative(
-                    text[:280]
+                    text[:280],
+                    speak=self._eddie_present(),
                 )
             except Exception:
                 pass
@@ -871,7 +928,10 @@ class AutonomousRuntime:
             return
 
         try:
-            server.send_initiative(text)
+            server.send_initiative(
+                text,
+                speak=self._eddie_present(),
+            )
         except Exception:
             return
 
@@ -913,7 +973,10 @@ class AutonomousRuntime:
             server, 'send_initiative'
         ):
             try:
-                server.send_initiative(text)
+                server.send_initiative(
+                    text,
+                    speak=self._eddie_present(),
+                )
             except Exception:
                 pass
 

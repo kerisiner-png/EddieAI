@@ -561,6 +561,7 @@ class EddieServer:
     def send_initiative(
         self,
         text: str,
+        speak: bool = True,
     ):
         """
         EddieAI сам обращается к Эдди.
@@ -609,6 +610,7 @@ class EddieServer:
             "type": "agent_initiative",
             "msg_id": ai_id,
             "text": text,
+            "speak": bool(speak),
         })
 
         if not self._clients:

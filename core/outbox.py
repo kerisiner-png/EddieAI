@@ -27,6 +27,7 @@ class Outbox:
         self,
         message: str,
         server=None,
+        speak: bool = True,
     ) -> bool:
         """
         Записать сообщение в outbox.
@@ -53,7 +54,10 @@ class Outbox:
 
         if server is not None:
             try:
-                server.send_initiative(message)
+                server.send_initiative(
+                    message,
+                    speak=speak,
+                )
             except Exception:
                 pass
 

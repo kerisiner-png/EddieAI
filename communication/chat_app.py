@@ -245,14 +245,25 @@ class EddieChatApp:
                 1000, self._check_connected
             )
 
-    def _on_initiative(self, text, msg_id=None):
+    def _on_initiative(
+        self,
+        text,
+        msg_id=None,
+        speak=True,
+    ):
         self._post_ui(
             self._show_initiative,
             text,
             msg_id,
+            speak,
         )
 
-    def _show_initiative(self, text, msg_id=None):
+    def _show_initiative(
+        self,
+        text,
+        msg_id=None,
+        speak=True,
+    ):
         if self._chat is None:
             return
         self._chat.append_message(
@@ -274,11 +285,8 @@ class EddieChatApp:
         except Exception:
             pass
         if (
-            self._voice
-            and (
-                self._chat.is_voice_mode()
-                or self._call.in_call()
-            )
+            self._voice is not None
+            and speak is not False
         ):
             from communication.voice_io import (
                 mood_from_agent,

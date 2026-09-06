@@ -236,13 +236,16 @@ class EddieTCPClient:
                     pass
 
         elif msg_type == "agent_initiative":
+            speak = bool(
+                payload.get("speak", True)
+            )
             with self._lock:
                 cbs = list(
                     self._initiative_callbacks
                 )
             for cb in cbs:
                 try:
-                    cb(text, msg_id)
+                    cb(text, msg_id, speak)
                 except Exception:
                     pass
 
