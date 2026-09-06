@@ -3,14 +3,6 @@ from datetime import datetime, timezone
 
 CONTOUR_LIMITATIONS = [
     {
-        "id": "no_audio",
-        "label": (
-            "нет слуха: не слышу звук "
-            "на текущем контуре"
-        ),
-        "scope": "perceptual",
-    },
-    {
         "id": "runs_on_eddie_pc",
         "label": (
             "живу и работаю на ПК Эдди"
@@ -26,6 +18,72 @@ CONTOUR_LIMITATIONS = [
         "scope": "resource",
     },
 ]
+
+
+def _perceptual_limitations(agent):
+    """
+    Ограничения чувств — по фактической
+    проводке агента, а не по статичному
+    списку: контур растёт, и самоописание
+    не должно отставать от тела.
+    """
+    items = []
+
+    if agent is None:
+        items.append({
+            "id": "no_audio",
+            "label": (
+                "нет слуха: не слышу звук "
+                "на текущем контуре"
+            ),
+            "scope": "perceptual",
+        })
+        items.append({
+            "id": "no_vision",
+            "label": (
+                "нет зрения: экран и камера "
+                "не подключены"
+            ),
+            "scope": "perceptual",
+        })
+        return items
+
+    has_hearing = (
+        getattr(agent, "pc_audio", None)
+        is not None
+        or getattr(
+            agent, "sense_listener", None
+        )
+        is not None
+    )
+    has_vision = (
+        getattr(
+            agent, "screen_perceiver", None
+        )
+        is not None
+    )
+
+    if not has_hearing:
+        items.append({
+            "id": "no_audio",
+            "label": (
+                "нет слуха: не слышу звук "
+                "на текущем контуре"
+            ),
+            "scope": "perceptual",
+        })
+
+    if not has_vision:
+        items.append({
+            "id": "no_vision",
+            "label": (
+                "нет зрения: экран и камера "
+                "не подключены"
+            ),
+            "scope": "perceptual",
+        })
+
+    return items
 
 
 class SelfModel:
@@ -66,7 +124,8 @@ class SelfModel:
         )
 
         limitations = self._limitations(
-            capabilities_spec
+            capabilities_spec,
+            agent=agent,
         )
 
         current_state = self._current_state(
@@ -250,6 +309,7 @@ class SelfModel:
     def _limitations(
         self,
         capabilities_spec,
+        agent=None,
     ):
         limitations = []
 
@@ -290,6 +350,10 @@ class SelfModel:
 
         for item in CONTOUR_LIMITATIONS:
             limitations.append(dict(item))
+
+        limitations.extend(
+            _perceptual_limitations(agent)
+        )
 
         return limitations
 

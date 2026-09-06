@@ -262,6 +262,7 @@ def main():
                 ),
             )
             senses.start()
+            agent.sense_listener = senses
             log("senses started (mic + webcam)")
         except Exception as exc:
             senses = None
