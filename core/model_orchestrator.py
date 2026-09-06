@@ -53,6 +53,8 @@ class ModelOrchestrator:
         3. glm z.ai (медленный при рейт-лимите)
     """
 
+    from core.power_mode import read_power_status
+
     SECRETS_DIR = Path.home() / ".eddieai_secrets"
     MISTRAL_MODEL = "mistral-small-latest"
 
@@ -1205,17 +1207,24 @@ class ModelOrchestrator:
 
         free_gb = self.available_ram_gb()
         required_gb = self.MODEL_RAM_GB.get(model.name)
-        if required_gb is not None and free_gb < required_gb:
+        on_battery = not read_power_status().get(
+            "ac_online", True
+        ) if read_power_status().get("known") else False
+        if required_gb is not None and (
+            free_gb < required_gb or on_battery
+        ):
             lighter = "phi4-mini:latest"
             lighter_need = self.MODEL_RAM_GB.get(lighter)
             if (
                 model.name != lighter
                 and lighter_need is not None
                 and free_gb >= lighter_need
+                and not on_battery
             ):
                 print(
                     f"[orchestrator] мало RAM ({free_gb:.1f} GB) "
                     f"для {model.name}: даунгрейд на {lighter}"
+                    + (" (on battery)" if on_battery else "")
                 )
                 decision = ModelDecision(
                     model=lighter,

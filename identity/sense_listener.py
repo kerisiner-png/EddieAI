@@ -461,9 +461,18 @@ class SenseListener:
                 self._cam_pass()
             except Exception:
                 pass
-            self._stop.wait(
-                timeout=self._webcam_interval
-            )
+            interval = self._webcam_interval
+
+            power = getattr(
+                self._agent,
+                "power_mode",
+                None,
+            ) if self._agent is not None else None
+
+            if power is not None and power.on_battery():
+                interval *= 3
+
+            self._stop.wait(timeout=interval)
 
     def _cam_pass(self):
         if self._screen is None:

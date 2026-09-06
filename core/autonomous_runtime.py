@@ -34,6 +34,9 @@ class AutonomousRuntime:
         world_process_history=None,
     ):
         self.scheduler = scheduler
+        self._normal_scheduler_interval = getattr(
+            scheduler, "interval_seconds", 15
+        )
         self.memory = memory
         self.orchestrator = orchestrator
         self.life_cycle = life_cycle
@@ -573,6 +576,129 @@ class AutonomousRuntime:
                         source="narrator",
                     )
                 )
+            except Exception:
+                pass
+
+    def _announce_power(self, transition):
+        to = transition.get("to")
+        percent = transition.get("percent")
+
+        texts = {
+            "save": (
+                "Эдди, свет отключили — я на батарее"
+                + (
+                    f" ({percent}%)."
+                    if percent is not None
+                    else "."
+                )
+                + " Перехожу в режим бережливости: "
+                "смотрю реже, думаю тише."
+            ),
+            "critical": (
+                "Эдди, батарея "
+                f"{percent if percent is not None else '?'}%"
+                " — найди розетку. Я сохраняю состояние "
+                "и почти уснул."
+            ),
+            "normal": (
+                "Свет вернулся — батарея "
+                f"{percent if percent is not None else '?'}%"
+                ". Возвращаюсь в обычный ритм."
+            ),
+        }
+
+        text = texts.get(to, "")
+
+        memory = getattr(
+            getattr(
+                self, "orchestrator", None
+            ),
+            "agent",
+            None,
+        )
+        agent = memory
+        memory = getattr(agent, "memory", None)
+
+        if memory is not None and text:
+            try:
+                from memory.events import Event
+
+                memory.remember(
+                    Event.create(
+                        content=text,
+                        event_type=(
+                            "SELF_EXPERIENCE"
+                        ),
+                        source_type="BODY",
+                        source="power",
+                    )
+                )
+            except Exception:
+                pass
+
+        if agent is not None:
+            stream = getattr(
+                agent, "inner_stream", None
+            )
+            if stream is not None:
+                stream.add(
+                    "свет",
+                    text,
+                    1.0,
+                    time.time(),
+                )
+            mood = getattr(agent, "mood", None)
+            if mood is not None:
+                if to == "save":
+                    mood.valence = max(
+                        -1.0, mood.valence - 0.1
+                    )
+                elif to == "critical":
+                    mood.valence = max(
+                        -1.0, mood.valence - 0.15
+                    )
+                elif to == "normal":
+                    mood.valence = min(
+                        1.0, mood.valence + 0.1
+                    )
+
+        outbox = getattr(self, "outbox", None)
+
+        if outbox is not None and text:
+            try:
+                outbox.send(
+                    message=text[:280],
+                    server=getattr(
+                        self,
+                        "eddie_server",
+                        None,
+                    ),
+                    speak=self._eddie_present(),
+                )
+            except Exception:
+                pass
+
+    def _apply_power_limits(self):
+        power = getattr(
+            self, "_power_mode", None
+        )
+        if power is None:
+            return
+
+        perceiver = getattr(
+            self, "_screen_perceiver", None
+        )
+
+        if perceiver is not None:
+            try:
+                if power.mode == "save":
+                    perceiver.INTERVAL = max(
+                        perceiver.INTERVAL, 600
+                    )
+                elif power.mode == "critical":
+                    perceiver.INTERVAL = 10 ** 9
+                elif power.mode == "normal":
+                    perceiver.INTERVAL = 120
             except Exception:
                 pass
 
@@ -1361,6 +1487,22 @@ class AutonomousRuntime:
 
         self._decay_affect()
 
+        power = getattr(
+            self, "_power_mode", None
+        )
+        if power is not None:
+            try:
+                transition = power.poll(
+                    time.time()
+                )
+                if transition is not None:
+                    self._announce_power(
+                        transition
+                    )
+                    self._apply_power_limits()
+            except Exception:
+                pass
+
         if self.life_cycle is not None:
             try:
                 _prev_asleep_since = self.life_cycle.state.get(
@@ -1416,7 +1558,19 @@ class AutonomousRuntime:
 
         self._inner_flow()
 
-        if hasattr(self, '_screen_perceiver') and self._screen_perceiver:
+        power = getattr(
+            self, "_power_mode", None
+        )
+        power_critical = (
+            power is not None
+            and power.mode == "critical"
+        )
+
+        if (
+            hasattr(self, '_screen_perceiver')
+            and self._screen_perceiver
+            and not power_critical
+        ):
             try:
                 self._screen_perceiver.tick()
             except Exception:
@@ -1524,6 +1678,38 @@ class AutonomousRuntime:
                 }
 
         self.last_error = None
+
+        power = getattr(
+            self, "_power_mode", None
+        )
+
+        if (
+            power is not None
+            and power.mode == "critical"
+        ):
+            return {
+                "status": "POWER_CRITICAL",
+                "state": self.state,
+                "reason": (
+                    "Батарея критична — автономная "
+                    "работа остановлена, жду розетку."
+                ),
+            }
+
+        if power is not None and power.mode == "save":
+            try:
+                self.scheduler.interval_seconds = 60
+            except Exception:
+                pass
+        elif power is not None and (
+            power.mode == "normal"
+        ):
+            try:
+                self.scheduler.interval_seconds = (
+                    self._normal_scheduler_interval
+                )
+            except Exception:
+                pass
 
         try:
             self.state = "ACTING"

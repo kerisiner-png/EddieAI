@@ -695,6 +695,12 @@ class AutonomyRuntimeFactory:
             self.agent.self_state
         )
 
+        from core.power_mode import PowerMode
+
+        power_mode = PowerMode()
+        runtime._power_mode = power_mode
+        self.agent.power_mode = power_mode
+
         from identity.body import Body
         from identity.inner_stream import (
             ThinkRhythm,

@@ -73,6 +73,18 @@ def _write_status_hb(runtime):
     except Exception:
         pass
     try:
+        power = getattr(
+            runtime, "_power_mode", None
+        )
+        if power is not None:
+            data["power"] = {
+                "mode": power.mode,
+                "ac_online": power.ac_online,
+                "percent": power.percent,
+            }
+    except Exception:
+        pass
+    try:
         cycles = getattr(
             runtime, "cycles_completed", None
         )
