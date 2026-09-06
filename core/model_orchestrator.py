@@ -62,6 +62,7 @@ class ModelOrchestrator:
     # (только когда все облака недоступны) и выгрузка сразу
     # после ответа (keep_alive=0, модель не висит в RAM).
     LOCAL_MODELS_ENABLED = True
+    LOCAL_RETRY_COOLDOWN_SEC = 600.0
 
     CLOUD_PROVIDERS = [
         {
@@ -711,6 +712,7 @@ class ModelOrchestrator:
         self.llm_client = Client(
             timeout=600.0,
         )
+        self._last_local_attempt_ts = 0.0
 
         self.models = [
             ModelProfile(
@@ -1164,6 +1166,22 @@ class ModelOrchestrator:
                 None,
             )
 
+            if (
+                time.time()
+                - self._last_local_attempt_ts
+                < self.LOCAL_RETRY_COOLDOWN_SEC
+            ):
+                return {
+                    "status": "FAILED",
+                    "content": "",
+                    "model": "cloud-only",
+                    "provider": "cloud",
+                    "error": (
+                        "local cooldown after "
+                        "recent attempt"
+                    ),
+                }
+
             if qwen is not None:
                 decision = ModelDecision(
                     model=qwen.name,
@@ -1188,6 +1206,22 @@ class ModelOrchestrator:
                     "model": (
                         self._cloud_used
                         or self.MISTRAL_MODEL
+                    ),
+                }
+
+            if (
+                time.time()
+                - self._last_local_attempt_ts
+                < self.LOCAL_RETRY_COOLDOWN_SEC
+            ):
+                return {
+                    "status": "FAILED",
+                    "content": "",
+                    "model": "cloud-only",
+                    "provider": "cloud",
+                    "error": (
+                        "local cooldown after "
+                        "recent attempt"
                     ),
                 }
 
@@ -1311,6 +1345,9 @@ class ModelOrchestrator:
                     response_format
                 )
 
+            self._last_local_attempt_ts = (
+                time.time()
+            )
             response = self.llm_client.chat(
                 **chat_kwargs
             )
@@ -1373,6 +1410,9 @@ class ModelOrchestrator:
                     response_format
                 )
 
+            self._last_local_attempt_ts = (
+                time.time()
+            )
             response = self.llm_client.chat(
                 **fallback_kwargs
             )
