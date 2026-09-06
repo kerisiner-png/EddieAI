@@ -79,6 +79,23 @@ class ScreenPerceiver:
     RESIZE = (1280, 720)
     VISION_DAILY_LIMIT = 150
 
+    # Роли камер (решение Эдди 06.09): обзорная
+    # комнатная — общий взгляд; ноутбучная — лицо Эдди.
+    # Индексы проверены живыми описаниями; 1 и 3 — Snap Camera (мусор).
+    CAMERA_ROLES = {"room": 2, "face": 0}
+    CAMERA_PROMPTS = {
+        "room": (
+            "Это обзорная камера комнаты Эдди. "
+            "Опиши одним-двумя предложениями, "
+            "что происходит в комнате."
+        ),
+        "face": (
+            "Это камера ноутбука, направленная "
+            "на Эдди. Опиши одним предложением, "
+            "что он делает и как выглядит."
+        ),
+    }
+
     def __init__(self, model_orchestrator=None, memory=None):
         self._orchestrator = model_orchestrator
         self._memory = memory
@@ -204,12 +221,18 @@ class ScreenPerceiver:
         except Exception:
             return ""
 
-    def webcam_capture(self):
+    def webcam_capture(self, camera="face"):
         try:
             import cv2
             import base64 as b64mod
 
-            index = self._find_webcam_index()
+            index = self.CAMERA_ROLES.get(
+                camera
+            )
+            if index is None:
+                index = (
+                    self._find_webcam_index()
+                )
             if index is None:
                 return None
             cap = cv2.VideoCapture(
@@ -304,10 +327,10 @@ class ScreenPerceiver:
         except Exception:
             return None
 
-    def webcam_describe(self):
+    def webcam_describe(self, camera="face"):
         if self._vision_calls >= self.VISION_DAILY_LIMIT:
             return ""
-        b64 = self.webcam_capture()
+        b64 = self.webcam_capture(camera=camera)
         if b64 is None:
             return ""
         if self._orchestrator is None:
@@ -321,8 +344,12 @@ class ScreenPerceiver:
             if vision_fn is None:
                 return ""
             result = vision_fn(
-                "Ты — глаза EddieAI. Опиши что видно с камеры: есть ли человек, "
-                "что он делает, что вокруг. Максимум 3 предложения.",
+                (
+                    "Ты — глаза EddieAI. "
+                    + self.CAMERA_PROMPTS.get(
+                        camera, ""
+                    )
+                ),
                 "Что на камере?",
                 [b64],
             )

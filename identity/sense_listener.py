@@ -402,7 +402,9 @@ class SenseListener:
         if self._screen is None:
             return
         try:
-            desc = self._screen.webcam_describe()
+            desc = self._screen.webcam_describe(
+                camera="room"
+            )
             if not desc or not desc.strip():
                 return
             memory = getattr(
@@ -414,7 +416,10 @@ class SenseListener:
 
             memory.remember(
                 Event.create(
-                    content=f"Камера: {desc}",
+                    content=(
+                        "Камера (комната): "
+                        f"{desc}"
+                    ),
                     event_type="SHARED_EXPERIENCE",
                     source_type="VISION",
                     source="webcam",

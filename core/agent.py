@@ -4499,7 +4499,9 @@ Respond briefly and naturally.
         chunks = []
         try:
             if want_camera:
-                desc = perceiver.webcam_describe()
+                desc = perceiver.webcam_describe(
+                    camera="face"
+                )
                 if desc and desc.strip():
                     chunks.append(
                         f"С камеры вижу: {desc.strip()}"

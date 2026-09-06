@@ -56,6 +56,10 @@ class ModelOrchestrator:
     SECRETS_DIR = Path.home() / ".eddieai_secrets"
     MISTRAL_MODEL = "mistral-small-latest"
 
+    # Решение Эдди 06.09: локальные модели не грузим вовсе —
+    # 8 ГБ RAM, мозг только в облаке (ollama-cloud → zen → glm).
+    LOCAL_MODELS_ENABLED = False
+
     CLOUD_PROVIDERS = [
         {
             "name": "ollama-gpt-oss",
@@ -1148,6 +1152,18 @@ class ModelOrchestrator:
                     ),
                 }
 
+            if not self.LOCAL_MODELS_ENABLED:
+                return {
+                    "status": "FAILED",
+                    "content": "",
+                    "model": "cloud-only",
+                    "provider": "cloud",
+                    "error": (
+                        "local fallback disabled "
+                        "(cloud-only mode)"
+                    ),
+                }
+
             qwen = next(
                 (
                     item
@@ -1181,6 +1197,18 @@ class ModelOrchestrator:
                     "model": (
                         self._cloud_used
                         or self.MISTRAL_MODEL
+                    ),
+                }
+
+            if not self.LOCAL_MODELS_ENABLED:
+                return {
+                    "status": "FAILED",
+                    "content": "",
+                    "model": "cloud-only",
+                    "provider": "cloud",
+                    "error": (
+                        "local fallback disabled "
+                        "(cloud-only mode)"
                     ),
                 }
 
