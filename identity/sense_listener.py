@@ -350,7 +350,7 @@ class SenseListener:
                 self._agent, "memory", None
             )
             if memory is not None:
-                items = memory.recent_dialogue(6)
+                items = memory.recent_dialogue(20)
                 if items:
                     return "\n".join(
                         f"{item['label']}: "

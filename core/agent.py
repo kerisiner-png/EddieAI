@@ -4374,6 +4374,67 @@ Respond briefly and naturally.
 
         return "\n".join(lines)
 
+    def _conversation_materials(self) -> str:
+        lines = []
+
+        state = getattr(
+            self, "self_state", None
+        )
+
+        if state is not None:
+            try:
+                interests = (
+                    state.get(
+                        "interests", []
+                    )
+                    or []
+                )
+                if interests:
+                    lines.append(
+                        "твои интересы: "
+                        + ", ".join(
+                            str(item)
+                            for item in interests[
+                                :3
+                            ]
+                        )
+                    )
+            except Exception:
+                pass
+
+            try:
+                prefs = (
+                    state.get(
+                        "preferences", {}
+                    )
+                    or {}
+                )
+                labels = []
+
+                for item in list(
+                    prefs.values()
+                )[:3]:
+                    if isinstance(
+                        item, dict
+                    ):
+                        label = item.get(
+                            "label", ""
+                        )
+                        if label:
+                            labels.append(
+                                str(label)
+                            )
+
+                if labels:
+                    lines.append(
+                        "твои предпочтения: "
+                        + "; ".join(labels)
+                    )
+            except Exception:
+                pass
+
+        return chr(10).join(lines)
+
     def respond_call_fast(
         self,
         conversation,
@@ -4412,6 +4473,8 @@ Respond briefly and naturally.
 
         inner = self._inner_context_block()
 
+        materials = self._conversation_materials()
+
         user = (
             "[ГОЛОСОВОЙ ЗВОНОК с Эдди — живой разговор "
             "голосом, не переписка]\n"
@@ -4434,6 +4497,13 @@ Respond briefly and naturally.
                 "\n\nТВОЯ ВНУТРЕННЯЯ ЖИЗНЬ СЕЙЧАС "
                 "(прожита тобой, не выдумана):\n"
                 + inner
+            )
+
+        if materials:
+            user = user + (
+                "\n\nНЕДАВНЕЕ МЕЖДУ ВАМИ И ТВОЁ "
+                "(опирайся на это, продолжай нить):\n"
+                + materials
             )
 
         options = {

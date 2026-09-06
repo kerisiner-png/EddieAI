@@ -272,6 +272,28 @@ def _recent_action_texts(memory, window_sec=900):
         return []
 
 
+def strip_leading_address(text):
+    """
+    Дежурное обращение по имени в начале
+    каждой фразы — маркер колл-центра,
+    не друга. Убираем, если оно есть.
+    """
+    import re as _re
+
+    cleaned = text or ""
+
+    while True:
+        stripped = _re.sub(
+            r"^\s*эдди\s*,\s*",
+            "",
+            cleaned,
+            flags=_re.IGNORECASE,
+        )
+        if stripped == cleaned:
+            return cleaned
+        cleaned = stripped
+
+
 def process_speech_promises(agent, text):
     """
     Единая обработка исходящей речи:
@@ -279,7 +301,7 @@ def process_speech_promises(agent, text):
     цель ядра; без способности → вырезано;
     «уже сделал» без факта → вырезано.
     """
-    text = text or ""
+    text = strip_leading_address(text)
 
     if not text.strip():
         return text

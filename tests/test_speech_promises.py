@@ -96,3 +96,32 @@ if __name__ == "__main__":
     test_no_past_claim_no_change()
     test_evidence_stem_match()
     print("ALL OK")
+
+
+def test_strip_leading_address():
+    from identity.speech_promises import (
+        strip_leading_address,
+    )
+
+    assert (
+        strip_leading_address(
+            "Эдди, а что думаешь?"
+        )
+        == "а что думаешь?"
+    )
+    assert (
+        strip_leading_address(
+            "Эдди,Эдди, слышу."
+        )
+        == "слышу."
+    )
+    assert (
+        strip_leading_address(
+            "А Эдди говорил иначе."
+        )
+        == "А Эдди говорил иначе."
+    )
+
+
+if __name__ == "__main__":
+    pass
