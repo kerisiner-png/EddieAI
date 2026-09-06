@@ -228,7 +228,7 @@ class _FakeServer:
     def __init__(self):
         self.sent = []
 
-    def send_initiative(self, text):
+    def send_initiative(self, text, speak=True):
         self.sent.append(text)
 
 

@@ -526,6 +526,16 @@ IDLE — сейчас ничего не делать.
         if state.get("incoming_call"):
             return Action("HANDLE_INCOMING_CALL")
 
+        inbox = state.get("inbox_unread", 0)
+
+        try:
+            inbox = int(inbox)
+        except (TypeError, ValueError):
+            inbox = 0
+
+        if inbox > 0:
+            return Action("READ_INBOX")
+
         emotions = state.get(
             "emotions",
             {},
@@ -594,16 +604,6 @@ IDLE — сейчас ничего не делать.
                 "COMPLETE_GOAL",
                 payload={"goal": value},
             )
-
-        inbox = state.get("inbox_unread", 0)
-
-        try:
-            inbox = int(inbox)
-        except (TypeError, ValueError):
-            inbox = 0
-
-        if inbox > 0:
-            return Action("READ_INBOX")
 
         candidate = self.goal_manager.best_candidate()
 
