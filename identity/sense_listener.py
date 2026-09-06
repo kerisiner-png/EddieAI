@@ -280,6 +280,17 @@ class SenseListener:
                         f"{exc}"
                     )
                     answer = self._agent.respond(text)
+            try:
+                from identity.speech_promises import (
+                    process_speech_promises,
+                )
+
+                answer = process_speech_promises(
+                    self._agent, answer
+                )
+            except Exception:
+                pass
+
             if not (answer or "").strip():
                 _log(
                     "voice empty answer: "

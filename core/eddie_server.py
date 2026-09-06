@@ -505,6 +505,17 @@ class EddieServer:
             with self._respond_lock:
                 answer = self.agent.respond(latest)
 
+        try:
+            from identity.speech_promises import (
+                process_speech_promises,
+            )
+
+            answer = process_speech_promises(
+                self.agent, answer
+            )
+        except Exception:
+            pass
+
         ai_id = None
 
         try:
