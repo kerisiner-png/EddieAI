@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from concurrent.futures import Future, ThreadPoolExecutor
 import threading
+import time
 
 from memory.events import Event
 from core.dream_processor import DreamProcessor
@@ -218,6 +219,210 @@ class AutonomousRuntime:
             applied.append(candidate)
 
         return applied
+
+    SCREEN_COMMENT_MIN_INTERVAL = 3600.0
+
+    def _decay_affect(self):
+        orchestrator = getattr(
+            self, "orchestrator", None
+        )
+        agent = getattr(
+            orchestrator, "agent", None
+        )
+        if agent is None:
+            return
+
+        affect = getattr(
+            agent,
+            "affective_state",
+            None,
+        )
+        if affect is None:
+            return
+
+        try:
+            affect.decay()
+        except Exception:
+            pass
+
+    def _handle_watch_mode(self, watch):
+        perceiver = getattr(
+            self, "_screen_perceiver", None
+        )
+        if perceiver is None:
+            return
+
+        try:
+            perceiver.INTERVAL = (
+                40.0
+                if watch.active
+                else 120.0
+            )
+        except Exception:
+            pass
+
+        agent = getattr(
+            getattr(
+                self, "orchestrator", None
+            ),
+            "agent",
+            None,
+        )
+        pc_audio = getattr(
+            agent, "pc_audio", None
+        )
+        if pc_audio is not None:
+            watch.note_audio(
+                getattr(
+                    pc_audio,
+                    "last_audio_ts",
+                    0.0,
+                )
+            )
+
+        now = time.time()
+
+        title = (
+            getattr(
+                perceiver,
+                "_last_window_title",
+                "",
+            )
+            or ""
+        )
+        entered = watch.maybe_enter(
+            now, title
+        )
+        if entered:
+            try:
+                self.outbox.send(
+                    message=(
+                        "Включаюсь: смотрим "
+                        "вместе."
+                    ),
+                    server=self.eddie_server,
+                )
+            except Exception:
+                pass
+
+        current = perceiver.get_current()
+
+        if current.get("description"):
+            watch.note_motion(now)
+
+        if watch.maybe_exit(now):
+            return
+
+        if watch.should_comment(now):
+            watch.mark_commented(now)
+            self._watch_comment(
+                current.get("description", "")
+            )
+
+    def _watch_comment(self, description):
+        if not description:
+            return
+
+        try:
+            text = (
+                self.agent
+                .model_orchestrator
+                .cloud_chat_stream(
+                    system=(
+                        "Ты EddieAI. Ты смотришь "
+                        "видео вместе с Эдди. Скажи "
+                        "ОДНУ короткую живую реакцию "
+                        "от первого лица на то, что "
+                        "происходит на экране. Только "
+                        "сама реакция, без пояснений."
+                    ),
+                    user=(
+                        "На экране сейчас: "
+                        f"{description}"
+                    ),
+                    options={
+                        "num_predict": 300,
+                        "temperature": 0.9,
+                    },
+                    task="conversation",
+                )
+            )
+        except Exception:
+            return
+
+        text = (text or "").strip()
+
+        if not text:
+            return
+
+        server = getattr(
+            self, "eddie_server", None
+        )
+
+        if server is not None and hasattr(
+            server, "send_initiative"
+        ):
+            try:
+                server.send_initiative(
+                    text[:280]
+                )
+            except Exception:
+                pass
+
+    def _maybe_comment_screen(self, current):
+        if not current:
+            return
+
+        description = (
+            current.get("description")
+            or ""
+        ).strip()
+
+        if len(description) < 20:
+            return
+
+        last_desc = getattr(
+            self, "_last_comment_description", None
+        )
+
+        if description == last_desc:
+            return
+
+        now = time.time()
+
+        last_at = getattr(
+            self, "_last_screen_comment_at", 0.0
+        )
+
+        if (
+            now - last_at
+            < self.SCREEN_COMMENT_MIN_INTERVAL
+        ):
+            return
+
+        text = (
+            "Смотрю на экран: "
+            + description[:180]
+        )
+
+        server = getattr(
+            self, "eddie_server", None
+        )
+
+        if server is None or not hasattr(
+            server, "send_initiative"
+        ):
+            return
+
+        try:
+            server.send_initiative(text)
+        except Exception:
+            return
+
+        self._last_screen_comment_at = now
+        self._last_comment_description = (
+            description
+        )
 
     def _enqueue_shared_suggestion(self, suggestion):
         if not suggestion:
@@ -635,6 +840,8 @@ class AutonomousRuntime:
                 ),
             }
 
+        self._decay_affect()
+
         if self.life_cycle is not None:
             try:
                 _prev_asleep_since = self.life_cycle.state.get(
@@ -694,6 +901,18 @@ class AutonomousRuntime:
             except Exception:
                 pass
 
+            watch = getattr(
+                self, "_watch_mode", None
+            )
+
+            if watch is not None:
+                try:
+                    self._handle_watch_mode(
+                        watch
+                    )
+                except Exception:
+                    pass
+
             if hasattr(self, '_shared_life') and self._shared_life:
                 try:
                     current = (
@@ -708,6 +927,9 @@ class AutonomousRuntime:
                         obs = self._shared_life.observe(
                             current["description"],
                             eddie_present=True,
+                        )
+                        self._maybe_comment_screen(
+                            current
                         )
                         if (
                             hasattr(self, '_shared_appraisal')
@@ -1013,6 +1235,24 @@ class AutonomousRuntime:
             try:
                 if self.state != "PAUSED":
                     self.tick_background()
+
+                    future = getattr(
+                        self,
+                        "_background_future",
+                        None,
+                    )
+
+                    if (
+                        future is not None
+                        and future.done()
+                    ):
+                        exc = future.exception()
+
+                        if exc is not None:
+                            self.last_error = (
+                                f"{type(exc).__name__}: "
+                                f"{exc}"
+                            )
             except Exception as exc:
                 self.last_error = str(exc)
                 self.state = "ERROR"

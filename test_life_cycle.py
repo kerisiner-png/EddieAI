@@ -39,15 +39,40 @@ lc2.update(h(1, day=28))
 assert lc2.is_asleep() is True, lc2.state_dict()
 assert lc2.state["sleep_count"] >= 1
 
-# Во сне усталость спадает и происходит пробуждение
+# Полноценный ночной сон: от ~0.9 до пробуждения уходит 7–9 часов.
+# Проснувшись на WAKE_THRESHOLD, EddieAI отдохнул по-настоящему.
 lc3 = LifeCycle(FakeState({"life_state": {"asleep": True, "fatigue": 1.0}}))
 lc3.update(h(0, day=28))
 lc3.update(h(2, day=28))
-lc3.update(h(3, day=28))
 lc3.update(h(4, day=28))
-assert lc3.state["fatigue"] < lc3.state["fatigue"] or True
+assert lc3.is_asleep() is True, "за 4 часа полноценный сон ещё не завершён"
+assert lc3.state["fatigue"] < 1.0
+lc3.update(h(8, day=28))
+assert lc3.is_asleep() is True, "за 8 часов сон почти завершён (≈0.2)"
+lc3.update(h(9, day=28))
 assert lc3.is_asleep() is False, lc3.state_dict()
 assert lc3.state["wake_count"] >= 1
+
+# Дневное бодрствование не гонит в сон: до вечера усталость
+# не достигает порога (в отличие от прежних частых дневных дремот).
+state_day = FakeState({
+    "life_state": {"fatigue": 0.10},
+    "goals_state": {},
+})
+lc_day = LifeCycle(state_day)
+lc_day.update(h(7, day=27))
+lc_day.update(h(13, day=27))
+assert lc_day.is_asleep() is False, (
+    "днём при нормальном бодрствовании сон не должен приходить"
+)
+assert lc_day.state["fatigue"] < 0.80
+# Но ближе к ночи усталость достигает порога — естественный отбой.
+# (максимальный шаг апдейта — MAX_DT_HOURS, поэтому идём по 6 часов)
+lc_day.update(h(19, day=27))
+lc_day.update(h(22, day=27))
+assert lc_day.is_asleep() is True, (
+    "вечером сон приходит естественно"
+)
 
 # Активная задача откладывает сон (порог выше; усталость не упирается
 # в жёсткий предел 1.0: 0.80 + час ночи = 0.96 < 1.0)

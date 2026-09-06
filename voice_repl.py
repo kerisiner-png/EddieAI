@@ -338,8 +338,30 @@ def saturate(pcm, drive):
 
 
 def equalize(pcm, rate):
-    b, a = butter(2, [1000, 5000], btype="bandpass", fs=rate)
+    b, a = butter(2, [300, 6500], btype="bandpass", fs=rate)
     return lfilter(b, a, pcm)
+
+
+def normalize_volume(pcm, target_rms=0.25, peak_limit=0.95, knee=0.75):
+    x = pcm.astype(np.float64)
+    rms = float(np.sqrt((x**2).mean()))
+    if rms < 1e-6:
+        return x.astype(np.float32)
+    x = x * (target_rms / rms)
+    a = np.abs(x)
+    tail = np.tanh(
+        (a - knee) / (peak_limit - knee)
+    )
+    y = np.sign(x) * (
+        knee
+        + (peak_limit - knee)
+        * np.where(a <= knee, 0.0, tail)
+        + np.where(a <= knee, a - knee, 0.0)
+    )
+    peak = float(np.abs(y).max())
+    if peak > peak_limit:
+        y = y / peak * peak_limit
+    return y.astype(np.float32)
 
 
 def speak(text):

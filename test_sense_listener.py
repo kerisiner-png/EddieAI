@@ -204,3 +204,53 @@ def test_finish_phrase_skips_short():
 
     sl._finish_phrase(FakeRec(), b"x")
     assert sl._agent.calls == []
+
+
+def test_finish_phrase_wakes_when_asleep():
+    import json
+
+    from identity.sense_listener import SenseListener
+
+    class Life:
+        def __init__(self):
+            self.woken = False
+
+        def is_asleep(self):
+            return True
+
+        def force_wake(self):
+            self.woken = True
+
+    class Agent:
+        def __init__(self):
+            self.calls = []
+            self.life_cycle = Life()
+
+        def respond_call_fast(self, conversation, text):
+            self.calls.append(text)
+            return "ответ"
+
+    sl = SenseListener(
+        agent=Agent(),
+        server=None,
+        screen_perceiver=None,
+    )
+    spoken = []
+    sl._speak = lambda text: spoken.append(text)
+
+    class FakeRec:
+        def AcceptWaveform(self, data):
+            pass
+
+        def FinalResult(self):
+            return json.dumps({"text": "эдди просыпайся"})
+
+        def Reset(self):
+            pass
+
+    sl._finish_phrase(FakeRec(), b"some-bytes")
+    assert sl._agent.life_cycle.woken is True, (
+        "обращение к спящему EddieAI будит его"
+    )
+    assert sl._agent.calls == ["эдди просыпайся"]
+    assert spoken and "ответ" in spoken[0]

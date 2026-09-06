@@ -282,6 +282,20 @@ class EddieServer:
             return None
 
         try:
+            life = getattr(
+                self.agent,
+                "life_cycle",
+                None,
+            )
+            if (
+                life is not None
+                and life.is_asleep()
+            ):
+                life.force_wake()
+        except Exception:
+            pass
+
+        try:
             return self.history.chat_add(
                 "Eddie", text
             )
@@ -324,6 +338,18 @@ class EddieServer:
                     + ended.get("type", "?"),
                     ended.get("type", "other"),
                 )
+            import time
+
+            watch = getattr(
+                self.agent, "watch_mode", None
+            )
+            if watch is not None:
+                try:
+                    watch.force_exit(
+                        time.time()
+                    )
+                except Exception:
+                    pass
             return cmd
 
         activity_type = cmd.get(
@@ -335,6 +361,19 @@ class EddieServer:
             title,
             source="chat",
         )
+        if activity_type == "movie":
+            import time
+
+            watch = getattr(
+                self.agent, "watch_mode", None
+            )
+            if watch is not None:
+                try:
+                    watch.force_enter(
+                        time.time(), "eddie"
+                    )
+                except Exception:
+                    pass
         self._record_shared_event(
             "Эдди предложил совместную активность: "
             + (title or activity_type),

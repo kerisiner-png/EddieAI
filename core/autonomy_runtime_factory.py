@@ -130,6 +130,8 @@ class AutonomyRuntimeFactory:
             self.agent.self_state
         )
 
+        goal_planner.revive_orphans()
+
         goal_manager = GoalManager(
             self.agent.self_state,
             goal_planner,
@@ -676,6 +678,12 @@ class AutonomyRuntimeFactory:
         screen_controller = ScreenController()
         runtime._screen_perceiver = screen_perceiver
         runtime._screen_controller = screen_controller
+
+        from identity.watch_mode import WatchMode
+
+        watch_mode = WatchMode()
+        runtime._watch_mode = watch_mode
+        self.agent.watch_mode = watch_mode
         self.agent.screen_perceiver = (
             screen_perceiver
         )

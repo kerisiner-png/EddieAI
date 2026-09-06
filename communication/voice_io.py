@@ -214,6 +214,27 @@ class VoiceIO:
         self._stream_on_phrase = None
         self._stream_on_speech_start = None
         self._stream_stop_check = None
+        self._speaker_id = self._make_speaker_id()
+
+    def _make_speaker_id(self):
+        try:
+            from identity.speaker_id import (
+                SpeakerIdentifier,
+                make_sherpa_embed_fn,
+            )
+
+            return SpeakerIdentifier(
+                profiles_path=r"C:\EddieAI\data"
+                r"\speaker_profiles.json",
+                embed_fn=make_sherpa_embed_fn(
+                    r"C:\EddieAI\models\speaker"
+                    r"\3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx",
+                    num_threads=2,
+                ),
+                threshold=0.5,
+            )
+        except Exception:
+            return None
 
     def _ensure_piper(self):
         with VoiceIO._pip_lock:
@@ -520,7 +541,8 @@ class VoiceIO:
                             f"partial emit words={len(text.split())} "
                             f"text={text[:60]!r}"
                         )
-                        self._emit_text(text)
+                        speaker = self._identify_speaker(pcm)
+                        self._emit_text(text, speaker=speaker)
                         with self._stream_lock:
                             self._stream_recording = False
                             self._stream_pending = []
@@ -541,9 +563,10 @@ class VoiceIO:
             text = self._transcribe_pcm(pcm)
         except Exception:
             text = ""
-        self._emit_text(text)
+        speaker = self._identify_speaker(pcm)
+        self._emit_text(text, speaker=speaker)
 
-    def _emit_text(self, text):
+    def _emit_text(self, text, speaker=None):
         if not text:
             _dbg("emit EMPTY")
             return
@@ -551,13 +574,22 @@ class VoiceIO:
             _dbg(f"emit skip dup: {text[:40]!r}")
             return
         self._stream_last_emitted = text
-        _dbg(f"emit: {text[:80]!r}")
+        _dbg(f"emit: {text[:80]!r} speaker={speaker!r}")
         cb = self._stream_on_phrase
         if cb is not None:
             try:
-                cb(text)
+                cb(text, speaker)
             except Exception:
                 pass
+
+    def _identify_speaker(self, samples):
+        sid = self._speaker_id
+        if sid is None or sid.identify is None:
+            return None
+        try:
+            return sid.identify(samples)
+        except Exception:
+            return None
 
     def speak(self, text: str, mood=None):
         self._stop_flag = False
@@ -642,9 +674,6 @@ class VoiceIO:
         out_pcm = brighten(sped, rate, 6500, brighten_db)
         out_pcm = saturate(out_pcm, drive)
         out_pcm = equalize(out_pcm, rate)
-        peak = np.abs(out_pcm).max()
-        if peak > 0.99:
-            out_pcm = out_pcm / peak * 0.99
 
         snd2 = parselmouth.Sound(out_pcm, rate)
         man = parselmouth.praat.call(
@@ -674,8 +703,20 @@ class VoiceIO:
             syn = parselmouth.praat.call(
                 man, "Get resynthesis (overlap-add)"
             )
-            return syn.values[0]
-        return out_pcm
+            from voice_repl import normalize_volume
+
+            return normalize_volume(
+                syn.values[0],
+                target_rms=0.25,
+                peak_limit=0.95,
+            )
+        from voice_repl import normalize_volume
+
+        return normalize_volume(
+            out_pcm,
+            target_rms=0.25,
+            peak_limit=0.95,
+        )
 
     def _play_pcm(self, pcm, rate):
         data = pcm.astype(np.float32)

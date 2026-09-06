@@ -163,3 +163,32 @@ with TemporaryDirectory() as temp:
     print("ALL PASS")
 
     db.close()
+
+with TemporaryDirectory() as temp9:
+    state9 = SelfState(
+        Path(temp9) / "state9.json"
+    )
+    state9.set("interests", [])
+
+    core9 = DecisionCore(
+        memory=object(),
+        goal_manager=GoalManager(
+            state9,
+            GoalPlanner(state9),
+        ),
+    )
+
+    # 13. Фрустрация 1.0 не блокирует чтение
+    #     сообщений Эдди (READ_INBOX)
+    decision = core9._local_rules(
+        dict(
+            STATE,
+            inbox_unread=2,
+            emotions={"frustration": 1.0},
+        )
+    )
+
+    assert decision.kind == "READ_INBOX", (
+        decision
+    )
+

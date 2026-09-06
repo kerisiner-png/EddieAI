@@ -7,7 +7,7 @@ class CuriosityDirector:
         self_state,
         goal_manager,
         llm=None,
-        min_interval_seconds=1800,
+        min_interval_seconds=600,
     ):
         self.self_state = self_state
         self.goal_manager = goal_manager

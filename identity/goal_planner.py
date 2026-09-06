@@ -232,6 +232,34 @@ class GoalPlanner:
             status="SKIPPED",
         )
 
+    def revive_orphans(self):
+        """
+        Задачи, брошенные в ACTIVE при гибели
+        предыдущего процесса, возвращаются в
+        PENDING: новый процесс не может их
+        «продолжать». Иначе next_task видит
+        пустоту, цель зависает между
+        COMPLETE_GOAL и вечной ACTIVE.
+        Возвращает число возрождённых задач.
+        """
+        plans = self._plans()
+
+        revived = 0
+
+        for plan in plans.values():
+            for task in plan.get(
+                "tasks", []
+            ):
+                if task.get("status") == "ACTIVE":
+                    task["status"] = "PENDING"
+                    task["progress"] = 0.0
+                    revived += 1
+
+        if revived:
+            self._save(plans)
+
+        return revived
+
     def revise(
         self,
         goal: str,

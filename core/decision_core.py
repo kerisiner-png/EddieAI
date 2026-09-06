@@ -540,6 +540,23 @@ IDLE — сейчас ничего не делать.
 
         active = self.goal_manager.active()
 
+        candidate = self.goal_manager.best_candidate()
+
+        if (
+            candidate is not None
+            and (
+                len(active)
+                < self.goal_manager.MAX_ACTIVE_GOALS
+            )
+        ):
+            if frustration >= 0.70:
+                return Action("IDLE")
+
+            return Action(
+                "ACTIVATE_GOAL",
+                payload={"value": candidate.value},
+            )
+
         if active:
             goal = self._top_goal(active)
             value = goal.value
@@ -585,7 +602,7 @@ IDLE — сейчас ничего не делать.
         except (TypeError, ValueError):
             inbox = 0
 
-        if inbox > 0 and frustration < 0.70:
+        if inbox > 0:
             return Action("READ_INBOX")
 
         candidate = self.goal_manager.best_candidate()

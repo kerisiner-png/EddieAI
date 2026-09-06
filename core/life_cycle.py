@@ -20,11 +20,14 @@ NIGHT_FATIGUE_MULTIPLIER = 1.6
 
 # Скорости усталости и пороги. Свобода: EddieAI сам решает,
 # когда и сколько спать; активная задача откладывает сон.
-FATIGUE_GAIN_PER_HOUR_AWAKE = 0.10
-FATIGUE_LOSS_PER_HOUR_SLEEP = 0.35
+# Параметры сбалансированы под «человеческий» ритм: днём бодрствует
+# долго (усталость копится ~5%/час), ночью спит полноценные 7–9 часов
+# (недосып из-за высокого WAKE_THRESHOLD убран).
+FATIGUE_GAIN_PER_HOUR_AWAKE = 0.05
+FATIGUE_LOSS_PER_HOUR_SLEEP = 0.10
 SLEEP_THRESHOLD = 0.80
 HARD_SLEEP_THRESHOLD = 1.0
-WAKE_THRESHOLD = 0.25
+WAKE_THRESHOLD = 0.15
 ACTIVE_TASK_EXTRA = 0.15
 
 MAX_DT_HOURS = 6.0

@@ -42,6 +42,26 @@ class TaskRevisionPolicy:
                 ),
             }
 
+        if result.get("status") == "REJECTED":
+            errors = result.get("errors") or []
+
+            reason = "; ".join(
+                str(item) for item in errors
+            )
+
+            if not reason:
+                reason = (
+                    "действие отклонено "
+                    "политикой инструментов"
+                )
+
+            return {
+                "action": "revise",
+                "reason": (
+                    f"Шаг невыполним: {reason}"
+                ),
+            }
+
         error = str(
             result.get("error", "")
         ).lower()

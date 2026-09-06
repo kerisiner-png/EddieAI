@@ -3,6 +3,8 @@ class TaskController:
     Связывает GoalPlanner с результатами ToolRunner.
     """
 
+    MAX_TASK_RETRIES = 3
+
     def __init__(
         self,
         goal_manager,
@@ -12,6 +14,7 @@ class TaskController:
         self.goal_manager = goal_manager
         self.planner = planner
         self.revision_policy = revision_policy
+        self._retry_counts = {}
 
     def execute_result(
         self,
@@ -26,6 +29,11 @@ class TaskController:
         )
 
         if status == "OK":
+            self._retry_counts.pop(
+                (goal, task_title.lower()),
+                None,
+            )
+
             completed = (
                 self.planner.complete_task(
                     goal,
@@ -99,6 +107,51 @@ class TaskController:
                     ),
                     "next_task": next_task,
                 }
+
+        key = (goal, task_title.lower())
+
+        retries = (
+            self._retry_counts.get(key, 0) + 1
+        )
+
+        self._retry_counts[key] = retries
+
+        if retries >= self.MAX_TASK_RETRIES:
+            self._retry_counts.pop(key, None)
+
+            self.planner.revise(
+                goal,
+                task_title,
+                reason=(
+                    f"Шаг не удался "
+                    f"{retries} раза подряд "
+                    f"(status={status}) — "
+                    f"пропущен после лимита "
+                    f"повторов."
+                ),
+            )
+
+            next_task = None
+
+            if activate_next:
+                next_task = (
+                    self.goal_manager
+                    .activate_next_task(
+                        goal
+                    )
+                )
+
+            return {
+                "status": "TASK_REVISED",
+                "task": self._current_task(
+                    goal,
+                    task_title,
+                ),
+                "goal": self.goal_manager.get(
+                    goal
+                ),
+                "next_task": next_task,
+            }
 
         return {
             "status": "TASK_NOT_COMPLETED",

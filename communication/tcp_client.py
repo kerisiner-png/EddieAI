@@ -2,6 +2,9 @@ import json
 import socket
 import threading
 import time
+from run_forever import log
+
+
 
 
 RECONNECT_DELAYS = [1, 2, 5, 10]
@@ -114,6 +117,7 @@ class EddieTCPClient:
                 pass
 
     def _send_raw(self, payload):
+        log(f"\u003e\u003e\u003e SEND RAW TO SERVER: {json.dumps(payload)[:200]}")
         data = json.dumps(
             payload,
             ensure_ascii=False,
@@ -160,25 +164,27 @@ class EddieTCPClient:
         while self._running:
             try:
                 self._connect_socket()
+                log(">>> CLIENT CONNECTED TO SERVER")
                 self._reconnect_index = 0
                 self._reader()
-            except Exception:
+            except Exception as e:
+                log(f">>> CLIENT CONNECTION ERROR: {e}")
                 pass
             finally:
                 with self._lock:
                     self._connected = False
                 self._close_socket()
-
-            if not self._running:
-                break
-            delay = RECONNECT_DELAYS[
-                min(
-                    self._reconnect_index,
-                    len(RECONNECT_DELAYS) - 1,
-                )
-            ]
-            self._reconnect_index += 1
-            time.sleep(delay)
+                
+                if not self._running:
+                    break
+                delay = RECONNECT_DELAYS[
+                    min(
+                        self._reconnect_index,
+                        len(RECONNECT_DELAYS) - 1,
+                    )
+                ]
+                self._reconnect_index += 1
+                time.sleep(delay)
 
     def _connect_socket(self):
         self._close_socket()

@@ -36,13 +36,10 @@ class EddieChatApp:
         self._server = (
             server
             if server is not None
-            else EddieServer(
-                self._agent,
-                history_store=(
-                    self._agent.memory
-                ),
-            )
+            else None
         )
+        if self._server is None:
+            raise RuntimeError("EddieChatApp requires an EddieServer instance passed from run_forever")
         self._tcp = EddieTCPClient()
         self._tray = TrayIcon()
         try:
@@ -218,12 +215,8 @@ class EddieChatApp:
             pass
 
     def _run_server(self):
-        try:
-            self._tcp_server = (
-                self._server.serve_forever()
-            )
-        except Exception:
-            pass
+        # Server is launched externally (run_forever). Nothing to do here.
+        return None
 
     def _wait_port(self, port, timeout=15):
         deadline = _monotonic() + timeout
@@ -616,8 +609,10 @@ class EddieChatApp:
                 pass
             self._speech_queue.clear()
 
-    def _on_phrase(self, text):
+    def _on_phrase(self, text, speaker=None):
         if not text:
+            return
+        if not _is_accepted_speaker(speaker):
             return
         self._on_speech_start()
         self._post_ui(self._on_user_send, text)
@@ -673,6 +668,12 @@ class EddieChatApp:
             self._tray.stop()
         except Exception:
             pass
+
+
+def _is_accepted_speaker(speaker):
+    if speaker is None:
+        return True
+    return speaker == "Eddie"
 
 
 def _monotonic():

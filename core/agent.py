@@ -1,4 +1,5 @@
 import re
+from run_forever import log
 from identity.evidence_consolidator import EvidenceConsolidator
 from identity.user_evidence import (
     UserEvidenceRecorder,
@@ -4336,6 +4337,7 @@ Respond briefly and naturally.
             .build_verbalizer_system_prompt(
                 speech_profile=speech_profile,
             )
+            + prompt_builder.build_sense_capabilities_block()
             + """
 Ты EddieAI в живом голосовом разговоре с Эдди.
 Твой ответ будет произнесён вслух (озвучен голосом),
@@ -4346,6 +4348,10 @@ Respond briefly and naturally.
 """
         )
 
+        sensory = (
+            self._sensory_intent_snapshot(latest)
+        )
+
         user = (
             "[ГОЛОСОВОЙ ЗВОНОК с Эдди — живой разговор "
             "голосом, не переписка]\n"
@@ -4353,6 +4359,13 @@ Respond briefly and naturally.
             + (conversation or "")
             + "\n\nСейчас Эдди сказал:\n"
             + latest
+            + (
+                "\n\nТВОИ РЕАЛЬНЫЕ НАБЛЮДЕНИЯ (не выдумывай "
+                "сверх этого):\n"
+                + sensory
+                if sensory
+                else ""
+            )
             + "\n\nТвой ответ:"
         )
 
@@ -4413,14 +4426,115 @@ Respond briefly and naturally.
         except Exception:
             return ""
 
+    def _sensory_intent_snapshot(
+        self,
+        text: str,
+    ) -> str:
+        """Проверяет, просит ли пользователь посмотреть
+        камерой/на экран, и возвращает сенсорное описание.
+
+        Если намерение не сенсорное или захвата нет —
+        возвращает пустую строку.
+        """
+        low = text.lower()
+        want_camera = any(
+            marker in low
+            for marker in (
+                "посмотр",
+                "камер",
+                "вокруг",
+                "что рядом",
+                "кто со мной",
+                "видишь меня",
+                "увидишь",
+                "видеть камерой",
+                "видеть вокруг",
+                "по камере",
+                "смотри камерой",
+            )
+        )
+        want_screen = any(
+            marker in low
+            for marker in (
+                "экран",
+                "на мониторе",
+                "что у меня открыто",
+                "что на экране",
+                "скрин",
+                "скриншот",
+                "видишь экран",
+                "смотреть на экран",
+                "функция смотреть",
+                "умеешь видеть",
+                "есть зрение",
+                "зрительное",
+            )
+        )
+        want_tools = any(
+            marker in low
+            for marker in (
+                "какие у тебя функции",
+                "что ты умеешь",
+                "какие у тебя возможности",
+                "умеешь нажать",
+                "можешь нажать",
+                "клик",
+                "мышк",
+                "клавиатур",
+                "ввести текст",
+                "что ты можешь",
+                "функция у тебя есть",
+                "что умеешь",
+            )
+        )
+        if not (want_camera or want_screen or want_tools):
+            return ""
+
+        perceiver = getattr(
+            self, "screen_perceiver", None
+        )
+        if perceiver is None:
+            return ""
+
+        chunks = []
+        try:
+            if want_camera:
+                desc = perceiver.webcam_describe()
+                if desc and desc.strip():
+                    chunks.append(
+                        f"С камеры вижу: {desc.strip()}"
+                    )
+            if want_screen:
+                snap = perceiver.capture_now()
+                desc = snap.get("description", "")
+                if desc and desc.strip():
+                    chunks.append(
+                        f"На экране: {desc.strip()}"
+                    )
+            if want_tools and not chunks:
+                chunks.append(
+                    "Могу взаимодействовать с ПК: файлы, терминал, "
+                    "программы, мышь и клавиатура (клики, ввод текста)."
+                )
+        except Exception:
+            pass
+
+        if not chunks:
+            return ""
+        return " ".join(chunks)
+
     def respond(
         self,
         user_message: str,
     ) -> str:
-
+        from time import perf_counter
+        start = perf_counter()
+        log(f">>> RESPOND START: {user_message[:80]}")
         answer = self._respond_core(
             user_message
         )
+        elapsed = perf_counter() - start
+        log(f">>> RESPOND END: {elapsed:.2f}s")
 
         try:
             self._capture_goal_claim(

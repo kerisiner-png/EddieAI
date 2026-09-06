@@ -1,5 +1,21 @@
 import threading
 import time
+from pathlib import Path
+
+
+def _log(msg):
+    stamp = time.strftime("%H:%M:%S")
+    try:
+        with open(
+            Path(__file__).resolve().parent.parent
+            / "logs"
+            / "eddie_forever.log",
+            "a",
+            encoding="utf-8",
+        ) as f:
+            f.write(f"[{stamp}] {msg}\n")
+    except Exception:
+        pass
 
 
 class SenseListener:
@@ -200,9 +216,6 @@ class SenseListener:
 
         if not raw:
             return
-        if self._is_asleep():
-            self._last_spoken_at = time.time()
-            return
         try:
             rec.AcceptWaveform(bytes(raw))
             result = json.loads(
@@ -222,7 +235,19 @@ class SenseListener:
         if len(cleaned.split()) < 2:
             return
         self._last_spoken_at = time.time()
+        if self._is_asleep():
+            self._wake_up()
         self._handle_spoken(cleaned)
+
+    def _wake_up(self):
+        try:
+            life = getattr(
+                self._agent, "life_cycle", None
+            )
+            if life is not None:
+                life.force_wake()
+        except Exception:
+            pass
 
     def _is_asleep(self):
         try:
@@ -247,13 +272,82 @@ class SenseListener:
                             text,
                         )
                     )
-                except Exception:
+                except Exception as exc:
+                    _log(
+                        f"voice respond_call_fast "
+                        f"failed: "
+                        f"{type(exc).__name__}: "
+                        f"{exc}"
+                    )
                     answer = self._agent.respond(text)
+            if not (answer or "").strip():
+                _log(
+                    "voice empty answer: "
+                    f"phrase={text[:80]!r}"
+                )
+            self._record_voice_turn(text, answer)
             self._speak(answer or "")
+        except Exception as exc:
+            _log(
+                f"voice handle_spoken failed: "
+                f"{type(exc).__name__}: {exc}"
+            )
+
+    def _record_voice_turn(self, user_text, agent_text):
+        try:
+            memory = getattr(
+                self._agent, "memory", None
+            )
+            if memory is None:
+                return
+            from memory.events import Event
+
+            user_text = (user_text or "").strip()
+            agent_text = (agent_text or "").strip()
+
+            if user_text:
+                memory.remember(
+                    Event.create(
+                        content=user_text,
+                        event_type="CONVERSATION",
+                        source_type="VOICE",
+                        source="Eddie",
+                        personal_experience=False,
+                        confidence=1.0,
+                        verified=True,
+                    )
+                )
+
+            if agent_text:
+                memory.remember(
+                    Event.create(
+                        content=agent_text,
+                        event_type="CONVERSATION",
+                        source_type="VOICE",
+                        source="EddieAI",
+                        personal_experience=False,
+                        confidence=1.0,
+                        verified=True,
+                    )
+                )
         except Exception:
             pass
 
     def _recent_conversation(self):
+        try:
+            memory = getattr(
+                self._agent, "memory", None
+            )
+            if memory is not None:
+                items = memory.recent_dialogue(6)
+                if items:
+                    return "\n".join(
+                        f"{item['label']}: "
+                        f"{item['text']}"
+                        for item in items
+                    )
+        except Exception:
+            pass
         try:
             server = self._server
             if server is None:

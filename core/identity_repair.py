@@ -172,7 +172,7 @@ class IdentityRepairStrategy:
 
         lowered = answer.casefold()
 
-        # Прямое утверждение о несуществующем
+# Прямое утверждение о несуществующем
         # preference/interest.
         if (
             "люблю сериал" in lowered
@@ -182,16 +182,6 @@ class IdentityRepairStrategy:
             return (
                 "У меня пока нет "
                 "зафиксированного любимого сериала."
-            )
-
-        if (
-            "мне нравится" in lowered
-            or "мне интересн" in lowered
-        ):
-            return (
-                "У меня пока нет достаточно "
-                "подтверждений для такого личного "
-                "предпочтения."
             )
 
         return answer
