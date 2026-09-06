@@ -271,6 +271,32 @@ def main():
                 f"{type(exc).__name__}: {exc}"
             )
 
+    web = None
+
+    if not args.no_chat and server is not None:
+        try:
+            from communication.web_messenger import (
+                WebMessenger,
+            )
+
+            web = WebMessenger(
+                server=server,
+                history=getattr(
+                    server, "history", None
+                ),
+            )
+            web.start()
+            log(
+                "web messenger: "
+                "http://127.0.0.1:7779"
+            )
+        except Exception as exc:
+            web = None
+            log(
+                f"web messenger unavailable: "
+                f"{type(exc).__name__}: {exc}"
+            )
+
     pc_audio = None
 
     if not args.no_senses:
