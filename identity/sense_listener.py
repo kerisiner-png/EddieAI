@@ -354,6 +354,16 @@ class SenseListener:
         except Exception:
             pass
 
+    def speak_initiative(self, text):
+        """
+        Спонтанная инициатива вслух
+        (единый голос EddieAI).
+        """
+        try:
+            self._speak(text)
+        except Exception:
+            pass
+
     def _record_voice_reply(self, answer):
         try:
             server = self._server

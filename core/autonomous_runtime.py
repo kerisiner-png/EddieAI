@@ -579,6 +579,26 @@ class AutonomousRuntime:
             except Exception:
                 pass
 
+    def _speak_aloud(self, text):
+        """
+        Спонтанная речь — всегда голосом
+        (Piper sense_listener), Эдди в наушниках.
+        """
+        if not text:
+            return
+
+        speaker = getattr(
+            self, "_voice_speaker", None
+        )
+
+        if speaker is None:
+            return
+
+        try:
+            speaker.speak_initiative(text)
+        except Exception:
+            pass
+
     def _announce_power(self, transition):
         to = transition.get("to")
         percent = transition.get("percent")
@@ -675,6 +695,8 @@ class AutonomousRuntime:
                     ),
                     speak=self._eddie_present(),
                 )
+                if self._eddie_present():
+                    self._speak_aloud(text)
             except Exception:
                 pass
 
@@ -826,6 +848,8 @@ class AutonomousRuntime:
                     ),
                     speak=self._eddie_present(),
                 )
+                if self._eddie_present():
+                    self._speak_aloud(text)
                 return
             except Exception:
                 pass
@@ -842,6 +866,8 @@ class AutonomousRuntime:
                     text[:280],
                     speak=self._eddie_present(),
                 )
+                if self._eddie_present():
+                    self._speak_aloud(text)
             except Exception:
                 pass
 
@@ -983,6 +1009,8 @@ class AutonomousRuntime:
                     text[:280],
                     speak=self._eddie_present(),
                 )
+                if self._eddie_present():
+                    self._speak_aloud(text)
             except Exception:
                 pass
 
@@ -1058,6 +1086,8 @@ class AutonomousRuntime:
                 text,
                 speak=self._eddie_present(),
             )
+            if self._eddie_present():
+                self._speak_aloud(text)
         except Exception:
             return
 
@@ -1103,6 +1133,8 @@ class AutonomousRuntime:
                     text,
                     speak=self._eddie_present(),
                 )
+                if self._eddie_present():
+                    self._speak_aloud(text)
             except Exception:
                 pass
 

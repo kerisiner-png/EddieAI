@@ -180,6 +180,11 @@ def main():
         action="store_true",
         help="Не поднимать микрофон/вебку.",
     )
+    parser.add_argument(
+        "--no-web",
+        action="store_true",
+        help="Не поднимать веб-мессенджер Tabula.",
+    )
     args = parser.parse_args()
 
     log("=== EDDIE FOREVER START ===")
@@ -275,6 +280,7 @@ def main():
             )
             senses.start()
             agent.sense_listener = senses
+            runtime._voice_speaker = senses
             log("senses started (mic + webcam)")
         except Exception as exc:
             senses = None
@@ -285,7 +291,7 @@ def main():
 
     web = None
 
-    if not args.no_chat and server is not None:
+    if not args.no_web and server is not None:
         try:
             from communication.web_messenger import (
                 WebMessenger,
