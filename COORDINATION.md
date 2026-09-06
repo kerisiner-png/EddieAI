@@ -21,7 +21,14 @@
 
 | Запуск | PID | Задание | Лог | Статус |
 |--------|-----|---------|-----|--------|
-| 05.09 00:00 | **8812** | run_forever.py: + команда wake/sleep (life_control). Бодрствует, вебка видит Эдди | logs/eddie_forever.log, порт 7778 | АКТИВЕН; RAM ~1141 МБ. Разбудить/усыпить: python wake_eddie.py wake\|sleep\|status. Суточная приёмка. |
+| 06.09 02:58 | **17236** | watchdog_runtime.py — внешний сторож: рестарт при stale status.json + RAM-guard (kill llama/ollama при <700 МБ) | logs/watchdog_runtime.log | АКТИВЕН |
+| 06.09 02:51 | **34364 / 18088** | run_forever.py — НОЧНОЙ ДЕПЛОЙ: восстановлена фабрика/eddie_server из HEAD (чат-ответ, outbox, screen, shared), ChatHistory→Memory, wake-при-сообщении, REJECTED→revise, READ_INBOX без фрустрационного гейта, decay в тике | logs/eddie_forever.log, порт 7778 | АКТИВЕН; приёмка: ответ в чате (row 479), READ_INBOX→ответ 47с, ACTIVATE_GOAL/COMPLETE_GOAL сам |
+| 06.09 01:15–02:48 | — | Диагностическая серия: 4 рестарта; найдено «тихое» падение тиков (AttributeError в тике — future-исключения никто не логировал); llama-server 2.8 ГБ из локального фолбэка — остановлен (правило 0 процессов) | logs/eddie_forever.log | ЗАВЕРШЕНО |
+| 05.09 21:02 | **9000** | run_forever.py (glm-4.7-flash вместо glm-4.5-flash) | logs/eddie_forever.log, порт 7778 | АКТИВЕН; chat attached, senses started; overlay status_overlay.py PID 21932 |
+| 05.09 19:40 | **25312** | run_forever.py (после enrollment голоса Эдди в speaker_profiles.json) | logs/eddie_forever.log, порт 7778 | Остановлен 19:53 при перезапуске на glm-5.2 |
+| 05.09 19:12 | **17516** | run_forever.py (код трёх блоков: голоса/инициатива/тон) | logs/eddie_forever.log, порт 7778 | Остановлен 19:40 при перезапуске на enrollment |
+| 05.09 17:53 | 31380 | run_forever.py (после проверки «голосовой ассистент») | logs/eddie_forever.log | Остановлен 19:12 при перезапуске на код трёх блоков |
+| 05.09 00:00 | **8812** | run_forever.py: + команда wake/sleep (life_control). Бодрствует, вебка видит Эдди | logs/eddie_forever.log, порт 7778 | Остановлен при перезапуске |
 | 04.09 23:57 | 29140 | run_forever.py: фикс голоса (не читает промпт) | logs/eddie_forever.log | Остановлен 00:00 при перезапуске на wake-команду |
 | 04.09 23:14 | 14732 | run_forever.py с чувствами (без голоса) | logs/eddie_forever.log | Остановлен 23:29 при перезапуске на голос |
 | 04.09 22:55 | 43680 | run_forever.py --no-chat (без чувств) | logs/eddie_forever.log | Остановлен 23:12 при перезапуске на чувства |
@@ -47,3 +54,12 @@ dream_night.py + хук `_dream_night()` на входе в SLEEP).
 |--------|-----|---------|-----|--------|
 | 01.09 00:xx | TBD | eddie.py --mode text — обсуждение внешности/образа с Эдди (человеком) | logs/eddie_session.log (если --log) | запускается |
 
+
+| 05.09 17:xx | explore-1 | Чтение: почему инициатива/любопытство на нуле, знает ли EddieAI свои способности | только чтение | ACTIVE — teste |
+
+## 05.09 вечер: параллельный аудит (читающие)
+| # | Агент | Задание | Статус |
+|---|-------|---------|--------|
+| 1 | explore-1 | Инициатива/любопытство: почему на нуле, что душит (только чтение) | ACTIVE |
+| 2 | explore-2 | Тон разговора: почему «пошаговая стратегия» (только чтение) | ACTIVE |
+| 06.09 14:20 | **runtime + watchdog** | ollama-cloud первым в CLOUD_PROVIDERS (gpt-oss:120b-cloud, gemma4:31b-cloud), логи голосовых отказов, сторож самолечит демона | logs/eddie_forever.log | АКТИВЕН; оllama serve поднят; ответ в чате 16.8 с |
