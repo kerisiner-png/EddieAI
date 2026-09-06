@@ -684,6 +684,16 @@ class AutonomyRuntimeFactory:
         watch_mode = WatchMode()
         runtime._watch_mode = watch_mode
         self.agent.watch_mode = watch_mode
+
+        from identity.inner_stream import (
+            InnerStream,
+            Mood,
+        )
+
+        self.agent.inner_stream = InnerStream()
+        self.agent.mood = Mood(
+            self.agent.self_state
+        )
         self.agent.screen_perceiver = (
             screen_perceiver
         )

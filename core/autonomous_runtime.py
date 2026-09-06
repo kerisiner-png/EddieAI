@@ -245,6 +245,231 @@ class AutonomousRuntime:
         except Exception:
             pass
 
+    def _inner_flow(self):
+        orchestrator = getattr(
+            self, "orchestrator", None
+        )
+        agent = getattr(
+            orchestrator, "agent", None
+        )
+        stream = getattr(
+            agent, "inner_stream", None
+        )
+        if stream is None:
+            return
+
+        now = time.time()
+
+        mood = getattr(agent, "mood", None)
+        if mood is not None:
+            try:
+                emotions = {}
+                affect = getattr(
+                    agent,
+                    "affective_state",
+                    None,
+                )
+                if affect is not None:
+                    emotions = (
+                        affect.snapshot().get(
+                            "emotions", {}
+                        )
+                    )
+                mood.update(emotions, now)
+            except Exception:
+                pass
+
+        perceiver = getattr(
+            self, "_screen_perceiver", None
+        )
+        if perceiver is not None:
+            try:
+                current = (
+                    perceiver.get_current()
+                )
+                desc = str(
+                    current.get("description", "")
+                    or ""
+                ).strip()
+                if desc:
+                    stream.note_event(
+                        "экран",
+                        desc[:40],
+                        desc,
+                        0.6,
+                        now,
+                    )
+            except Exception:
+                pass
+
+        pc_audio = getattr(
+            agent, "pc_audio", None
+        )
+        if pc_audio is not None:
+            heard = str(
+                getattr(
+                    pc_audio,
+                    "last_heard_text",
+                    "",
+                )
+                or ""
+            ).strip()
+            if heard:
+                stream.note_event(
+                    "звук",
+                    heard[:40],
+                    heard,
+                    1.0,
+                    now,
+                )
+
+        server = getattr(
+            self, "eddie_server", None
+        )
+        if server is not None:
+            history = getattr(
+                server, "history", None
+            )
+            if history is not None:
+                try:
+                    unread = int(
+                        history.chat_unread_meta()
+                        .get("count", 0)
+                    )
+                    if unread:
+                        stream.note_event(
+                            "сообщение",
+                            f"unread-{unread}",
+                            (
+                                "Эдди написал: "
+                                f"{unread} непрочитанных"
+                            ),
+                            1.5,
+                            now,
+                        )
+                except Exception:
+                    pass
+
+        orchestrator_goals = getattr(
+            orchestrator,
+            "goal_manager",
+            None,
+        )
+        if orchestrator_goals is not None:
+            try:
+                active = (
+                    orchestrator_goals.active()
+                )
+                key = "|".join(
+                    sorted(
+                        goal.value
+                        for goal in active
+                    )
+                )[:40]
+                titles = "; ".join(
+                    goal.value
+                    for goal in active
+                )[:120]
+                stream.note_event(
+                    "дело",
+                    key,
+                    f"В работе: {titles}",
+                    0.5,
+                    now,
+                )
+            except Exception:
+                pass
+
+        if stream.should_speak(now):
+            self._inner_speak(stream)
+
+    def _inner_speak(self, stream):
+        stream.mark_spoke(time.time())
+
+        orchestrator = getattr(
+            self, "orchestrator", None
+        )
+        agent = getattr(
+            orchestrator, "agent", None
+        )
+        if agent is None:
+            return
+
+        mood = getattr(agent, "mood", None)
+        mood_text = (
+            mood.snapshot()["label"]
+            if mood is not None
+            else "ровно"
+        )
+        context = stream.render_context(10)
+
+        try:
+            text = (
+                agent.model_orchestrator
+                .cloud_chat_stream(
+                    system=(
+                        "Ты EddieAI. Из твоего "
+                        "внутреннего потока созрело "
+                        "то, чем хочется поделиться "
+                        "с Эдди: наблюдение, мысль "
+                        "или вопрос. Скажи это "
+                        "коротко (1-2 предложения), "
+                        "живо, от первого лица. "
+                        "Только сама фраза."
+                    ),
+                    user=(
+                        "Настроение: "
+                        f"{mood_text}. "
+                        "Внутренний поток: "
+                        f"{context}"
+                    ),
+                    options={
+                        "num_predict": 300,
+                        "temperature": 0.95,
+                    },
+                    task="conversation",
+                )
+            )
+        except Exception:
+            return
+
+        text = (text or "").strip()
+
+        if not text:
+            return
+
+        outbox = getattr(
+            self, "outbox", None
+        )
+
+        if outbox is not None:
+            try:
+                outbox.send(
+                    message=text[:280],
+                    server=getattr(
+                        self,
+                        "eddie_server",
+                        None,
+                    ),
+                )
+                return
+            except Exception:
+                pass
+
+        server = getattr(
+            self, "eddie_server", None
+        )
+
+        if server is not None and hasattr(
+            server, "send_initiative"
+        ):
+            try:
+                server.send_initiative(
+                    text[:280]
+                )
+            except Exception:
+                pass
+
     def _handle_watch_mode(self, watch):
         perceiver = getattr(
             self, "_screen_perceiver", None
@@ -932,6 +1157,8 @@ class AutonomousRuntime:
                         "модель не грузится."
                     ),
                 }
+
+        self._inner_flow()
 
         if hasattr(self, '_screen_perceiver') and self._screen_perceiver:
             try:

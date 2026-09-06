@@ -125,6 +125,7 @@ class PcAudioListener:
         self._cooldown = cooldown
         self._last_store_ts = 0.0
         self.last_audio_ts = 0.0
+        self.last_heard_text = ""
         self._queue = queue.Queue()
         self._stop = threading.Event()
         self._thread = None
@@ -395,5 +396,6 @@ class PcAudioListener:
                 ):
                     continue
                 self._last_store_ts = now
+                self.last_heard_text = text
                 _log(f"услышал: {text[:80]!r}")
                 self._remember(text)
