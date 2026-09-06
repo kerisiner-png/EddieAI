@@ -265,6 +265,7 @@ class SenseListener:
             answer = ""
             if self._agent is not None:
                 try:
+                    self._note_spoken_phrase(text)
                     conversation = self._recent_conversation()
                     answer = (
                         self._agent.respond_call_fast(
@@ -291,6 +292,8 @@ class SenseListener:
             except Exception:
                 pass
 
+            self._record_voice_reply(answer)
+
             if not (answer or "").strip():
                 _log(
                     "voice empty answer: "
@@ -303,6 +306,70 @@ class SenseListener:
                 f"voice handle_spoken failed: "
                 f"{type(exc).__name__}: {exc}"
             )
+
+    def _note_spoken_phrase(self, text):
+        """
+        Голосовая фраза Эдди — то же событие,
+        что и сообщение в чате: поток, тело,
+        общая история. Одна жизнь, один канал.
+        """
+        try:
+            agent = self._agent
+
+            stream = getattr(
+                agent, "inner_stream", None
+            )
+            if stream is not None:
+                stream.note_event(
+                    "Эдди сказал",
+                    (text or "")[:40],
+                    (text or "")[:120],
+                    1.5,
+                )
+
+            body = getattr(
+                agent, "body", None
+            )
+            if body is not None:
+                body.satisfy_social()
+
+            server = self._server
+            history = getattr(
+                server, "history", None
+            ) if server is not None else None
+
+            if history is not None and (
+                text or ""
+            ).strip():
+                msg_id = history.chat_add(
+                    "Eddie",
+                    "[голос] " + text,
+                )
+                try:
+                    history.chat_mark_read(
+                        msg_id
+                    )
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    def _record_voice_reply(self, answer):
+        try:
+            server = self._server
+            history = getattr(
+                server, "history", None
+            ) if server is not None else None
+
+            if history is not None and (
+                answer or ""
+            ).strip():
+                history.chat_add(
+                    "EddieAI",
+                    "[голос] " + answer,
+                )
+        except Exception:
+            pass
 
     def _record_voice_turn(self, user_text, agent_text):
         try:

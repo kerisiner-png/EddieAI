@@ -4348,6 +4348,40 @@ Respond briefly and naturally.
             except Exception:
                 pass
 
+        body = getattr(self, "body", None)
+
+        if body is not None:
+            try:
+                snap = body.snapshot()
+                lines.append(
+                    "потребности: "
+                    + snap["social_label"]
+                    + "; "
+                    + snap["novelty_label"]
+                )
+            except Exception:
+                pass
+
+        server = getattr(
+            self, "eddie_server", None
+        )
+
+        history = getattr(
+            server, "history", None
+        ) if server is not None else None
+
+        if history is not None:
+            try:
+                meta = history.chat_unread_meta()
+                if meta.get("count"):
+                    lines.append(
+                        "Эдди ждёт ответа в чате: "
+                        f"{meta['count']} "
+                        "непрочитанных"
+                    )
+            except Exception:
+                pass
+
         perceiver = getattr(
             self, "screen_perceiver", None
         )
